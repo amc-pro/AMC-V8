@@ -89,9 +89,6 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
 
         #region Calcul VAH / POC / VAL & ClosedVolumeProfile
 
-        /// <summary>
-        /// Construit un ClosedVolumeProfile complet et immuable pour une période donnée.
-        /// </summary>
         public ClosedVolumeProfile BuildProfile(
             string symbol,
             string exchange,
@@ -119,11 +116,8 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             };
 
             if (TotalVolume <= 0 || volumeMap.Count == 0 || tickSize <= 0 || MinTick > MaxTick)
-            {
                 return profile;
-            }
 
-            // 1. Recherche du POC
             long pocTick = MinTick;
             long maxVol = -1;
             foreach (var kv in volumeMap)
@@ -135,7 +129,6 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 }
             }
 
-            // 2. Calcul de la Value Area (VAH / VAL)
             long targetVolume = (long)(TotalVolume * (ValueAreaPercent / 100.0));
             long accumulatedVolume = GetVolumeAtTick(pocTick);
             long upTick = pocTick;
@@ -171,11 +164,8 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             profile.Val = dnTick * tickSize;
             profile.Valid = true;
 
-            // 3. Détection des HVN / LVN (pour Weekly et Monthly)
             if (periodType == VolumeProfilePeriodType.Weekly || periodType == VolumeProfilePeriodType.Monthly)
-            {
                 profile.Nodes = DetectNodes(tickSize);
-            }
 
             return profile;
         }
@@ -184,9 +174,6 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
 
         #region Détection HVN / LVN avec Lissage Gaussien
 
-        /// <summary>
-        /// Extrait les HVN et LVN significatifs à partir d'une distribution lissée par noyau Gaussien.
-        /// </summary>
         public List<VolumeProfileNode> DetectNodes(double tickSize)
         {
             var nodes = new List<VolumeProfileNode>();
@@ -198,17 +185,12 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
 
             double[] raw = new double[range];
             for (int i = 0; i < range; i++)
-            {
                 raw[i] = GetVolumeAtTick(MinTick + i);
-            }
 
             double meanVolume = (double)TotalVolume / range;
             if (meanVolume <= 0) return nodes;
 
-            // 1. Lissage par filtre Gaussien 1D
             double[] smoothed = ApplyGaussianSmoothing(raw, GaussianSigmaTicks);
-
-            // 2. Recherche des extrema locaux
             var hvnCandidates = new List<NodeCandidate>();
             var lvnCandidates = new List<NodeCandidate>();
 
@@ -218,7 +200,6 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 double prev = smoothed[i - 1];
                 double next = smoothed[i + 1];
 
-                // Maximum local (HVN)
                 if (val > prev && val >= next)
                 {
                     double relVol = val / meanVolume;
@@ -234,7 +215,6 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                         });
                     }
                 }
-                // Minimum local (LVN)
                 else if (val < prev && val <= next)
                 {
                     double relVol = val / meanVolume;
@@ -252,14 +232,11 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 }
             }
 
-            // 3. Calcul de la proéminence et des zones [ZoneLow, ZoneHigh] à mi-hauteur (FWHM)
             var selectedHvns = FilterAndBuildZones(hvnCandidates, smoothed, raw, range, tickSize, meanVolume, true);
             var selectedLvns = FilterAndBuildZones(lvnCandidates, smoothed, raw, range, tickSize, meanVolume, false);
 
             nodes.AddRange(selectedHvns);
             nodes.AddRange(selectedLvns);
-
-            // Trier par prix croissant
             nodes.Sort((a, b) => a.PeakPrice.CompareTo(b.PeakPrice));
             return nodes;
         }
@@ -276,7 +253,6 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             var result = new List<VolumeProfileNode>();
             if (candidates.Count == 0) return result;
 
-            // Trier par force décroissante (volume relatif)
             if (isHvn)
                 candidates.Sort((a, b) => b.RelativeVolume.CompareTo(a.RelativeVolume));
             else
@@ -286,7 +262,6 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
 
             foreach (var cand in candidates)
             {
-                // Vérifier la séparation minimale
                 bool tooClose = false;
                 foreach (int acc in acceptedIndices)
                 {
@@ -299,13 +274,11 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
 
                 if (tooClose) continue;
 
-                // Calcul des bornes de la zone (FWHM / inflection)
                 int left = cand.Index;
                 int right = cand.Index;
                 double peakVal = cand.SmoothedVolume;
-                double threshold = isHvn ? (peakVal + meanVolume) * 0.5 : (peakVal + meanVolume) * 0.5;
+                double threshold = (peakVal + meanVolume) * 0.5;
 
-                // Expansion à gauche
                 while (left > 0)
                 {
                     if (isHvn && smoothed[left - 1] < threshold) break;
@@ -313,7 +286,6 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                     left--;
                 }
 
-                // Expansion à droite
                 while (right < range - 1)
                 {
                     if (isHvn && smoothed[right + 1] < threshold) break;
@@ -390,15 +362,6 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
 
         #region Partitionnement Temporel & Clés Déterministes
 
-        // NOTE: Volume Profile is partitioned by the instrument's trading session,
-        // not by UTC midnight.  For CME index/metal/energy futures this matters
-        // because the electronic session crosses midnight in New York time.
-        // We support the two conventions used by this project:
-        //   RTH  -> New York calendar trading date, 09:30-16:00 ET
-        //   ETH  -> CME Globex trading date, 18:00-17:00 ET next day
-        // Custom session templates are mapped conservatively to the RTH calendar
-        // date instead of silently pretending that UTC midnight is a session close.
-
         private static TimeZoneInfo GetNewYorkTimeZone()
         {
             try { return TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"); }
@@ -421,17 +384,11 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             return s.Contains("ETH") || s.Contains("GLOBEX") || s.Contains("24");
         }
 
-        /// <summary>
-        /// Returns the trading/session date represented by a bar timestamp.
-        /// RTH uses the New York calendar date. ETH uses the CME 18:00 ET boundary.
-        /// </summary>
         public static DateTime GetTradingSessionDateUtc(string sessionTemplate, DateTime barTimeUtc)
         {
             DateTime ny = ToNewYork(barTimeUtc);
             DateTime sessionDate = ny.Date;
 
-            // CME Globex trade date: the session opening at 18:00 ET belongs to
-            // the following business/trading date (Sunday 18:00 -> Monday).
             if (IsEthTemplate(sessionTemplate) && ny.TimeOfDay >= new TimeSpan(18, 0, 0))
                 sessionDate = sessionDate.AddDays(1);
 
@@ -481,13 +438,6 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 symbol ?? "SYM", exchange ?? "EXCH", sessionTemplate ?? "RTH", tradingDate);
         }
 
-        /// <summary>
-        /// Returns the actual session-aware UTC bounds containing referenceDateUtc.
-        /// Daily RTH: 09:30-16:00 ET. Daily ETH: 18:00 ET -> 17:00 ET next day.
-        /// Weekly RTH: Monday 09:30 -> Friday 16:00 ET.
-        /// Weekly ETH: Sunday 18:00 -> Friday 17:00 ET.
-        /// Monthly bounds use the same session convention at month boundaries.
-        /// </summary>
         public static void GetPeriodBoundsUtc(
             VolumeProfilePeriodType periodType,
             DateTime referenceDateUtc,
@@ -502,10 +452,10 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             if (periodType == VolumeProfilePeriodType.Daily)
             {
                 DateTime localStart = eth
-                    ? sessionDate.AddHours(18)
+                    ? sessionDate.AddDays(-1).AddHours(18)
                     : sessionDate.AddHours(9).AddMinutes(30);
                 DateTime localEnd = eth
-                    ? sessionDate.AddDays(1).AddHours(17)
+                    ? sessionDate.AddHours(17)
                     : sessionDate.AddHours(16);
                 startUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(localStart, DateTimeKind.Unspecified), GetNewYorkTimeZone());
                 endUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(localEnd, DateTimeKind.Unspecified), GetNewYorkTimeZone());
@@ -518,19 +468,17 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 DateTime monday = sessionDate.Date.AddDays(-diffFromMonday);
 
                 DateTime localStart = eth
-                    ? monday.AddDays(-1).AddHours(18) // Sunday 18:00 ET
+                    ? monday.AddDays(-1).AddHours(18)
                     : monday.AddHours(9).AddMinutes(30);
                 DateTime localEnd = eth
-                    ? monday.AddDays(4).AddHours(17) // Friday 17:00 ET
-                    : monday.AddDays(4).AddHours(16); // Friday 16:00 ET
+                    ? monday.AddDays(4).AddHours(17)
+                    : monday.AddDays(4).AddHours(16);
 
                 startUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(localStart, DateTimeKind.Unspecified), GetNewYorkTimeZone());
                 endUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(localEnd, DateTimeKind.Unspecified), GetNewYorkTimeZone());
                 return;
             }
 
-            // Monthly: use the session calendar month. The profile closes at the
-            // final trading session boundary of the month rather than UTC midnight.
             DateTime monthFirst = new DateTime(sessionDate.Year, sessionDate.Month, 1);
             DateTime monthLast = monthFirst.AddMonths(1).AddDays(-1);
             while (monthLast.DayOfWeek == DayOfWeek.Saturday || monthLast.DayOfWeek == DayOfWeek.Sunday)
@@ -547,11 +495,6 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             endUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(monthEndLocal, DateTimeKind.Unspecified), GetNewYorkTimeZone());
         }
 
-        /// <summary>
-        /// Session-aware bounds using the actual template passed by the manager.
-        /// This overload must be used by production code; the legacy overload above
-        /// remains for backward-compatible tests/API callers.
-        /// </summary>
         public static void GetPeriodBoundsUtc(
             VolumeProfilePeriodType periodType,
             DateTime referenceDateUtc,
@@ -566,8 +509,12 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
 
             if (periodType == VolumeProfilePeriodType.Daily)
             {
-                DateTime startLocal = eth ? sessionDate.AddHours(18) : sessionDate.AddHours(9).AddMinutes(30);
-                DateTime endLocal = eth ? sessionDate.AddDays(1).AddHours(17) : sessionDate.AddHours(16);
+                DateTime startLocal = eth
+                    ? sessionDate.AddDays(-1).AddHours(18)
+                    : sessionDate.AddHours(9).AddMinutes(30);
+                DateTime endLocal = eth
+                    ? sessionDate.AddHours(17)
+                    : sessionDate.AddHours(16);
                 startUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(startLocal, DateTimeKind.Unspecified), tz);
                 endUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(endLocal, DateTimeKind.Unspecified), tz);
                 return;
