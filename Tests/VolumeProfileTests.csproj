@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <RootNamespace>AMC.VolumeProfile.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\VolumeProfile\VolumeProfileModels.cs" Link="VolumeProfileModels.cs" />
+    <Compile Include="..\VolumeProfile\VolumeProfileCalculator.cs" Link="VolumeProfileCalculator.cs" />
+    <Compile Include="..\VolumeProfile\VolumeProfileRepository.cs" Link="VolumeProfileRepository.cs" />
+    <Compile Include="..\VolumeProfile\VolumeProfileAnalyzer.cs" Link="VolumeProfileAnalyzer.cs" />
+    <Compile Include="..\VolumeProfile\VolumeProfileManager.cs" Link="VolumeProfileManager.cs" />
+    <Compile Include="..\MarketIntelligence\MarketState.cs" Link="MarketState.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="3.1.20" />
+  </ItemGroup>
+
+</Project>
