@@ -22,51 +22,40 @@ namespace NinjaTrader.NinjaScript.Indicators
     {
         #region Paramètres Volume Profile V2 (Closed References)
 
-        [NinjaScriptProperty]
         [Display(Name = "Activer Volume Profile V2 (Closed)", Order = 1, GroupName = "15. Volume Profile V2 (Closed References)")]
         public bool EnableClosedVolumeProfile { get; set; }
 
-        [NinjaScriptProperty]
         [Display(Name = "Activer Persistance SQLite", Order = 2, GroupName = "15. Volume Profile V2 (Closed References)")]
         public bool EnableSQLiteVolumeProfileHistory { get; set; }
 
-        [NinjaScriptProperty]
         [Range(1, 20)]
         [Display(Name = "Tolérance Niveaux (Ticks)", Order = 3, GroupName = "15. Volume Profile V2 (Closed References)")]
         public int VolumeProfileLevelToleranceTicks { get; set; }
 
-        [NinjaScriptProperty]
         [Range(1, 30)]
         [Display(Name = "Tolérance Nodes HVN/LVN (Ticks)", Order = 4, GroupName = "15. Volume Profile V2 (Closed References)")]
         public int VolumeProfileNodeToleranceTicks { get; set; }
 
-        [NinjaScriptProperty]
         [Display(Name = "Chemin Base SQLite (Vide = Auto Documents/NT8/db)", Order = 5, GroupName = "15. Volume Profile V2 (Closed References)")]
         public string VolumeProfileDbPath { get; set; }
 
-        [NinjaScriptProperty]
         [Display(Name = "Activer Alertes Telegram VP", Order = 6, GroupName = "15. Volume Profile V2 (Closed References)")]
         public bool EnableVolumeProfileTelegramAlerts { get; set; }
 
-        [NinjaScriptProperty]
         [Range(1, 5)]
         [Display(Name = "Confluence Min pour Alerte Telegram", Order = 7, GroupName = "15. Volume Profile V2 (Closed References)")]
         public int VolumeProfileMinConfluenceAlert { get; set; }
 
-        [NinjaScriptProperty]
         [Range(1, 120)]
         [Display(Name = "Cooldown Alerte Niveau (Minutes)", Order = 8, GroupName = "15. Volume Profile V2 (Closed References)")]
         public int VolumeProfileAlertCooldownMinutes { get; set; }
 
-        [NinjaScriptProperty]
         [Display(Name = "Alerter sur 1er Test de Niveau/Zone", Order = 9, GroupName = "15. Volume Profile V2 (Closed References)")]
         public bool VolumeProfileAlertOnFirstTouch { get; set; }
 
-        [NinjaScriptProperty]
         [Display(Name = "Alerter sur Rejet Confirmé", Order = 10, GroupName = "15. Volume Profile V2 (Closed References)")]
         public bool VolumeProfileAlertOnRejection { get; set; }
 
-        [NinjaScriptProperty]
         [Display(Name = "Alerter sur Entrée en LVN (Vide)", Order = 11, GroupName = "15. Volume Profile V2 (Closed References)")]
         public bool VolumeProfileAlertOnLvnEntry { get; set; }
 

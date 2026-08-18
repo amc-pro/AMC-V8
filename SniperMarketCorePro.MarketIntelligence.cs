@@ -22,39 +22,31 @@ namespace NinjaTrader.NinjaScript.Indicators
     {
         #region Market Intelligence — Parametres
 
-        [NinjaScriptProperty]
         [Display(Name = "Activer Market Intelligence", GroupName = "13. Market Intelligence", Order = 1)]
         public bool EnableMarketIntelligence { get; set; }
 
-        [NinjaScriptProperty]
         [Display(Name = "Market Report H4", GroupName = "13. Market Intelligence", Order = 2)]
         public bool EnableMarketReport { get; set; }
 
-        [NinjaScriptProperty]
         [Display(Name = "Market Update (changements majeurs)", GroupName = "13. Market Intelligence", Order = 3)]
         public bool EnableMarketUpdate { get; set; }
 
-        [NinjaScriptProperty]
         [Range(2, 200)]
         [Display(Name = "Periode EMA de tendance", GroupName = "13. Market Intelligence", Order = 4)]
         public int MiTrendEmaPeriod { get; set; }
 
-        [NinjaScriptProperty]
         [Range(1, 10)]
         [Display(Name = "Force des swings (SMC)", GroupName = "13. Market Intelligence", Order = 5)]
         public int MiSwingStrength { get; set; }
 
-        [NinjaScriptProperty]
         [Range(0.0, 10.0)]
         [Display(Name = "Distance minimale prix/EMA (ticks)", GroupName = "13. Market Intelligence", Order = 6)]
         public double MiTrendMinDistanceTicks { get; set; }
 
-        [NinjaScriptProperty]
         [Range(0.0, 10.0)]
         [Display(Name = "Pente minimale EMA (ticks/barre)", GroupName = "13. Market Intelligence", Order = 7)]
         public double MiTrendMinSlopeTicks { get; set; }
 
-        [NinjaScriptProperty]
         [Display(Name = "Canal Telegram (1, 2 ou 3)", GroupName = "13. Market Intelligence", Order = 8)]
         [Range(1, 3)]
         public int MiTelegramChannel { get; set; }

@@ -2777,9 +2777,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private void EmitAlert(Candidate c)
         {
-            // Ne pas dessiner d'alertes visuelles sur les données historiques au chargement
-            if (State != State.Realtime) return;
-
             if (c.EntryAtEmission <= 0) c.EntryAtEmission = snClose;
             double driftTicks = tickSize > 0 ? (c.EntryAtEmission - c.Entry) / tickSize : 0;
 
@@ -2803,35 +2800,37 @@ namespace NinjaTrader.NinjaScript.Indicators
             sniperAlertsThisSession++;
             alertsThisWeek.Enqueue(c.Time);
             openTrades.Add(trade);
-            DrawTradeLevels(trade);
 
-            // couche de validation (SniperValidationStrategy) voie le signal meme si le
-            // reseau est indisponible ou desactive en backtest.
+            // Exportation des signaux pour stratégies / bridge
             SniperPublishExports(c);
 
-            // Construction centralisée du message Telegram (Network.cs)
-            string sniperMsg = BuildSniperTelegramAlert(c);
-
-            SendTelegramMessage(sniperMsg, null, c.Score >= ScoreThresholdChat2 ? 2 : 1);
-
-            try
+            // Les alertes Telegram et les tracés visuels sont réservés au temps réel
+            if (State == State.Realtime)
             {
-                // d'emission (SelectionBufferBars plus tard). Ancrage vertical sur le prix
-                // de reference du signal, la meche de la barre courante n'etant pas la sienne.
-                string tag = "sniper" + c.BarIdx + c.Name;
-                int barsAgo = Math.Min(CurrentBars[0], Math.Max(0, CurrentBar - c.BarIdx));
-                double anchor = c.Entry > 0 ? c.Entry : (c.IsBuy ? snLow : snHigh);
+                DrawTradeLevels(trade);
 
-                if (c.IsBuy)
-                    Draw.ArrowUp(this, tag, true, barsAgo, anchor - 2 * tickSize, Brushes.Lime);
-                else
-                    Draw.ArrowDown(this, tag, true, barsAgo, anchor + 2 * tickSize, Brushes.OrangeRed);
+                // Construction centralisée du message Telegram (Network.cs)
+                string sniperMsg = BuildSniperTelegramAlert(c);
+                SendTelegramMessage(sniperMsg, null, c.Score >= ScoreThresholdChat2 ? 2 : 1);
 
-                Draw.Text(this, tag + "Txt", c.Grade + " " + c.Score.ToString("0", CultureInfo.InvariantCulture), barsAgo,
-                    c.IsBuy ? anchor - 6 * tickSize : anchor + 6 * tickSize,
-                    c.IsBuy ? Brushes.Lime : Brushes.OrangeRed);
+                try
+                {
+                    // Ancrage vertical sur le prix de référence du signal
+                    string tag = "sniper" + c.BarIdx + c.Name;
+                    int barsAgo = Math.Min(CurrentBars[0], Math.Max(0, CurrentBar - c.BarIdx));
+                    double anchor = c.Entry > 0 ? c.Entry : (c.IsBuy ? snLow : snHigh);
+
+                    if (c.IsBuy)
+                        Draw.ArrowUp(this, tag, true, barsAgo, anchor - 2 * tickSize, Brushes.Lime);
+                    else
+                        Draw.ArrowDown(this, tag, true, barsAgo, anchor + 2 * tickSize, Brushes.OrangeRed);
+
+                    Draw.Text(this, tag + "Txt", c.Grade + " " + c.Score.ToString("0", CultureInfo.InvariantCulture), barsAgo,
+                        c.IsBuy ? anchor - 6 * tickSize : anchor + 6 * tickSize,
+                        c.IsBuy ? Brushes.Lime : Brushes.OrangeRed);
+                }
+                catch { /* le rendu ne doit jamais casser l'emission */ }
             }
-            catch { /* le rendu ne doit jamais casser l'emission */ }
 
             sniperLastStatus = c.Grade + " " + c.Name + " @" + SniperFormatPrice(c.Entry);
         }
