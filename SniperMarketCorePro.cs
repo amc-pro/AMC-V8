@@ -1750,6 +1750,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (EvaluateOnBarClose && isNewSessionTick && barIdx > 0)
                     {
                         evalOffset = 1;
+                        UpdateCurrentVwap(evalOffset);
+                        UpdateHtfBias();
 
                         UpdateNakedPocs(Highs[volumetricBarsIndex][1], Lows[volumetricBarsIndex][1]);
 
@@ -1773,7 +1775,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                         RollSessionState(barIdx, Closes[volumetricBarsIndex][1]);
 
                         CalculateRollingVolumeProfile(barIdx, barsType);
-                        UpdateTrendFilters();
+                        UpdateCurrentVwap(0);
+                        UpdateHtfBias();
 
                         return;
                     }
@@ -1793,12 +1796,16 @@ namespace NinjaTrader.NinjaScript.Indicators
                         if (!isBarClose)
                         {
                             // Profil rafraichi pour le dashboard, aucune evaluation.
+                            UpdateCurrentVwap(0);
+                            UpdateHtfBias();
                             CalculateRollingVolumeProfile(barIdx, barsType);
-                            UpdateTrendFilters();
                             return;
                         }
 
                         evalOffset = 1;
+                        UpdateCurrentVwap(evalOffset);
+                        UpdateHtfBias();
+
                         CalculateRollingVolumeProfile(barIdx - 1, barsType);
                         EvaluateVolumeProfileSignal();
                         SniperOnEvaluatedBar();
@@ -1815,9 +1822,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                         frozenVahPrice = vahPrice;
                         frozenValPrice = valPrice;
 
-                        // Profil complet (barre courante incluse) pour l'affichage.
+                        // Profil complet (barre courante incluse) pour l'affichage dashboard.
                         CalculateRollingVolumeProfile(barIdx, barsType);
-                        UpdateTrendFilters();
+                        UpdateCurrentVwap(0);
+                        UpdateHtfBias();
                     }
                     else
                     {
@@ -1832,6 +1840,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                         }
 
                         evalOffset = 0;
+                        UpdateCurrentVwap(evalOffset);
+                        UpdateHtfBias();
+
                         CalculateRollingVolumeProfile(barIdx, barsType);
                         EvaluateVolumeProfileSignal();
                         SniperOnEvaluatedBar();
@@ -1909,16 +1920,50 @@ namespace NinjaTrader.NinjaScript.Indicators
             return DateTime.MinValue;
         }
 
-        private void UpdateTrendFilters()
+        /// <summary>
+        /// Met à jour la VWAP pour l'offset spécifié (0 = live bar, 1 = barre clôturée) avec rejet strict des valeurs invalides (NaN, 0, Inf).
+        /// </summary>
+        private void UpdateCurrentVwap(int offset)
         {
-            if (ofVwap != null && CurrentBars[volumetricBarsIndex] >= 0)
+            if (ofVwap == null || volumetricBarsIndex < 0 || volumetricBarsIndex >= BarsArray.Length || CurrentBars[volumetricBarsIndex] < 0)
             {
-                int maxBars = Math.Max(0, CurrentBars[volumetricBarsIndex]);
-                int off = Math.Min(evalOffset, maxBars);
-                if (ofVwap.VWAP.IsValidDataPoint(off))
-                    currentVwapPrice = ofVwap.VWAP[off];
+                currentVwapPrice = 0;
+                return;
             }
 
+            int maxBars = CurrentBars[volumetricBarsIndex];
+            int targetOffset = Math.Max(0, Math.Min(offset, maxBars));
+
+            if (!ofVwap.VWAP.IsValidDataPoint(targetOffset))
+            {
+                currentVwapPrice = 0;
+                return;
+            }
+
+            double vwap = ofVwap.VWAP[targetOffset];
+
+            if (double.IsNaN(vwap) || double.IsInfinity(vwap) || vwap <= 0)
+            {
+                currentVwapPrice = 0;
+                return;
+            }
+
+            currentVwapPrice = vwap;
+        }
+
+        private void UpdateCurrentVwap()
+        {
+            UpdateCurrentVwap(evalOffset);
+        }
+
+        private void UpdateTrendFilters()
+        {
+            UpdateTrendFilters(evalOffset);
+        }
+
+        private void UpdateTrendFilters(int offset)
+        {
+            UpdateCurrentVwap(offset);
             UpdateHtfBias();
         }
 

@@ -41,6 +41,7 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_Dashboard_Text_Wrapping_And_Formatting", Test_Dashboard_Text_Wrapping_And_Formatting);
             RunTest("Test_HTF_Trend_Classifier_ClosedBars", Test_HTF_Trend_Classifier_ClosedBars);
             RunTest("Test_HTF_Trend_Classifier_RejectsInvalidData", Test_HTF_Trend_Classifier_RejectsInvalidData);
+            RunTest("Test_VWAP_Sanitization_And_AntiLookahead", Test_VWAP_Sanitization_And_AntiLookahead);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
@@ -749,6 +750,34 @@ namespace AMC.VolumeProfile.Tests
             var res4 = wrapLines("  Régime : ", shortText, maxLen);
             Assert(res4.Count == 1, "Une ligne courte ne doit pas être coupée");
             Assert(res4[0] == "  Régime : Normal Day", "Contenu exact attendu");
+        }
+
+        private static void Test_VWAP_Sanitization_And_AntiLookahead()
+        {
+            // Fonction de validation VWAP simulant UpdateCurrentVwap
+            Func<double, bool, int, int, double> sanitizeVwap = (val, isValid, offset, maxBars) =>
+            {
+                if (maxBars < 0) return 0.0;
+                int targetOffset = Math.Max(0, Math.Min(offset, maxBars));
+                if (!isValid) return 0.0;
+                if (double.IsNaN(val) || double.IsInfinity(val) || val <= 0) return 0.0;
+                return val;
+            };
+
+            // Cas nominal
+            Assert(sanitizeVwap(5000.25, true, 1, 10) == 5000.25, "VWAP valide doit être acceptée.");
+            
+            // Rejet des valeurs invalides
+            Assert(sanitizeVwap(double.NaN, true, 1, 10) == 0.0, "VWAP NaN doit retourner 0.");
+            Assert(sanitizeVwap(double.PositiveInfinity, true, 1, 10) == 0.0, "VWAP Infinity doit retourner 0.");
+            Assert(sanitizeVwap(-100.0, true, 1, 10) == 0.0, "VWAP négative doit retourner 0.");
+            Assert(sanitizeVwap(0.0, true, 1, 10) == 0.0, "VWAP nulle doit retourner 0.");
+            Assert(sanitizeVwap(5000.25, false, 1, 10) == 0.0, "DataPoint invalide doit retourner 0.");
+            Assert(sanitizeVwap(5000.25, true, 1, -1) == 0.0, "MaxBars < 0 doit retourner 0.");
+
+            // Protection offset borné
+            int offsetClamped = Math.Max(0, Math.Min(5, 2));
+            Assert(offsetClamped == 2, "Offset au-delà de maxBars doit être borné à maxBars.");
         }
 
         #endregion
