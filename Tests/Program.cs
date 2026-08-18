@@ -378,7 +378,7 @@ namespace AMC.VolumeProfile.Tests
 
             Assert((ctx.Location & VolumeProfileLocationType.AboveValue) != 0, "Doit être détecté AboveValue");
             Assert(ctx.DistanceToClosestReference > 0, "Distance doit être calculée");
-            Assert(ctx.ClosestReferenceName == "PrevDay VAH", "Référence la plus proche doit être VAH, obtenu: " + ctx.ClosestReferenceName);
+            Assert(ctx.ClosestReferenceName == "VAH Jour Préc", "Référence la plus proche doit être VAH, obtenu: " + ctx.ClosestReferenceName);
         }
 
         private static void Test_Analyzer_MultiTimeframe_Confluence()
@@ -408,7 +408,7 @@ namespace AMC.VolumeProfile.Tests
             var ctx = analyzer.Analyze(21851.0, 21855.0, 21848.0, 21851.0, -50, 15.0, tickSize, DateTime.UtcNow, day, week, null);
 
             Assert(ctx.ConfluenceCount >= 2, "Doit détecter au moins 2 niveaux en confluence, détecté: " + ctx.ConfluenceCount);
-            Assert(ctx.ConfluenceType.Contains("PrevDay POC") && ctx.ConfluenceType.Contains("PrevWeek POC"), "La description doit lister les confluences: " + ctx.ConfluenceType);
+            Assert(ctx.ConfluenceType.Contains("POC Jour Préc") && ctx.ConfluenceType.Contains("POC Sem Préc"), "La description doit lister les confluences: " + ctx.ConfluenceType);
         }
 
         private static void Test_Analyzer_Zone_Lifecycle_Transitions()

@@ -79,9 +79,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 if (EnableCumDeltaDivergence)
                     AppendWrappedLine(sb, "  DivCD  : ", CleanTextForDashboard(currentCumDeltaDivStatus), maxLen);
                 if (EnableFinishedAuction)
-                    AppendWrappedLine(sb, "  Auction: ", CleanTextForDashboard(currentFinishedAuctionStatus), maxLen);
+                    AppendWrappedLine(sb, "  Enchère: ", CleanTextForDashboard(currentFinishedAuctionStatus), maxLen);
                 if (EnableExhaustion)
-                    AppendWrappedLine(sb, "  Exhaust: ", CleanTextForDashboard(currentExhaustionStatus), maxLen);
+                    AppendWrappedLine(sb, "  Épuis. : ", CleanTextForDashboard(currentExhaustionStatus), maxLen);
 
                 if (runtimeErrorCount > 0)
                     AppendWrappedLine(sb, "  ERREURS: ", string.Format("{0} ({1})", runtimeErrorCount, CleanTextForDashboard(lastRuntimeError)), maxLen);
@@ -166,11 +166,11 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (!EnableClosedVolumeProfile || vpManager == null) return "";
             var sb = new StringBuilder(256);
-            sb.AppendLine("  VOLUME PROFILE — CLOSED REFERENCES");
+            sb.AppendLine("  VOLUME PROFILE — RÉFÉRENCES CLÔTURÉES");
 
             if (vpManager.PrevDay != null && vpManager.PrevDay.Valid)
             {
-                AppendWrappedLine(sb, "  P.DAY   : ", string.Format(CultureInfo.InvariantCulture,
+                AppendWrappedLine(sb, "  JOUR PRÉ: ", string.Format(CultureInfo.InvariantCulture,
                     "VAH {0} | POC {1} | VAL {2}",
                     Instrument.MasterInstrument.FormatPrice(vpManager.PrevDay.Vah),
                     Instrument.MasterInstrument.FormatPrice(vpManager.PrevDay.Poc),
@@ -178,12 +178,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
             else
             {
-                AppendWrappedLine(sb, "  P.DAY   : ", "En attente clôture session", maxLen);
+                AppendWrappedLine(sb, "  JOUR PRÉ: ", "En attente clôture session", maxLen);
             }
 
             if (vpManager.PrevWeek != null && vpManager.PrevWeek.Valid)
             {
-                AppendWrappedLine(sb, "  P.WEEK  : ", string.Format(CultureInfo.InvariantCulture,
+                AppendWrappedLine(sb, "  SEM PRÉ : ", string.Format(CultureInfo.InvariantCulture,
                     "VAH {0} | POC {1} | VAL {2}",
                     Instrument.MasterInstrument.FormatPrice(vpManager.PrevWeek.Vah),
                     Instrument.MasterInstrument.FormatPrice(vpManager.PrevWeek.Poc),
@@ -194,9 +194,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                     for (int i = 0; i < Math.Min(2, vpManager.PrevWeek.Nodes.Count); i++)
                     {
                         var n = vpManager.PrevWeek.Nodes[i];
-                        string nodeLabel = string.Format("  W.{0,-4} : ", n.NodeType);
+                        string nodeLabel = string.Format("  S.{0,-4} : ", n.NodeType);
                         string nodeVal = string.Format(CultureInfo.InvariantCulture,
-                            "{0}-{1} (Peak {2})",
+                            "{0}-{1} (Pic {2})",
                             Instrument.MasterInstrument.FormatPrice(n.ZoneLow),
                             Instrument.MasterInstrument.FormatPrice(n.ZoneHigh),
                             Instrument.MasterInstrument.FormatPrice(n.PeakPrice));
@@ -207,7 +207,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             if (vpManager.PrevMonth != null && vpManager.PrevMonth.Valid)
             {
-                AppendWrappedLine(sb, "  P.MONTH : ", string.Format(CultureInfo.InvariantCulture,
+                AppendWrappedLine(sb, "  MOIS PRÉ: ", string.Format(CultureInfo.InvariantCulture,
                     "VAH {0} | POC {1} | VAL {2}",
                     Instrument.MasterInstrument.FormatPrice(vpManager.PrevMonth.Vah),
                     Instrument.MasterInstrument.FormatPrice(vpManager.PrevMonth.Poc),

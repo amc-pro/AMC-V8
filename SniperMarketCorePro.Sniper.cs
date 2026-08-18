@@ -2884,8 +2884,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             StringBuilder sb = new StringBuilder(512);
             AppendWrappedLine(sb, "  SNIPER : ", string.Format("[{0} / {1}] seuil {2}/100", TradingPreset, ExecutionMode, MinScoreToAlert), maxLen);
-            AppendWrappedLine(sb, "  DayType: ", string.Format(CultureInfo.InvariantCulture, "{0} | IBext {1:0.00}", sniperDayType, ibExtensionRatio), maxLen);
-            AppendWrappedLine(sb, "  Context: ", string.Format(CultureInfo.InvariantCulture, "ATRpct {0:0} | Zdelta {1:0.00} | VAov {2:0.00}",
+            AppendWrappedLine(sb, "  TypeJour: ", string.Format(CultureInfo.InvariantCulture, "{0} | IBext {1:0.00}", sniperDayType, ibExtensionRatio), maxLen);
+            AppendWrappedLine(sb, "  Contexte: ", string.Format(CultureInfo.InvariantCulture, "ATRpct {0:0} | Zdelta {1:0.00} | VAov {2:0.00}",
                 AtrPercentileRank(), ZDeltaCurrent(), sniperVaOverlap), maxLen);
             AppendWrappedLine(sb, "  Alertes: ", string.Format("{0}/{1} sess, {2}/{3} sem",
                 sniperAlertsThisSession, MaxSniperAlertsPerSession, alertsThisWeek.Count, MaxAlertsPerWeek), maxLen);

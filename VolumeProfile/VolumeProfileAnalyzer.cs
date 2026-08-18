@@ -111,16 +111,16 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
 
             if (day != null && day.Valid)
             {
-                list.Add(new RefLevel { Name = "PrevDay POC", Price = day.Poc, PeriodType = "DAY" });
-                list.Add(new RefLevel { Name = "PrevDay VAH", Price = day.Vah, PeriodType = "DAY" });
-                list.Add(new RefLevel { Name = "PrevDay VAL", Price = day.Val, PeriodType = "DAY" });
+                list.Add(new RefLevel { Name = "POC Jour Préc", Price = day.Poc, PeriodType = "DAY" });
+                list.Add(new RefLevel { Name = "VAH Jour Préc", Price = day.Vah, PeriodType = "DAY" });
+                list.Add(new RefLevel { Name = "VAL Jour Préc", Price = day.Val, PeriodType = "DAY" });
             }
 
             if (week != null && week.Valid)
             {
-                list.Add(new RefLevel { Name = "PrevWeek POC", Price = week.Poc, PeriodType = "WEEK" });
-                list.Add(new RefLevel { Name = "PrevWeek VAH", Price = week.Vah, PeriodType = "WEEK" });
-                list.Add(new RefLevel { Name = "PrevWeek VAL", Price = week.Val, PeriodType = "WEEK" });
+                list.Add(new RefLevel { Name = "POC Sem Préc", Price = week.Poc, PeriodType = "WEEK" });
+                list.Add(new RefLevel { Name = "VAH Sem Préc", Price = week.Vah, PeriodType = "WEEK" });
+                list.Add(new RefLevel { Name = "VAL Sem Préc", Price = week.Val, PeriodType = "WEEK" });
 
                 if (week.Nodes != null)
                 {
@@ -129,7 +129,7 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                         var n = week.Nodes[i];
                         list.Add(new RefLevel
                         {
-                            Name = string.Format("PrevWeek {0} #{1}", n.NodeType, i + 1),
+                            Name = string.Format("{0} Sem Préc #{1}", n.NodeType, i + 1),
                             Price = n.PeakPrice,
                             ZoneLow = n.ZoneLow,
                             ZoneHigh = n.ZoneHigh,
@@ -142,9 +142,9 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
 
             if (month != null && month.Valid)
             {
-                list.Add(new RefLevel { Name = "PrevMonth POC", Price = month.Poc, PeriodType = "MONTH" });
-                list.Add(new RefLevel { Name = "PrevMonth VAH", Price = month.Vah, PeriodType = "MONTH" });
-                list.Add(new RefLevel { Name = "PrevMonth VAL", Price = month.Val, PeriodType = "MONTH" });
+                list.Add(new RefLevel { Name = "POC Mois Préc", Price = month.Poc, PeriodType = "MONTH" });
+                list.Add(new RefLevel { Name = "VAH Mois Préc", Price = month.Vah, PeriodType = "MONTH" });
+                list.Add(new RefLevel { Name = "VAL Mois Préc", Price = month.Val, PeriodType = "MONTH" });
 
                 if (month.Nodes != null)
                 {
@@ -153,7 +153,7 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                         var n = month.Nodes[i];
                         list.Add(new RefLevel
                         {
-                            Name = string.Format("PrevMonth {0} #{1}", n.NodeType, i + 1),
+                            Name = string.Format("{0} Mois Préc #{1}", n.NodeType, i + 1),
                             Price = n.PeakPrice,
                             ZoneLow = n.ZoneLow,
                             ZoneHigh = n.ZoneHigh,
@@ -214,33 +214,33 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 if (price > day.Vah)
                 {
                     loc |= VolumeProfileLocationType.AboveValue;
-                    sb.Append("ABOVE PREV DAY VA");
+                    sb.Append("AU-DESSUS VA JOUR PRÉC");
                 }
                 else if (price < day.Val)
                 {
                     loc |= VolumeProfileLocationType.BelowValue;
-                    sb.Append("BELOW PREV DAY VA");
+                    sb.Append("SOUS VA JOUR PRÉC");
                 }
                 else
                 {
                     loc |= VolumeProfileLocationType.InsideValue;
-                    sb.Append("INSIDE PREV DAY VA");
+                    sb.Append("DANS VA JOUR PRÉC");
                 }
 
                 if (Math.Abs(price - day.Poc) / tickSize <= LevelToleranceTicks)
                 {
                     loc |= VolumeProfileLocationType.NearPoc;
-                    sb.Append(" [NEAR DAY POC]");
+                    sb.Append(" [PROCHE POC JOUR]");
                 }
                 else if (Math.Abs(price - day.Vah) / tickSize <= LevelToleranceTicks)
                 {
                     loc |= VolumeProfileLocationType.NearVah;
-                    sb.Append(" [NEAR DAY VAH]");
+                    sb.Append(" [PROCHE VAH JOUR]");
                 }
                 else if (Math.Abs(price - day.Val) / tickSize <= LevelToleranceTicks)
                 {
                     loc |= VolumeProfileLocationType.NearVal;
-                    sb.Append(" [NEAR DAY VAL]");
+                    sb.Append(" [PROCHE VAL JOUR]");
                 }
             }
 
@@ -250,7 +250,7 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 if (Math.Abs(price - week.Poc) / tickSize <= LevelToleranceTicks)
                 {
                     loc |= VolumeProfileLocationType.NearPoc;
-                    sb.Append(" [NEAR WEEK POC]");
+                    sb.Append(" [PROCHE POC SEMAINE]");
                 }
             }
 
@@ -259,12 +259,23 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             CheckNodesLocation(price, month, tickSize, ref loc, sb);
 
             ctx.Location = loc;
-            ctx.LocationSummary = sb.Length > 0 ? sb.ToString() : "NEUTRAL";
+            ctx.LocationSummary = sb.Length > 0 ? sb.ToString() : "NEUTRE";
+        }
+
+        private static string FormatFrenchPeriodType(VolumeProfilePeriodType periodType)
+        {
+            switch (periodType)
+            {
+                case VolumeProfilePeriodType.Weekly: return "SEMAINE";
+                case VolumeProfilePeriodType.Monthly: return "MOIS";
+                default: return "JOUR";
+            }
         }
 
         private void CheckNodesLocation(double price, ClosedVolumeProfile profile, double tickSize, ref VolumeProfileLocationType loc, StringBuilder sb)
         {
             if (profile == null || !profile.Valid || profile.Nodes == null) return;
+            string periodLabel = FormatFrenchPeriodType(profile.ProfileType);
 
             foreach (var n in profile.Nodes)
             {
@@ -273,12 +284,12 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                     if (n.NodeType == VolumeProfileNodeType.HVN)
                     {
                         loc |= VolumeProfileLocationType.InsideHvn;
-                        sb.Append(string.Format(" [IN {0} HVN]", profile.ProfileType));
+                        sb.Append(string.Format(" [DANS HVN {0}]", periodLabel));
                     }
                     else
                     {
                         loc |= VolumeProfileLocationType.InsideLvn;
-                        sb.Append(string.Format(" [IN {0} LVN]", profile.ProfileType));
+                        sb.Append(string.Format(" [DANS LVN {0}]", periodLabel));
                     }
                 }
                 else
@@ -289,12 +300,12 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                         if (n.NodeType == VolumeProfileNodeType.HVN)
                         {
                             loc |= VolumeProfileLocationType.NearHvn;
-                            sb.Append(string.Format(" [NEAR {0} HVN]", profile.ProfileType));
+                            sb.Append(string.Format(" [PROCHE HVN {0}]", periodLabel));
                         }
                         else
                         {
                             loc |= VolumeProfileLocationType.NearLvn;
-                            sb.Append(string.Format(" [NEAR {0} LVN]", profile.ProfileType));
+                            sb.Append(string.Format(" [PROCHE LVN {0}]", periodLabel));
                         }
                     }
                 }
@@ -360,7 +371,7 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 ctx.ConfluenceZoneHigh = bestHigh;
 
                 var sb = new StringBuilder(64);
-                sb.Append(string.Format("VP_CONFLUENCE x{0} [", bestCount));
+                sb.Append(string.Format("CONFLUENCE x{0} [", bestCount));
                 for (int m = 0; m < bestMembers.Count; m++)
                 {
                     if (m > 0) sb.Append(" + ");
