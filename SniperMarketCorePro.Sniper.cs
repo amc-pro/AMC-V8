@@ -2439,13 +2439,20 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Le stop doit toujours proteger le niveau structurel du setup.
             if (c.IsBuy)
             {
-                double structural = Math.Min(snLow, refLevel) - buffer;
+                double structural = (refLevel > 0 && refLevel < c.Entry) ? refLevel - buffer : snLow - buffer;
                 c.Stop = Math.Min(c.Stop, structural);
             }
             else
             {
-                double structural = Math.Max(snHigh, refLevel) + buffer;
+                double structural = (refLevel > 0 && refLevel > c.Entry) ? refLevel + buffer : snHigh + buffer;
                 c.Stop = Math.Max(c.Stop, structural);
+            }
+
+            // Sécurité anti-bruit : le stop ne doit jamais être inférieur à MinStopTicks
+            double minStopDist = Math.Max(MinStopTicks > 0 ? MinStopTicks : 8, 8) * tickSize;
+            if (Math.Abs(c.Entry - c.Stop) < minStopDist)
+            {
+                c.Stop = c.IsBuy ? c.Entry - minStopDist : c.Entry + minStopDist;
             }
 
             // Cap en pips : le stop ne doit JAMAIS depasser MaxStopPips de l'entree,
@@ -2984,6 +2991,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 TrackedTrade t = openTrades[i];
                 if (t.Closed) { RemoveTradeLevels(t); openTrades.RemoveAt(i); continue; }
 
+                // Ne pas évaluer la sortie sur la bougie même de l'entrée (les mèches ont pu se former avant le signal)
+                if (evalBarIndex <= t.BarIdx) continue;
+
                 double risk = Math.Abs(t.Entry - t.Stop);
                 if (risk <= 0) { RemoveTradeLevels(t); openTrades.RemoveAt(i); continue; }
 
@@ -2991,30 +3001,40 @@ namespace NinjaTrader.NinjaScript.Indicators
                 bool t1Hit = t.IsBuy ? snHigh >= t.T1 : snLow <= t.T1;
                 bool t2Hit = t.IsBuy ? snHigh >= t.T2 : snLow <= t.T2;
 
-                if (stopHit)
+                if (stopHit && !t1Hit)
                 {
-                    double exitPrice = t.IsBuy ? Math.Min(snOpen, t.Stop) : Math.Max(snOpen, t.Stop);
+                    double exitPrice = t.IsBuy ? (snOpen < t.Stop ? snOpen : t.Stop) : (snOpen > t.Stop ? snOpen : t.Stop);
                     double lossR = -Math.Max(1.0, Math.Abs(t.Entry - exitPrice) / risk);
                     JournalOutcome(t, "STOP", lossR);
                     RemoveTradeLevels(t);
                     openTrades.RemoveAt(i);
                 }
-                else if (t1Hit && !t2Hit)
+                else if (t1Hit && !stopHit)
                 {
-                    JournalOutcome(t, "TARGET1", Math.Abs(t.T1 - t.Entry) / risk);
+                    if (t2Hit)
+                    {
+                        JournalOutcome(t, "TARGET2", Math.Abs(t.T2 - t.Entry) / risk);
+                    }
+                    else
+                    {
+                        JournalOutcome(t, "TARGET1", Math.Abs(t.T1 - t.Entry) / risk);
+                    }
                     RemoveTradeLevels(t);
                     openTrades.RemoveAt(i);
                 }
-                else if (t1Hit && t2Hit)
+                else if (t1Hit && stopHit)
                 {
-                    // Hypothèse conservatrice : T1 atteint d'abord sur la barre
-                    JournalOutcome(t, "TARGET1", Math.Abs(t.T1 - t.Entry) / risk);
-                    RemoveTradeLevels(t);
-                    openTrades.RemoveAt(i);
-                }
-                else if (t2Hit)
-                {
-                    JournalOutcome(t, "TARGET2", Math.Abs(t.T2 - t.Entry) / risk);
+                    // Si la barre touche le Stop et le TP sur la même bougie, arbitrage selon l'open
+                    double distToTp = Math.Abs(snOpen - t.T1);
+                    double distToStop = Math.Abs(snOpen - t.Stop);
+                    if (distToTp < distToStop)
+                    {
+                        JournalOutcome(t, "TARGET1", Math.Abs(t.T1 - t.Entry) / risk);
+                    }
+                    else
+                    {
+                        JournalOutcome(t, "STOP", -1.0);
+                    }
                     RemoveTradeLevels(t);
                     openTrades.RemoveAt(i);
                 }
