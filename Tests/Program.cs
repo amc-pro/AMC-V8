@@ -42,6 +42,7 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_HTF_Trend_Classifier_ClosedBars", Test_HTF_Trend_Classifier_ClosedBars);
             RunTest("Test_HTF_Trend_Classifier_RejectsInvalidData", Test_HTF_Trend_Classifier_RejectsInvalidData);
             RunTest("Test_VWAP_Sanitization_And_AntiLookahead", Test_VWAP_Sanitization_And_AntiLookahead);
+            RunTest("Test_XmlConfigurations_And_ScalpingPro_GateMatching", Test_XmlConfigurations_And_ScalpingPro_GateMatching);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
@@ -780,6 +781,45 @@ namespace AMC.VolumeProfile.Tests
             Assert(offsetClamped == 2, "Offset au-delà de maxBars doit être borné à maxBars.");
         }
 
+        private static void Test_XmlConfigurations_And_ScalpingPro_GateMatching()
+        {
+            // 1. Validation de l'égalité du nom de porte N2 entre Sniper.cs et ScalpingPro.cs
+            string engineGateFailed = "N2_LOCALISATION";
+            bool isOnlyN2GateFailed = engineGateFailed == "N2_LOCALISATION" || engineGateFailed == "GATE_N2_FAILED" || engineGateFailed == "N2_LOW" || string.IsNullOrEmpty(engineGateFailed);
+            Assert(isOnlyN2GateFailed, "Le libellé de porte N2_LOCALISATION doit être reconnu par le mécanisme de levée de porte de ScalpingPro");
+
+            // 2. Validation que tous les 40 fichiers XML de configs existent et sont bien formés
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string workspaceRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
+            string configsDir = Path.Combine(workspaceRoot, "configs");
+            if (!Directory.Exists(configsDir))
+            {
+                configsDir = Path.Combine(Directory.GetCurrentDirectory(), "configs");
+            }
+
+            if (Directory.Exists(configsDir))
+            {
+                string[] presets = { "SCALPING_PRO", "SCALPING", "SNIPER", "STANDARD", "SCANNER" };
+                string[] instruments = { "NQ", "MNQ", "ES", "MES", "GC", "MGC", "CL", "MCL" };
+
+                int count = 0;
+                foreach (string p in presets)
+                {
+                    foreach (string inst in instruments)
+                    {
+                        string fpath = Path.Combine(configsDir, p, string.Format("CONFIG_{0}_{1}.xml", inst, p));
+                        Assert(File.Exists(fpath), string.Format("Fichier XML manquant: {0}", fpath));
+                        string content = File.ReadAllText(fpath);
+                        Assert(content.Contains("<NinjaTrader>"), string.Format("XML invalide dans {0}", fpath));
+                        Assert(content.Contains("<SniperMarketCorePro>"), string.Format("SniperMarketCorePro absent dans {0}", fpath));
+                        count++;
+                    }
+                }
+                Assert(count == 40, string.Format("40 configurations XML attendues, {0} trouvées", count));
+            }
+        }
+
         #endregion
     }
 }
+

@@ -157,7 +157,7 @@
       <EnableHtfFilter>true</EnableHtfFilter>
       <HtfMinutes>15</HtfMinutes>
       <HtfEmaPeriod>50</HtfEmaPeriod>
-      <HtfStrictMode>true</HtfStrictMode>
+      <HtfStrictMode>false</HtfStrictMode>
       <EnableTradeJournal>true</EnableTradeJournal>
       <JournalMaxBarsInTrade>24</JournalMaxBarsInTrade>
       <JournalFilePath />
@@ -184,7 +184,7 @@
       <GateN4MinScore>2</GateN4MinScore>
       <HtfGateAppliesToMeanReversion>false</HtfGateAppliesToMeanReversion>
       <HtfMisalignmentPenalty>4</HtfMisalignmentPenalty>
-      <HtfSoftMode>false</HtfSoftMode>
+      <HtfSoftMode>true</HtfSoftMode>
       <SmcEventMaxAgeBars>12</SmcEventMaxAgeBars>
       <RequireFootprintEvidence>true</RequireFootprintEvidence>
       <TierSilverScore>46</TierSilverScore>
@@ -211,6 +211,14 @@
       <RejectionWickPercent>40</RejectionWickPercent>
       <OppositeSignalPenalty>3</OppositeSignalPenalty>
       <EnableShadowJournal>true</EnableShadowJournal>
+      <EnableMarketIntelligence>true</EnableMarketIntelligence>
+      <EnableMarketReport>true</EnableMarketReport>
+      <EnableMarketUpdate>true</EnableMarketUpdate>
+      <MiTrendEmaPeriod>21</MiTrendEmaPeriod>
+      <MiSwingStrength>2</MiSwingStrength>
+      <MiTrendMinDistanceTicks>0.5</MiTrendMinDistanceTicks>
+      <MiTrendMinSlopeTicks>0.1</MiTrendMinSlopeTicks>
+      <MiTelegramChannel>3</MiTelegramChannel>
     </SniperMarketCorePro>
   </SniperMarketCorePro>
 </NinjaTrader>

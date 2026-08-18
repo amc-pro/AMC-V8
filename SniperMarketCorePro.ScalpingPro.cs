@@ -802,10 +802,11 @@ namespace NinjaTrader.NinjaScript.Indicators
             MaxEntryDriftAtr = 0.5;
 
             EnableHtfFilter = true;
-            HtfStrictMode = true;
-            HtfSoftMode = false;
+            HtfStrictMode = false;
+            HtfSoftMode = true;
             HtfGateAppliesToMeanReversion = false;
             HtfMisalignmentPenalty = 4;
+            EnableMarketIntelligence = true;
 
             MinRiskReward = 1.0;
             TargetR1 = 1.0;
@@ -929,7 +930,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Les portes critiques (Risk/Reward, Drift, HTF Strict) restent strictement applicables.
             bool strongScore = c.ScoreRaw >= 50;
             bool strongFootprint = fp.IsValid;
-            bool isOnlyN2GateFailed = c.GateFailed == "GATE_N2_FAILED" || c.GateFailed == "N2_LOW" || string.IsNullOrEmpty(c.GateFailed);
+            bool isOnlyN2GateFailed = c.GateFailed == "N2_LOCALISATION" || c.GateFailed == "GATE_N2_FAILED" || c.GateFailed == "N2_LOW" || string.IsNullOrEmpty(c.GateFailed);
 
             if (c.Gated && isOnlyN2GateFailed && (strongScore || strongFootprint))
             {
