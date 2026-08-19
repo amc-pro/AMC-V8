@@ -640,13 +640,24 @@ namespace NinjaTrader.NinjaScript.Indicators
                     }
                 }
 
-                r.Penalty = ctx.Penalty + htfMod + m5Mod + ibMod;
+                // Bonus pour setups à haute fiabilité statistique (DELTA_FLIP, CUM_DELTA_DIV, NPOC_ABSORPTION)
+                double setupBonus = 0.0;
+                if (!string.IsNullOrEmpty(ctx.CandidateName))
+                {
+                    string cn = ctx.CandidateName.ToUpperInvariant();
+                    if (cn.Contains("DELTA_FLIP") || cn.Contains("CUM_DELTA_DIV"))
+                        setupBonus = 3.0;
+                    else if (cn.Contains("NPOC_ABSORPTION"))
+                        setupBonus = 4.0;
+                }
+
+                r.Penalty = ctx.Penalty + htfMod + m5Mod + ibMod + setupBonus;
                 r.Total = Clamp(r.Structure + r.Footprint + r.Volume + r.Momentum + r.Context + r.Penalty, 0, 100);
 
                 r.Detail = string.Format(CultureInfo.InvariantCulture,
-                    "PRO struct={0:0.0}/{1:0} foot={2:0.0}/{3:0} vol={4:0.0}/{5:0} mom={6:0.0}/{7:0} ctx={8:0.0}/{9:0} htfM15={10:+0.0;-0.0;0} m5Mod={11:+0.0;-0.0;0} ibMod={12:+0.0;-0.0;0} pen={13:0.0} => {14:0.0}/100",
+                    "PRO struct={0:0.0}/{1:0} foot={2:0.0}/{3:0} vol={4:0.0}/{5:0} mom={6:0.0}/{7:0} ctx={8:0.0}/{9:0} htfM15={10:+0.0;-0.0;0} m5Mod={11:+0.0;-0.0;0} ibMod={12:+0.0;-0.0;0} setupBonus={13:+0.0;-0.0;0} pen={14:0.0} => {15:0.0}/100",
                     r.Structure, effWStructure, r.Footprint, effWFootprint, r.Volume, wVolume,
-                    r.Momentum, effWMomentum, r.Context, wContext, htfMod, m5Mod, ibMod, ctx.Penalty, r.Total);
+                    r.Momentum, effWMomentum, r.Context, wContext, htfMod, m5Mod, ibMod, setupBonus, ctx.Penalty, r.Total);
                 return r;
             }
         }
@@ -811,15 +822,15 @@ namespace NinjaTrader.NinjaScript.Indicators
             MinRiskReward = 1.0;
             TargetR1 = 1.0;
             TargetR2 = 2.0;
-            StopAtrMultiple = 1.0;
-            StopBufferTicks = 2;
+            StopAtrMultiple = 1.25;
+            StopBufferTicks = 4;
             ExecutionCostTicks = 1;
 
             // de 200 / 5 contrats sur un profil d'execution reelle. On le fixe.
             RiskPerTradeCurrency = 100;
             MaxContracts = 2;
-            MinStopTicks = 4;
-            MaxStopTicks = 50;
+            MinStopTicks = 8;
+            MaxStopTicks = 80;
             MaxStopPips = 30;
             PipSize = 0.1;
 
@@ -926,6 +937,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 c.Gated = true;
             }
 
+            // Filtre de qualité pour FINISHED_AUCTION : éliminer le bruit sous le seuil Silver (46)
+            if (c.Name == "FINISHED_AUCTION" && c.ScoreRaw < TierSilverScore && !c.Gated)
+            {
+                c.GateFailed = "FA_SCORE_LOW";
+                c.Gated = true;
+                c.Detail.Add(string.Format(CultureInfo.InvariantCulture,
+                    "FINISHED_AUCTION score {0:0.0} < {1} (seuil de qualite)", c.ScoreRaw, TierSilverScore));
+            }
+
             // Seule la porte N2 (localisation) peut être levée si le score ou footprint est fort.
             // Les portes critiques (Risk/Reward, Drift, HTF Strict) restent strictement applicables.
             bool strongScore = c.ScoreRaw >= 50;
@@ -983,7 +1003,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             ctx.CandidateFamily = c.Family;
             ctx.SetupType = c.SetupType;
             ctx.CandidateName = c.Name;
-            ctx.HtfModifier = CalculateHtfModifier(c.SetupType, c.HtfAligned, c.Name);
+            ctx.HtfModifier = CalculateHtfModifier(c.SetupType, c.HtfAligned, c.Name, isBuy);
             ctx.M5Modifier = CalculateM5Modifier(isBuy, ctx.MiBias, ctx.MiConfidence);
             c.HtfModifier = ctx.HtfModifier;
             c.M5Modifier = ctx.M5Modifier;
@@ -1060,18 +1080,21 @@ namespace NinjaTrader.NinjaScript.Indicators
             return SetupType.Reversal;
         }
 
-        private double CalculateHtfModifier(SetupType setupType, bool htfAligned, string candidateName)
+        private double CalculateHtfModifier(SetupType setupType, bool htfAligned, string candidateName, bool isBuy)
         {
             if (htfAligned) return 4.0; // Bonus +4.0 pour HTF M15 aligne
 
-            // HTF Oppose : penalite adaptative selon le setup
+            // HTF Oppose : penalite adaptative selon le setup et le sens
             string n = candidateName != null ? candidateName.ToUpperInvariant() : "";
             bool isExtremeReversal = n.Contains("NPOC") || n.Contains("FAILED_AUCTION") || n.Contains("EXHAUSTION");
 
-            if (isExtremeReversal) return -1.0;
-            if (setupType == SetupType.Reversal) return -2.0;
-            if (setupType == SetupType.Breakout) return -4.0;
-            if (setupType == SetupType.Continuation) return -6.0;
+            // Penalite asymetrique : les SHORT contre tendance haussiere sont plus penalises (-2.0 de plus)
+            double shortExtraPenalty = (!isBuy) ? -2.0 : 0.0;
+
+            if (isExtremeReversal) return -1.0 + shortExtraPenalty;
+            if (setupType == SetupType.Reversal) return -2.0 + shortExtraPenalty;
+            if (setupType == SetupType.Breakout) return -4.0 + shortExtraPenalty;
+            if (setupType == SetupType.Continuation) return -6.0 + shortExtraPenalty;
 
             return 0.0;
         }
