@@ -946,6 +946,19 @@ namespace NinjaTrader.NinjaScript.Indicators
                     "FINISHED_AUCTION score {0:0.0} < {1} (seuil de qualite)", c.ScoreRaw, TierSilverScore));
             }
 
+            // Hard Gate IB Trend Day : Bloquer les Reversals contre la tendance confirmée de session (IB extension >= 1.5)
+            if (ctx.IsIbComplete && ctx.IbExtensionRatio >= 1.5 && c.SetupType == SetupType.Reversal && !c.Gated)
+            {
+                bool trendAligned = (ctx.IsBuy && ctx.IsIbUpExtension) || (!ctx.IsBuy && ctx.IsIbDownExtension);
+                if (!trendAligned)
+                {
+                    c.GateFailed = "IB_TREND_REVERSAL";
+                    c.Gated = true;
+                    c.Detail.Add(string.Format(CultureInfo.InvariantCulture,
+                        "IB_TREND_REVERSAL: Reversal contre Trend Day session (ratio {0:0.00} >= 1.5)", ctx.IbExtensionRatio));
+                }
+            }
+
             // Seule la porte N2 (localisation) peut être levée si le score ou footprint est fort.
             // Les portes critiques (Risk/Reward, Drift, HTF Strict) restent strictement applicables.
             bool strongScore = c.ScoreRaw >= 50;
@@ -1084,17 +1097,17 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (htfAligned) return 4.0; // Bonus +4.0 pour HTF M15 aligne
 
-            // HTF Oppose : penalite adaptative selon le setup et le sens
+            // HTF Oppose : penalite adaptative douce selon le setup et le sens (aucun hard gate)
             string n = candidateName != null ? candidateName.ToUpperInvariant() : "";
-            bool isExtremeReversal = n.Contains("NPOC") || n.Contains("FAILED_AUCTION") || n.Contains("EXHAUSTION");
+            bool isExtremeReversal = n.Contains("NPOC") || n.Contains("FAILED_AUCTION") || n.Contains("EXHAUSTION") || n.Contains("FINISHED_AUCTION") || n.Contains("SWEEP");
 
-            // Penalite asymetrique : les SHORT contre tendance haussiere sont plus penalises (-2.0 de plus)
-            double shortExtraPenalty = (!isBuy) ? -2.0 : 0.0;
+            // Penalite asymetrique : les SHORT contre tendance haussiere sont legerement plus penalises (-1.5 de plus)
+            double shortExtraPenalty = (!isBuy) ? -1.5 : 0.0;
 
             if (isExtremeReversal) return -1.0 + shortExtraPenalty;
             if (setupType == SetupType.Reversal) return -2.0 + shortExtraPenalty;
-            if (setupType == SetupType.Breakout) return -4.0 + shortExtraPenalty;
-            if (setupType == SetupType.Continuation) return -6.0 + shortExtraPenalty;
+            if (setupType == SetupType.Breakout) return -3.5 + shortExtraPenalty;
+            if (setupType == SetupType.Continuation) return -5.0 + shortExtraPenalty;
 
             return 0.0;
         }

@@ -254,8 +254,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             // POINT 4 : plus de closure Action<double> allouee a chaque appel ;
             // la logique passe par une methode statique avec "ref best".
 
-            // 1) HVN le plus proche dans le sens du trade (zone d'aimantation).
-            if (EnableNodeSetups && hvnVolumeThreshold > 0 && profileCount > 0)
+            // 1) HVN ou LVN le plus proche dans le sens du trade (zones d'aimantation / de rejet).
+            if (EnableNodeSetups && profileCount > 0)
             {
                 // recherche au niveau du prix d'entree au lieu de scanner tout le profil.
                 long entryTick = tickSize > 0 ? (long)Math.Round(entry / tickSize) : 0;
@@ -264,20 +264,24 @@ namespace NinjaTrader.NinjaScript.Indicators
                 {
                     for (int i = startIdx; i < profileCount; i++)
                     {
-                        if (profileVols[i] < hvnVolumeThreshold) continue;
                         double lvl = profileTicks[i] * tickSize;
                         if (lvl <= entry) continue;
-                        ConsiderTargetLevel(lvl, isBuy, entry, minDist, ref best);
+                        if (hvnVolumeThreshold > 0 && profileVols[i] >= hvnVolumeThreshold)
+                            ConsiderTargetLevel(lvl, isBuy, entry, minDist, ref best);
+                        else if (lvnVolumeThreshold > 0 && profileVols[i] <= lvnVolumeThreshold)
+                            ConsiderTargetLevel(lvl, isBuy, entry, minDist, ref best);
                     }
                 }
                 else
                 {
                     for (int i = Math.Min(startIdx, profileCount - 1); i >= 0; i--)
                     {
-                        if (profileVols[i] < hvnVolumeThreshold) continue;
                         double lvl = profileTicks[i] * tickSize;
                         if (lvl >= entry) continue;
-                        ConsiderTargetLevel(lvl, isBuy, entry, minDist, ref best);
+                        if (hvnVolumeThreshold > 0 && profileVols[i] >= hvnVolumeThreshold)
+                            ConsiderTargetLevel(lvl, isBuy, entry, minDist, ref best);
+                        else if (lvnVolumeThreshold > 0 && profileVols[i] <= lvnVolumeThreshold)
+                            ConsiderTargetLevel(lvl, isBuy, entry, minDist, ref best);
                     }
                 }
             }
@@ -565,11 +569,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                             : t.BestPrice + TrailWidthT2R * riskDist;
                         // Le trailing ne recule jamais.
                         t.TrailStop = t.IsBuy ? Math.Max(t.TrailStop, candidate) : Math.Min(t.TrailStop, candidate);
-                        // Passage a breakeven des que T1 est touche.
+                        // Passage a breakeven + 2 ticks de securite des que T1 est touche.
                         if (!t.Target1Hit && (t.IsBuy ? high >= t.Target1 : low <= t.Target1))
                         {
                             t.Target1Hit = true;
-                            t.TrailStop = t.IsBuy ? Math.Max(t.TrailStop, t.Entry) : Math.Min(t.TrailStop, t.Entry);
+                            double bePlus = tickSize > 0 ? (2 * tickSize) : 0;
+                            t.TrailStop = t.IsBuy ? Math.Max(t.TrailStop, t.Entry + bePlus) : Math.Min(t.TrailStop, t.Entry - bePlus);
                         }
                     }
                 }

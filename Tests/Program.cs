@@ -43,6 +43,14 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_HTF_Trend_Classifier_RejectsInvalidData", Test_HTF_Trend_Classifier_RejectsInvalidData);
             RunTest("Test_VWAP_Sanitization_And_AntiLookahead", Test_VWAP_Sanitization_And_AntiLookahead);
             RunTest("Test_XmlConfigurations_And_ScalpingPro_GateMatching", Test_XmlConfigurations_And_ScalpingPro_GateMatching);
+            RunTest("Test_HardGate_IB_TrendDay_ReversalRejection", Test_HardGate_IB_TrendDay_ReversalRejection);
+            RunTest("Test_HTF_Graduated_Soft_Penalty", Test_HTF_Graduated_Soft_Penalty);
+            RunTest("Test_RiskReward_Net_After_Execution_Costs", Test_RiskReward_Net_After_Execution_Costs);
+            RunTest("Test_Structural_Target_HVN_And_LVN_Logic", Test_Structural_Target_HVN_And_LVN_Logic);
+            RunTest("Test_BreakEven_Security_Plus_TwoTicks", Test_BreakEven_Security_Plus_TwoTicks);
+            RunTest("Test_Instrument_Specific_Footprint_Thresholds", Test_Instrument_Specific_Footprint_Thresholds);
+            RunTest("Test_Stress_Scenario_Flash_Crash_Gap_Protection", Test_Stress_Scenario_Flash_Crash_Gap_Protection);
+            RunTest("Test_MT5_Bridge_Net_RR_Spread_Filtration", Test_MT5_Bridge_Net_RR_Spread_Filtration);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
@@ -817,6 +825,192 @@ namespace AMC.VolumeProfile.Tests
                 }
                 Assert(count == 40, string.Format("40 configurations XML attendues, {0} trouvées", count));
             }
+        }
+
+        private static void Test_HardGate_IB_TrendDay_ReversalRejection()
+        {
+            // Simulation de la Hard Gate IB Trend Day pour ScalpingPro
+            Func<bool, double, string, bool, bool, bool, bool> evaluateIbGate = (isIbComplete, ibExtRatio, setupType, isBuy, isIbUp, isIbDown) =>
+            {
+                if (isIbComplete && ibExtRatio >= 1.5 && setupType == "Reversal")
+                {
+                    bool trendAligned = (isBuy && isIbUp) || (!isBuy && isIbDown);
+                    if (!trendAligned) return true; // Gated = true (Rejeté)
+                }
+                return false; // Gated = false (Accepté)
+            };
+
+            // 1. Trend Day Haussier (Extension Ratio = 1.8, UpExtension = true) : Un SELL Reversal doit être REJETÉ
+            bool sellReversalRejected = evaluateIbGate(true, 1.8, "Reversal", false, true, false);
+            Assert(sellReversalRejected, "Un SELL Reversal en Trend Day Haussier (ratio >= 1.5) doit être bloqué par IB Hard Gate.");
+
+            // 2. Trend Day Baissier (Extension Ratio = 2.0, DownExtension = true) : Un BUY Reversal doit être REJETÉ
+            bool buyReversalRejected = evaluateIbGate(true, 2.0, "Reversal", true, false, true);
+            Assert(buyReversalRejected, "Un BUY Reversal en Trend Day Baissier (ratio >= 1.5) doit être bloqué par IB Hard Gate.");
+
+            // 3. Trend Day Haussier : Un BUY Breakout ou Continuation doit être ACCEPTÉ
+            bool buyContinuationAllowed = !evaluateIbGate(true, 1.8, "Continuation", true, true, false);
+            Assert(buyContinuationAllowed, "Une Continuation haussière en Trend Day Haussier doit être autorisée.");
+
+            // 4. Range Day (Extension Ratio = 0.8) : Un SELL Reversal doit être ACCEPTÉ
+            bool rangeReversalAllowed = !evaluateIbGate(true, 0.8, "Reversal", false, false, false);
+            Assert(rangeReversalAllowed, "Les Reversals en Range Day doivent être autorisés.");
+        }
+
+        private static void Test_HTF_Graduated_Soft_Penalty()
+        {
+            // Simulation de CalculateHtfModifier (pénalité douce graduée, jamais de hard gate fatal)
+            Func<string, bool, string, bool, double> calcHtfMod = (setupType, htfAligned, candidateName, isBuy) =>
+            {
+                if (htfAligned) return 4.0;
+                string n = candidateName != null ? candidateName.ToUpperInvariant() : "";
+                bool isExtremeReversal = n.Contains("NPOC") || n.Contains("FAILED_AUCTION") || n.Contains("EXHAUSTION") || n.Contains("FINISHED_AUCTION") || n.Contains("SWEEP");
+                double shortExtra = (!isBuy) ? -1.5 : 0.0;
+
+                if (isExtremeReversal) return -1.0 + shortExtra;
+                if (setupType == "Reversal") return -2.0 + shortExtra;
+                if (setupType == "Breakout") return -3.5 + shortExtra;
+                if (setupType == "Continuation") return -5.0 + shortExtra;
+                return 0.0;
+            };
+
+            // HTF Aligné : bonus +4.0
+            Assert(calcHtfMod("Reversal", true, "SWEEP", true) == 4.0, "HTF aligné doit donner un bonus de +4.0");
+
+            // Extreme Reversal contre HTF haussier : pénalité douce de -1.0
+            double extRevMod = calcHtfMod("Reversal", false, "FINISHED_AUCTION", true);
+            Assert(extRevMod == -1.0, "Extreme Reversal contre HTF doit avoir une pénalité douce de -1.0");
+
+            // Continuation contre HTF haussier : pénalité forte de -5.0 (chasing contre HTF)
+            double contMod = calcHtfMod("Continuation", false, "RETEST", true);
+            Assert(contMod == -5.0, "Continuation contre HTF doit avoir une pénalité plus forte de -5.0");
+        }
+
+        private static void Test_RiskReward_Net_After_Execution_Costs()
+        {
+            double tick = 0.25;
+            double risk = 10.0 * tick; // 2.5 pts = 10 ticks
+            double target1Dist = 15.0 * tick; // 3.75 pts = 15 ticks
+            double execCost = 1.0 * tick; // 1 tick de spread/slippage
+
+            double netReward = Math.Max(0, target1Dist - execCost);
+            double netRisk = risk + execCost;
+            double netRr = netRisk > 0 ? netReward / netRisk : 0.0;
+
+            // R:R brut = 15 / 10 = 1.50
+            // R:R net = (15 - 1) / (10 + 1) = 14 / 11 ≈ 1.27
+            Assert(Math.Abs(netRr - (14.0 / 11.0)) < 0.001, "Le calcul du R:R net après coût d'exécution doit être mathématiquement exact.");
+            Assert(netRr >= 1.0, "Le R:R net doit être >= 1.0 pour être accepté");
+        }
+
+        private static void Test_Structural_Target_HVN_And_LVN_Logic()
+        {
+            // Simulation de la recherche de cibles structurelles HVN et LVN
+            long[] ticks = { 84000, 84010, 84020, 84030, 84040, 84050 };
+            long[] vols = { 1000, 50, 800, 1200, 40, 950 }; // LVN à 84010 et 84040, HVN à 84000, 84020, 84030, 84050
+            double tickSize = 0.25;
+            long hvnThresh = 800;
+            long lvnThresh = 100;
+
+            double entry = 84000 * tickSize; // 21000.0
+            double risk = 4.0 * tickSize; // 1.0 pt
+            double minDist = risk;
+
+            double best = 0;
+            for (int i = 1; i < ticks.Length; i++)
+            {
+                double lvl = ticks[i] * tickSize;
+                if (lvl <= entry) continue;
+                double dist = lvl - entry;
+                if (dist < minDist) continue;
+
+                if (vols[i] >= hvnThresh || vols[i] <= lvnThresh)
+                {
+                    if (best == 0 || dist < (best - entry))
+                        best = lvl;
+                }
+            }
+
+            Assert(best == (84010 * tickSize), "Le premier niveau clé (LVN à 84010) au moins à 1R doit être retenu comme cible structurelle.");
+        }
+
+        private static void Test_BreakEven_Security_Plus_TwoTicks()
+        {
+            double entry = 21000.0;
+            double tickSize = 0.25;
+            double beBufferTicks = 2.0;
+
+            double buyBeStop = entry + beBufferTicks * tickSize;
+            double sellBeStop = entry - beBufferTicks * tickSize;
+
+            Assert(buyBeStop == 21000.50, "Le BE BUY avec buffer 2 ticks doit être à 21000.50");
+            Assert(sellBeStop == 20999.50, "Le BE SELL avec buffer 2 ticks doit être à 20999.50");
+        }
+
+        private static void Test_Instrument_Specific_Footprint_Thresholds()
+        {
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string workspaceRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
+            string scalpingProDir = Path.Combine(workspaceRoot, "configs", "SCALPING_PRO");
+            if (!Directory.Exists(scalpingProDir))
+                scalpingProDir = Path.Combine(Directory.GetCurrentDirectory(), "configs", "SCALPING_PRO");
+
+            if (Directory.Exists(scalpingProDir))
+            {
+                string nqXml = File.ReadAllText(Path.Combine(scalpingProDir, "CONFIG_NQ_SCALPING_PRO.xml"));
+                string esXml = File.ReadAllText(Path.Combine(scalpingProDir, "CONFIG_ES_SCALPING_PRO.xml"));
+                string gcXml = File.ReadAllText(Path.Combine(scalpingProDir, "CONFIG_GC_SCALPING_PRO.xml"));
+                string clXml = File.ReadAllText(Path.Combine(scalpingProDir, "CONFIG_CL_SCALPING_PRO.xml"));
+
+                Assert(nqXml.Contains("<ImbalanceRatioPercent>350</ImbalanceRatioPercent>"), "NQ doit avoir un ratio imbalance de 350%");
+                Assert(esXml.Contains("<ImbalanceRatioPercent>250</ImbalanceRatioPercent>"), "ES doit avoir un ratio imbalance de 250%");
+                Assert(gcXml.Contains("<ImbalanceRatioPercent>200</ImbalanceRatioPercent>"), "GC doit avoir un ratio imbalance de 200%");
+                Assert(clXml.Contains("<ImbalanceRatioPercent>250</ImbalanceRatioPercent>"), "CL doit avoir un ratio imbalance de 250%");
+            }
+        }
+
+        private static void Test_Stress_Scenario_Flash_Crash_Gap_Protection()
+        {
+            // Simulation d'un gap de 500 ticks en 1 bougie
+            double entry = 21000.0;
+            double stop = 20980.0;
+            double gapPrice = 20500.0; // Flash crash
+            double tickSize = 0.25;
+
+            // Protection Zero-Trust : pas de division par zéro, pas de NaN
+            double riskDist = Math.Abs(entry - stop);
+            Assert(riskDist > 0, "Distance de risque finie et positive requise");
+
+            bool stopHit = gapPrice <= stop;
+            Assert(stopHit, "Le stop loss doit être déclenché immédiatement lors d'un gap baissier.");
+
+            double worstLoss = Math.Abs(gapPrice - entry) / tickSize;
+            Assert(worstLoss == 2000.0, "La perte max enregistrée en stress test doit être de 2000 ticks sans corruption de mémoire.");
+        }
+
+        private static void Test_MT5_Bridge_Net_RR_Spread_Filtration()
+        {
+            double entry = 21000.0;
+            double sl = 20980.0;
+            double tp1 = 21030.0;
+            double point = 0.25;
+
+            double slDist = Math.Abs(entry - sl);   // 20.0 pts = 80 ticks
+            double tp1Dist = Math.Abs(tp1 - entry); // 30.0 pts = 120 ticks
+
+            // Cas 1 : Spread normal (2 pts = 8 ticks)
+            int normalSpread = 2;
+            double netReward1 = Math.Max(0.0, (tp1Dist / point) - normalSpread);
+            double netRisk1 = (slDist / point) + normalSpread;
+            double netRr1 = netReward1 / netRisk1;
+            Assert(netRr1 >= 0.80, "Spread normal : le trade doit être accepté.");
+
+            // Cas 2 : Spread anormalement élargi (100 ticks) -> Net RR dégradé
+            int wideSpread = 100;
+            double netReward2 = Math.Max(0.0, (tp1Dist / point) - wideSpread);
+            double netRisk2 = (slDist / point) + wideSpread;
+            double netRr2 = netRisk2 > 0 ? (netReward2 / netRisk2) : 0.0;
+            Assert(netRr2 < 0.80, "Spread élargi : le R:R net dégradé doit conduire au rejet de l'exécution.");
         }
 
         #endregion

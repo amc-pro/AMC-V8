@@ -101,7 +101,7 @@ input ulong             InpMagicNumber           = 888777;                 // Ma
 input group "=== 3.1. SORTIES PARTIELLES, BREAK-EVEN & TRAILING ==="
 input double            InpClosePercentTP1       = 50.0;                   // % du volume à fermer à TP1 (Mode Split)
 input bool              InpEnableBreakEven       = true;                   // Déplacer le SL à Break-Even après TP1
-input int               InpBreakEvenBufferPoints = 5;                      // Marge de sécurité au-delà de l'entrée (points)
+input int               InpBreakEvenBufferPoints = 2;                      // Marge de sécurité au-delà de l'entrée (points/ticks)
 input bool              InpEnableTrailing        = false;                  // Activer Trailing Stop dynamique après TP1
 input int               InpTrailingDistancePoints= 50;                     // Distance de Trailing (points)
 input int               InpTrailingStepPoints    = 10;                     // Pas d'incrément de Trailing (points)
@@ -110,6 +110,10 @@ input group "=== 3.2. SUITE RISK PROP FIRM & CIRCUIT BREAKER ==="
 input bool              InpEnableDailyMaxLoss    = true;                   // Activer le Hard Lockout perte journalière
 input double            InpDailyMaxLossPercent   = 2.5;                    // Perte journalière max (% de l'Equity de départ)
 input double            InpDailyMaxLossCurrency  = 0.0;                    // Perte journalière max en devise (0.0 = % prioritaire)
+input bool              InpEnableTrailingMaxDD   = true;                   // Activer le Trailing Max Drawdown (Prop Firm HWM)
+input double            InpTrailingMaxDDPercent  = 4.0;                    // Drawdown Max Trailing depuis le pic d'Equity (%)
+input bool              InpEnableSpreadMaFilter  = true;                   // Filtre anti-élargissement brutal du spread (MA20)
+input double            InpSpreadMaMultiplier    = 1.5;                    // Multiplicateur max du spread par rapport à la moyenne
 input bool              InpEnableCircuitBreaker  = true;                   // Activer Circuit Breaker sur pertes consécutives
 input int               InpMaxConsecutiveLosses  = 3;                      // Nombre de pertes d'affilée tolérées (0 = désactivé)
 input int               InpCircuitBreakerPauseMin= 90;                     // Durée de la pause obligatoire (minutes)
@@ -145,15 +149,21 @@ datetime          ExtLastTcpConnectAttempt  = 0;
 string            ExtTcpBuffer              = "";
 bool              ExtTcpConnected           = false;
 
-// Variables de gestion du risque journalier
+// Variables de gestion du risque journalier & Prop Firm
 datetime          ExtCurrentDay             = 0;
 double            ExtDailyStartEquity       = 0.0;
+double            ExtPeakEquity             = 0.0;
 bool              ExtDailyLockoutActive     = false;
 datetime          ExtCircuitBreakerUntil    = 0;
 int               ExtConsecutiveLossCount   = 0;
 double            ExtDailyRealizedPl        = 0.0;
 double            ExtDailyFloatingPl        = 0.0;
 double            ExtDailyTotalPl           = 0.0;
+
+// Buffer circulaire de suivi du spread moyen (MA20)
+int               ExtRecentSpreads[20];
+int               ExtRecentSpreadIndex      = 0;
+int               ExtRecentSpreadCount      = 0;
 
 //+------------------------------------------------------------------+
 //| GESTION DU SOCKET TCP CLIENT (IPC ULTRA-BASSE LATENCE < 1MS)     |
@@ -417,6 +427,7 @@ int OnInit()
    ExtCurrentDay = (datetime)(now - (now % 86400));
    ExtDailyStartEquity = AccountInfoDouble(ACCOUNT_EQUITY);
    if(ExtDailyStartEquity <= 0) ExtDailyStartEquity = AccountInfoDouble(ACCOUNT_BALANCE);
+   ExtPeakEquity = ExtDailyStartEquity;
 
    ScanExistingPositions();
 
@@ -430,6 +441,22 @@ int OnInit()
                (InpBridgeMode == BRIDGE_AUTO ? "Auto (TCP/File)" : (InpBridgeMode == BRIDGE_SOCKET_TCP ? "TCP Socket <1ms" : "Fichier JSON")),
                (InpTpTarget == TP_TARGET_SPLIT ? "Split TP1/BE/TP2" : StringFormat("Fixe TP%d", (int)InpTpTarget)));
    return INIT_SUCCEEDED;
+  }
+
+//+------------------------------------------------------------------+
+//| CALCUL DE LA MOYENNE GLISSANTE DU SPREAD (MA20)                  |
+//+------------------------------------------------------------------+
+double GetAverageSpreadPoints(int currentSpread)
+  {
+   ExtRecentSpreads[ExtRecentSpreadIndex] = currentSpread;
+   ExtRecentSpreadIndex = (ExtRecentSpreadIndex + 1) % 20;
+   if(ExtRecentSpreadCount < 20) ExtRecentSpreadCount++;
+
+   int sum = 0;
+   for(int i = 0; i < ExtRecentSpreadCount; i++)
+      sum += ExtRecentSpreads[i];
+
+   return (ExtRecentSpreadCount > 0) ? ((double)sum / ExtRecentSpreadCount) : (double)currentSpread;
   }
 
 //+------------------------------------------------------------------+
@@ -699,6 +726,17 @@ void ProcessSignalPayload(const string &json, long sequence, bool fromTcp = fals
       return;
      }
 
+   double avgSpread = GetAverageSpreadPoints(currentSpreadPoints);
+   if(InpEnableSpreadMaFilter && ExtRecentSpreadCount >= 5)
+     {
+      if(currentSpreadPoints > InpSpreadMaMultiplier * avgSpread && currentSpreadPoints > 10)
+        {
+         ExtLastExecStatus = StringFormat("Attente : Spread anormalement élargi (%d pts vs moyenne %.1f pts)", currentSpreadPoints, avgSpread);
+         Print("⚠️ " + ExtLastExecStatus);
+         return;
+        }
+     }
+
    double finalSl  = 0.0;
    double finalTp  = 0.0;
    double finalTp1 = 0.0;
@@ -709,6 +747,22 @@ void ProcessSignalPayload(const string &json, long sequence, bool fromTcp = fals
       double slDist  = MathAbs(entry - sl);
       double tp1Dist = MathAbs(tp1 - entry);
       double tp2Dist = (tp2 > 0) ? MathAbs(tp2 - entry) : (tp1Dist * 2.0);
+
+      // Validation du R:R net réel après déduction du spread broker
+      double slPoints = (point > 0) ? (slDist / point) : 0.0;
+      double tp1Points = (point > 0) ? (tp1Dist / point) : 0.0;
+      double netRewardPoints = MathMax(0.0, tp1Points - currentSpreadPoints);
+      double netRiskPoints = slPoints + currentSpreadPoints;
+      double netRr = (netRiskPoints > 0) ? (netRewardPoints / netRiskPoints) : 0.0;
+
+      if(netRr < 0.80)
+        {
+         ExtLastProcessedSequence = sequence;
+         ExtLastExecStatus = StringFormat("Rejeté : R:R net après spread broker trop faible (%.2f < 0.80)", netRr);
+         Print("⚠️ " + ExtLastExecStatus);
+         LogExecutionToCsv(sequence, timestampStr, action, mt5Symbol, 0, currentPrice, sl, tp1, score, grade, sigName, "REJECTED_NET_RR_TOO_LOW", 0, ExtLastExecStatus);
+         return;
+        }
 
       if(isBuy)
         {
@@ -1155,6 +1209,29 @@ void CheckAndUpdateDailyRisk()
             CloseAllPositions("DAILY_MAX_LOSS_REACHED");
             LogExecutionToCsv(0, TimeToString(TimeLocal()), "LOCKOUT", "ALL", 0, 0, 0, 0, 0, "", "HARD_LOCKOUT", "TRIGGERED", 0,
                               StringFormat("P/L Jour: %.2f | Seuil: -%.2f", ExtDailyTotalPl, maxAllowedLossCurrency));
+           }
+        }
+     }
+
+   // 3.5. Vérification du Trailing Max Drawdown Prop Firm (depuis le Pic d'Equity)
+   double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(currentEquity > ExtPeakEquity) ExtPeakEquity = currentEquity;
+
+   if(InpEnableTrailingMaxDD && ExtPeakEquity > 0.0 && InpTrailingMaxDDPercent > 0.0)
+     {
+      double maxAllowedTrailingDd = ExtPeakEquity * (InpTrailingMaxDDPercent / 100.0);
+      double currentTrailingDd = ExtPeakEquity - currentEquity;
+
+      if(currentTrailingDd >= maxAllowedTrailingDd)
+        {
+         if(!ExtDailyLockoutActive)
+           {
+            ExtDailyLockoutActive = true;
+            PrintFormat("🚨 [TRAILING MAX DD LOCKOUT] Trailing Drawdown max atteint ! DD: %.2f / Max autorisé: %.2f (Pic: %.2f)",
+                        currentTrailingDd, maxAllowedTrailingDd, ExtPeakEquity);
+            CloseAllPositions("TRAILING_MAX_DD_REACHED");
+            LogExecutionToCsv(0, TimeToString(TimeLocal()), "LOCKOUT", "ALL", 0, 0, 0, 0, 0, "", "TRAILING_DD_LOCKOUT", "TRIGGERED", 0,
+                              StringFormat("Trailing DD: %.2f | Pic: %.2f | Max DD: %.2f", currentTrailingDd, ExtPeakEquity, maxAllowedTrailingDd));
            }
         }
      }

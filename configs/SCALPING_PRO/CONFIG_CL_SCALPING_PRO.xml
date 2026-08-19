@@ -114,11 +114,11 @@
       <IcebergRequireRejection>true</IcebergRequireRejection>
       <IcebergMinRejectionPercent>25</IcebergMinRejectionPercent>
       <EnableImbalanceDetection>true</EnableImbalanceDetection>
-      <ImbalanceRatioPercent>300</ImbalanceRatioPercent>
+      <ImbalanceRatioPercent>250</ImbalanceRatioPercent>
       <ImbalanceConsecutiveLevels>3</ImbalanceConsecutiveLevels>
       <ImbalanceOnlyAtKeyLevels>true</ImbalanceOnlyAtKeyLevels>
       <ImbalanceKeyLevelTicks>10</ImbalanceKeyLevelTicks>
-      <ImbalanceMinLevelVolume>25</ImbalanceMinLevelVolume>
+      <ImbalanceMinLevelVolume>20</ImbalanceMinLevelVolume>
       <ImbalanceDiagonalMode>true</ImbalanceDiagonalMode>
       <ImbalanceZoneMemoryBars>15</ImbalanceZoneMemoryBars>
       <ImbalanceZoneRetestTicks>3</ImbalanceZoneRetestTicks>
