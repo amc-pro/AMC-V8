@@ -797,15 +797,15 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Un preset d'EXECUTION REELLE ne peut pas s'en accommoder.
             EvaluateOnBarClose = true;
 
-            MinScoreToAlert = 35;                    // Optimisé V-reversal (ScalpingPro : 35)
+            MinScoreToAlert = 50;                    // Seuil ScalpingPro calibré : 50/100
             MaxSniperAlertsPerSession = 0;            // Illimité (0 = illimité)
             MaxAlertsPerWeek = 0;                     // Illimité (0 = illimité)
             MaxAlertsPerSession = 0;                  // Illimité (0 = illimité)
 
-            GateN1MinScore = 5;                      // Contexte      (/30) - Assoupli pour permettre plus de signaux
-            GateN2MinScore = 2;                      // Localisation  (/30) - Assoupli pour ne plus bloquer les V-reversals
-            GateN3MinScore = 4;                      // Microstructure(/25) - Assoupli
-            GateN4MinScore = 2;                      // Trigger       (/15) - Assoupli
+            GateN1MinScore = 6;                      // Contexte      (/30)
+            GateN2MinScore = 6;                      // Localisation  (/30) - Niveau clé VAH/VAL/POC institutionnel
+            GateN3MinScore = 5;                      // Microstructure(/25)
+            GateN4MinScore = 4;                      // Trigger       (/15)
 
             SelectionBufferBars = 0;
             // Le buffer est nul mais le controle de derive reste actif : en reel,
@@ -856,7 +856,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             // et le mode debug sont desactives (charge CPU + volume de logs). Ils
             // restent disponibles manuellement pour les phases de calibration.
             EnableTradeJournal = true;
-            JournalLiveOnly = true;
+            JournalLiveOnly = false;
             JournalMaxBarsInTrade = 24;
             JournalShadowMode = false;
             EnableDebugMode = false;
