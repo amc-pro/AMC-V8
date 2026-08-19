@@ -191,8 +191,10 @@ def analyze_file(filepath):
     print(f"🎯 RAPPORT DE PERFORMANCE AMC PRO — {os.path.basename(filepath)}")
     print("=" * 90)
     print(f"📁 Fichier analysé : {filepath}")
-    if trades[0]["entry_time"] and trades[-1]["exit_time"]:
-        print(f"📅 Période couverte: du {trades[0]['entry_time']} au {trades[-1]['exit_time']}")
+    entry_times = [t["entry_time"] for t in trades if t["entry_time"]]
+    exit_times = [t["exit_time"] for t in trades if t["exit_time"]]
+    if entry_times and exit_times:
+        print(f"📅 Période couverte: du {min(entry_times)} au {max(exit_times)}")
     print("-" * 90)
     
     print(f"📈 TOTAL TRADES EXÉCUTÉS : {m['total']}")
