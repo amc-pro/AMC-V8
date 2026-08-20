@@ -2319,7 +2319,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
             
             // Pour les setups d'orderflow purs (DELTA_FLIP, CUM_DELTA_DIV) en mode ScalpingPro, assouplir la porte N2
-            bool isOrderflowSetup = c.Name == "DELTA_FLIP" || c.Name == "CUM_DELTA_DIV";
+            bool isOrderflowSetup = c.Name == "DELTA_FLIP" || c.Name == "CUM_DELTA_DIV" || c.Name == "FINISHED_AUCTION";
             if (IsScalpingPro && isOrderflowSetup && c.N2 >= 1)
             {
                 g2 = true; // Accepter N2 >= 1 pour les setups orderflow purs en ScalpingPro

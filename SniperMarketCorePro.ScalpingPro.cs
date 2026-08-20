@@ -797,7 +797,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Un preset d'EXECUTION REELLE ne peut pas s'en accommoder.
             EvaluateOnBarClose = true;
 
-            MinScoreToAlert = 50;                    // Seuil ScalpingPro calibré : 50/100
+            MinScoreToAlert = 45; // Assoupli pour éviter la sur-sélectivité                    // Seuil ScalpingPro calibré : 50/100
             MaxSniperAlertsPerSession = 0;            // Illimité (0 = illimité)
             MaxAlertsPerWeek = 0;                     // Illimité (0 = illimité)
             MaxAlertsPerSession = 0;                  // Illimité (0 = illimité)
@@ -814,7 +814,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             EnableHtfFilter = true;
             HtfStrictMode = false;
-            HtfSoftMode = true;
+            HtfSoftMode = true; // Actif par défaut pour un scalping plus fluide
             HtfGateAppliesToMeanReversion = false;
             HtfMisalignmentPenalty = 4;
             EnableMarketIntelligence = true;
