@@ -179,8 +179,8 @@
       <NewsHardBlock>true</NewsHardBlock>
       <MaxEntryDriftAtr>0.5</MaxEntryDriftAtr>
       <GateN1MinScore>6</GateN1MinScore>
-      <GateN2MinScore>5</GateN2MinScore>
-      <GateN3MinScore>5</GateN3MinScore>
+      <GateN2MinScore>4</GateN2MinScore>
+      <GateN3MinScore>4</GateN3MinScore>
       <GateN4MinScore>4</GateN4MinScore>
       <HtfGateAppliesToMeanReversion>false</HtfGateAppliesToMeanReversion>
       <HtfMisalignmentPenalty>2</HtfMisalignmentPenalty>
