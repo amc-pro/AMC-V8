@@ -2327,6 +2327,18 @@ namespace NinjaTrader.NinjaScript.Indicators
                 c.Detail.Add("ScalpingPro Orderflow: N2 gate assoupli (>=1)");
             }
             
+            // VETO STRICT : Si le marché est en tendance haussière forte (ex: EMA ou Biais H4/H1 haussier), 
+            // interdire les setups FINISHED_AUCTION en Short (évite de vendre le bas ou de faire du contre-tendance suicidaire)
+            if (IsScalpingPro && !c.IsBuy && c.Name == "FINISHED_AUCTION")
+            {
+                // Si la tendance HTF globale est nettement haussière (biais haussier), on rejette le Short Finished Auction
+                if (ctx.HtfModifier > 1.0 || (MarketSnapshotGlobal != null && MarketSnapshotGlobal.TrendH4 == MiTrend.Bullish))
+                {
+                    c.Detail.Add("VETO SCALPING PRO: Short Finished Auction rejeté car contre-tendance haussière forte");
+                    return null; // Rejet pur et simple du trade contre-tendance
+                }
+            }
+
             bool g3 = c.N3 >= GateN3MinScore;
             bool g4 = c.N4 >= GateN4MinScore;
             // Quand MinRiskReward == TargetR1 (cas du preset Scanner : 1.2 / 1.2), un
