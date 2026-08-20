@@ -2348,7 +2348,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 // Si l'ATR de la barre dépasse 3.5 fois la taille de tick moyenne, le marché est en mode trend/breakout, 
                 // le finished auction (mean reversion) est donc proscrit pour éviter de "prendre un couteau qui tombe".
                 double avgTickSize = tickSize > 0 ? tickSize : 0.25;
-                if (c.Atr > avgTickSize * 140)
+                if (SniperAtr() > avgTickSize * 140)
                 {
                     c.Detail.Add("REJET SCALPING PRO: Finished Auction rejeté car volatilité (ATR) trop excessive pour du mean-reversion");
                     return null;
