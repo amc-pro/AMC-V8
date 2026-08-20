@@ -807,14 +807,14 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Un preset d'EXECUTION REELLE ne peut pas s'en accommoder.
             EvaluateOnBarClose = true;
 
-            MinScoreToAlert = 45; // Assoupli pour éviter la sur-sélectivité                    // Seuil ScalpingPro calibré : 50/100
+            MinScoreToAlert = 35; // Abaissé à 35 pour les tests en Replay
             MaxSniperAlertsPerSession = 0;            // Illimité (0 = illimité)
             MaxAlertsPerWeek = 0;                     // Illimité (0 = illimité)
             MaxAlertsPerSession = 0;                  // Illimité (0 = illimité)
 
             GateN1MinScore = 6;                      // Contexte      (/30)
-            GateN2MinScore = 6;                      // Localisation  (/30) - Niveau clé VAH/VAL/POC institutionnel
-            GateN3MinScore = 5;                      // Microstructure(/25)
+            GateN2MinScore = 4;                      // Localisation  (/30) - Assoupli pour US session
+            GateN3MinScore = 4;                      // Microstructure(/25) - Assoupli pour US session
             GateN4MinScore = 4;                      // Trigger       (/15)
 
             SelectionBufferBars = 0;
@@ -840,7 +840,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             RiskPerTradeCurrency = 100;
             MaxContracts = 2;
             MinStopTicks = 8;
-            MaxStopTicks = 80;
+            MaxStopTicks = 160; // Élargi à 160 pour supporter la volatilité US du NQ
             MaxStopPips = 30;
             PipSize = 0.1;
 
