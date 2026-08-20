@@ -173,7 +173,7 @@
       <SelectionBufferBars>0</SelectionBufferBars>
       <SniperRthOnly>false</SniperRthOnly>
       <NewsBlackoutMinutes>5</NewsBlackoutMinutes>
-      <NewsTimesCsv>0830,1000,1430,1500</NewsTimesCsv>
+      <NewsTimesCsv>1530</NewsTimesCsv>
       <NewsWindowPenalty>1</NewsWindowPenalty>
       <NewsWeekdaysOnly>true</NewsWeekdaysOnly>
       <NewsHardBlock>true</NewsHardBlock>
