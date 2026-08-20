@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <NinjaTrader>
   <SniperMarketCorePro>
     <SniperMarketCorePro>
@@ -173,7 +173,7 @@
       <SelectionBufferBars>0</SelectionBufferBars>
       <SniperRthOnly>false</SniperRthOnly>
       <NewsBlackoutMinutes>5</NewsBlackoutMinutes>
-      <NewsTimesCsv>0830,1000,1400,1430</NewsTimesCsv>
+      <NewsTimesCsv>0830,1000,1430,1500</NewsTimesCsv>
       <NewsWindowPenalty>1</NewsWindowPenalty>
       <NewsWeekdaysOnly>true</NewsWeekdaysOnly>
       <NewsHardBlock>true</NewsHardBlock>
