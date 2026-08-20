@@ -2327,11 +2327,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                 c.Detail.Add("ScalpingPro Orderflow: N2 gate assoupli (>=1)");
             }
             
-            // FILTRE ANTI-CONTRE-TENDANCE ROBUSTE : Si le setup est FINISHED_AUCTION et que le HTF n'est pas aligné (contre-tendance),
+            // FILTRE ANTI-CONTRE-TENDANCE ROBUSTE : Si le setup est FINISHED_AUCTION ou DELTA_FLIP et que le HTF n'est pas aligné,
             // on rejette purement et simplement le trade pour éviter les faux retournements.
-            if (IsScalpingPro && c.Name == "FINISHED_AUCTION" && !c.HtfAligned)
+            if (IsScalpingPro && (c.Name == "FINISHED_AUCTION" || c.Name == "DELTA_FLIP") && !c.HtfAligned)
             {
-                c.Detail.Add("REJET SCALPING PRO: Finished Auction rejeté car non aligné avec la tendance HTF");
+                c.Detail.Add("REJET SCALPING PRO: " + c.Name + " rejeté car non aligné avec la tendance HTF");
                 return null;
             }
 

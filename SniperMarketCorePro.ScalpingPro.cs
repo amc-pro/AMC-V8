@@ -807,7 +807,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Un preset d'EXECUTION REELLE ne peut pas s'en accommoder.
             EvaluateOnBarClose = true;
 
-            MinScoreToAlert = 45; // Abaissé à 35 pour les tests en Replay
+            MinScoreToAlert = 55; // Abaissé à 35 pour les tests en Replay
             MaxSniperAlertsPerSession = 0;            // Illimité (0 = illimité)
             MaxAlertsPerWeek = 0;                     // Illimité (0 = illimité)
             MaxAlertsPerSession = 0;                  // Illimité (0 = illimité)
