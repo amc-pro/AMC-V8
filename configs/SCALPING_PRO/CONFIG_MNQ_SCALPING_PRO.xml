@@ -66,14 +66,14 @@
       <AcceptanceBars>1</AcceptanceBars>
       <RetestToleranceTicks>8</RetestToleranceTicks>
       <RetestMaxBars>15</RetestMaxBars>
-      <EnableFailedAuction>false</EnableFailedAuction>
+      <EnableFailedAuction>true</EnableFailedAuction>
       <FailedAuctionMaxBars>6</FailedAuctionMaxBars>
       <EnableNodeSetups>true</EnableNodeSetups>
       <LvnThresholdPercent>20</LvnThresholdPercent>
       <HvnThresholdPercent>120</HvnThresholdPercent>
       <NodeToleranceTicks>4</NodeToleranceTicks>
       <SignalValidityBars>2</SignalValidityBars>
-      <MinConfluencePercentToAlert>50</MinConfluencePercentToAlert>
+      <MinConfluencePercentToAlert>45</MinConfluencePercentToAlert>
       <UseWeightedMultiSignal>true</UseWeightedMultiSignal>
       <DirectionalConflictPercent>90</DirectionalConflictPercent>
       <UseAdaptiveMovementThreshold>true</UseAdaptiveMovementThreshold>
@@ -83,10 +83,10 @@
       <AutoProfileInstrument>true</AutoProfileInstrument>
       <EnableAbsorptionDetection>true</EnableAbsorptionDetection>
       <AbsorptionDeltaThreshold>300</AbsorptionDeltaThreshold>
-      <AbsorptionTickVolumeThreshold>50</AbsorptionTickVolumeThreshold>
+      <AbsorptionTickVolumeThreshold>250</AbsorptionTickVolumeThreshold>
       <AbsorptionOnlyAtKeyLevels>true</AbsorptionOnlyAtKeyLevels>
       <AbsorptionKeyLevelTicks>8</AbsorptionKeyLevelTicks>
-      <MinBarVolumeForAbsorption>500</MinBarVolumeForAbsorption>
+      <MinBarVolumeForAbsorption>3000</MinBarVolumeForAbsorption>
       <UseAdaptiveAbsorptionThreshold>true</UseAdaptiveAbsorptionThreshold>
       <AbsorptionDeltaPercentile>90</AbsorptionDeltaPercentile>
       <AdaptiveCalibrationBars>300</AdaptiveCalibrationBars>
@@ -146,8 +146,8 @@
       <MaxAlertsPerSession>0</MaxAlertsPerSession>
       <EnableRiskManagement>true</EnableRiskManagement>
       <RiskAtrPeriod>14</RiskAtrPeriod>
-      <StopAtrMultiple>1.25</StopAtrMultiple>
-      <StopBufferTicks>4</StopBufferTicks>
+      <StopAtrMultiple>1.75</StopAtrMultiple>
+      <StopBufferTicks>6</StopBufferTicks>
       <TargetR1>1</TargetR1>
       <TargetR2>2</TargetR2>
       <MinRiskReward>1</MinRiskReward>
@@ -172,18 +172,18 @@
       <MaxSniperAlertsPerSession>0</MaxSniperAlertsPerSession>
       <SelectionBufferBars>0</SelectionBufferBars>
       <SniperRthOnly>false</SniperRthOnly>
-      <NewsBlackoutMinutes>5</NewsBlackoutMinutes>
-      <NewsTimesCsv>1530</NewsTimesCsv>
+      <NewsBlackoutMinutes>10</NewsBlackoutMinutes>
+      <NewsTimesCsv>0830,1000,1430,1500</NewsTimesCsv>
       <NewsWindowPenalty>1</NewsWindowPenalty>
       <NewsWeekdaysOnly>true</NewsWeekdaysOnly>
       <NewsHardBlock>true</NewsHardBlock>
       <MaxEntryDriftAtr>0.5</MaxEntryDriftAtr>
       <GateN1MinScore>6</GateN1MinScore>
-      <GateN2MinScore>6</GateN2MinScore>
-      <GateN3MinScore>5</GateN3MinScore>
+      <GateN2MinScore>4</GateN2MinScore>
+      <GateN3MinScore>4</GateN3MinScore>
       <GateN4MinScore>4</GateN4MinScore>
       <HtfGateAppliesToMeanReversion>false</HtfGateAppliesToMeanReversion>
-      <HtfMisalignmentPenalty>4</HtfMisalignmentPenalty>
+      <HtfMisalignmentPenalty>2</HtfMisalignmentPenalty>
       <HtfSoftMode>true</HtfSoftMode>
       <SmcEventMaxAgeBars>12</SmcEventMaxAgeBars>
       <RequireFootprintEvidence>true</RequireFootprintEvidence>
@@ -219,6 +219,7 @@
       <MiTrendMinDistanceTicks>0.5</MiTrendMinDistanceTicks>
       <MiTrendMinSlopeTicks>0.1</MiTrendMinSlopeTicks>
       <MiTelegramChannel>3</MiTelegramChannel>
+      <MaxStopTicks>160</MaxStopTicks>
     </SniperMarketCorePro>
   </SniperMarketCorePro>
 </NinjaTrader>
