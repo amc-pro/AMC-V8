@@ -2327,7 +2327,21 @@ namespace NinjaTrader.NinjaScript.Indicators
                 c.Detail.Add("ScalpingPro Orderflow: N2 gate assoupli (>=1)");
             }
             
-            // (Veto anti-contre-tendance retiré pour éviter toute erreur de compilation et laisser le score évaluer la pertinence)
+            // FILTRE ANTI-CONTRE-TENDANCE ROBUSTE : Si le setup est FINISHED_AUCTION et que le HTF n'est pas aligné (contre-tendance),
+            // on rejette purement et simplement le trade pour éviter les faux retournements.
+            if (IsScalpingPro && c.Name == "FINISHED_AUCTION" && !c.HtfAligned)
+            {
+                c.Detail.Add("REJET SCALPING PRO: Finished Auction rejeté car non aligné avec la tendance HTF");
+                return null;
+            }
+
+            // EXIGENCE MICROSTRUCTURE STRICTE : Pour Finished Auction, exiger un score N3 minimum (ex: 3.5) 
+            // pour garantir une vraie preuve d'absorption passive ou d'iceberg avant d'entrer.
+            if (IsScalpingPro && c.Name == "FINISHED_AUCTION" && c.N3 < 3.5)
+            {
+                c.Detail.Add("REJET SCALPING PRO: Finished Auction rejeté car microstructure N3 insuffisante (< 3.5)");
+                return null;
+            }
 
             bool g3 = c.N3 >= GateN3MinScore;
             bool g4 = c.N4 >= GateN4MinScore;
