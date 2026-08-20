@@ -2113,9 +2113,13 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         // Anti-correlation : absorption / iceberg / delta flip decrivent le MEME facteur
         // latent. On ne retient que le maximum de la famille, jamais la somme.
-        private double ScoreMicrostructure(bool isBuy, List<string> detail)
+        private double ScoreMicrostructure(bool isBuy, string setupName, List<string> detail)
         {
             double s = 0;
+            string upperSetup = setupName != null ? setupName.ToUpperInvariant() : "";
+            bool isBreakoutOrAcceptance = upperSetup.Contains("BREAKOUT") || upperSetup.Contains("ACCEPTANCE");
+            bool isDeltaFlip = upperSetup.Contains("DELTA_FLIP");
+            bool isRetest = upperSetup.Contains("RETEST");
 
             double zSum, clusterPrice;
             double passiveScore = 0;
@@ -2135,19 +2139,23 @@ namespace NinjaTrader.NinjaScript.Indicators
                     passiveScore = icePts;
                 }
             }
+            // Setup-aware: Breakouts & Acceptances rely on impulse rather than passive absorption
+            if (isBreakoutOrAcceptance) passiveScore *= 0.5;
             s += Math.Min(10.0, passiveScore);
 
             double zSlope;
             if (CvdSlopeDivergence(isBuy, out zSlope))
             {
                 double pts = Clamp(zSlope / (CvdSlopeZThreshold * 2.0), 0, 1.0) * 7.0;
+                if (isDeltaFlip || isBreakoutOrAcceptance) pts *= 1.3;
                 s += pts;
                 detail.Add(string.Format(CultureInfo.InvariantCulture, "CVDslopeDiv Z={0:0.00} (+{1:0.0})", zSlope, pts));
             }
             else if ((isBuy && isCumDeltaDivBullish) || (!isBuy && isCumDeltaDivBearish))
             {
-                s += 3;
-                detail.Add("CumDeltaDiv AMC (+3)");
+                double pts = isDeltaFlip ? 4.0 : 3.0;
+                s += pts;
+                detail.Add("CumDeltaDiv AMC (+" + pts + ")");
             }
 
             int bestLevels = 0;
@@ -2161,11 +2169,17 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (bestLevels >= ImbalanceMinStack)
             {
                 double pts = Clamp(bestLevels / (double)(ImbalanceMinStack * 2), 0.5, 1.0) * 5.0;
+                if (isBreakoutOrAcceptance) pts *= 1.4; // Imbalances are key for breakout / acceptance
                 s += pts;
                 detail.Add("StackedImb x" + bestLevels + string.Format(CultureInfo.InvariantCulture, " (+{0:0.0})", pts));
             }
 
-            if (FinishedAuctionAtExtreme(isBuy)) { s += 3; detail.Add("FinishedAuction (+3)"); }
+            if (FinishedAuctionAtExtreme(isBuy)) 
+            { 
+                double pts = isRetest ? 4.0 : 3.0;
+                s += pts; 
+                detail.Add("FinishedAuction (+" + pts + ")"); 
+            }
 
             return Math.Min(25.0, s);
         }
@@ -2186,19 +2200,36 @@ namespace NinjaTrader.NinjaScript.Indicators
             return v > 0 && v <= p15;
         }
 
-        private double ScoreTrigger(bool isBuy, List<string> detail)
+        private double ScoreTrigger(bool isBuy, string setupName, List<string> detail)
         {
             double s = 0;
+            string upperSetup = setupName != null ? setupName.ToUpperInvariant() : "";
+            bool isBreakoutOrAcceptance = upperSetup.Contains("BREAKOUT") || upperSetup.Contains("ACCEPTANCE");
+            bool isDeltaFlip = upperSetup.Contains("DELTA_FLIP");
+            bool isRetest = upperSetup.Contains("RETEST");
+
             double range = snHigh - snLow;
             if (range <= 0) return 0;
 
             double wick = isBuy
                 ? (Math.Min(snOpen, snClose) - snLow) / range
                 : (snHigh - Math.Max(snOpen, snClose)) / range;
-            if (wick * 100.0 >= RejectionWickPercent)
+            
+            // Retests rely on rejection wicks; breakouts rely on body expansion / closing outside
+            if (!isBreakoutOrAcceptance && wick * 100.0 >= RejectionWickPercent)
             {
-                s += 6;
-                detail.Add(string.Format(CultureInfo.InvariantCulture, "Rejet meche {0:0}% (+6)", wick * 100));
+                double pts = isRetest ? 7.0 : 6.0;
+                s += pts;
+                detail.Add(string.Format(CultureInfo.InvariantCulture, "Rejet meche {0:0}% (+{1:0.0})", wick * 100, pts));
+            }
+            else if (isBreakoutOrAcceptance)
+            {
+                double bodyRatio = Math.Abs(snClose - snOpen) / range;
+                if (bodyRatio >= 0.5)
+                {
+                    s += 6.0;
+                    detail.Add(string.Format(CultureInfo.InvariantCulture, "Breakout Body Expansion {0:0}% (+6.0)", bodyRatio * 100));
+                }
             }
 
             if (vahPrice > 0 && valPrice > 0)
@@ -2210,10 +2241,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
 
             double z = ZDeltaCurrent();
-            if ((isBuy && z >= 1.0) || (!isBuy && z <= -1.0))
+            double zThreshold = isDeltaFlip ? 1.5 : 1.0;
+            if ((isBuy && z >= zThreshold) || (!isBuy && z <= -zThreshold))
             {
-                s += 4;
-                detail.Add(string.Format(CultureInfo.InvariantCulture, "Delta Z={0:0.00} (+4)", z));
+                double pts = (isDeltaFlip || isBreakoutOrAcceptance) ? 5.0 : 4.0;
+                s += pts;
+                detail.Add(string.Format(CultureInfo.InvariantCulture, "Delta Z={0:0.00} (+" + pts + ")", z));
             }
 
             return s;
@@ -2275,8 +2308,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             c.N1 = ScoreContext(isBuy, name, c.Detail);
             c.N2 = ScoreLocation(isBuy, refLevel, name, c.Detail);
-            c.N3 = ScoreMicrostructure(isBuy, c.Detail);
-            c.N4 = ScoreTrigger(isBuy, c.Detail);
+            c.N3 = ScoreMicrostructure(isBuy, name, c.Detail);
+            c.N4 = ScoreTrigger(isBuy, name, c.Detail);
             NormalizeLevels(c, meanReversion);
             c.Penalty = ScorePenalties(isBuy, c.Detail);
 
@@ -2327,11 +2360,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                 c.Detail.Add("ScalpingPro Orderflow: N2 gate assoupli (>=1)");
             }
             
-            // FILTRE ANTI-CONTRE-TENDANCE ROBUSTE : Si le setup est FINISHED_AUCTION ou DELTA_FLIP et que le HTF n'est pas aligné,
-            // on rejette purement et simplement le trade pour éviter les faux retournements.
-            if (IsScalpingPro && (c.Name == "FINISHED_AUCTION" || c.Name == "DELTA_FLIP") && !c.HtfAligned)
+            // FILTRE ANTI-CONTRE-TENDANCE ROBUSTE (respectant HtfSoftMode via htfIsGate) :
+            // Si htfIsGate est false (HtfSoftMode actif), un désalignement HTF ne provoque pas un rejet dur (null),
+            // mais applique uniquement la pénalité de score (géré en amont).
+            if (IsScalpingPro && (c.Name == "FINISHED_AUCTION" || c.Name == "DELTA_FLIP") && !c.HtfAligned && htfIsGate)
             {
-                c.Detail.Add("REJET SCALPING PRO: " + c.Name + " rejeté car non aligné avec la tendance HTF");
+                c.Detail.Add("REJET SCALPING PRO: " + c.Name + " rejeté car non aligné avec la tendance HTF (mode strict)");
                 return null;
             }
 
