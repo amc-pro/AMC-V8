@@ -167,7 +167,7 @@
       <IbPeriodMinutes>30</IbPeriodMinutes>
       <ExecutionMode>Sniper</ExecutionMode>
       <EnableSniperEngine>true</EnableSniperEngine>
-      <MinScoreToAlert>45</MinScoreToAlert>
+      <MinScoreToAlert>35</MinScoreToAlert>
       <MaxAlertsPerWeek>0</MaxAlertsPerWeek>
       <MaxSniperAlertsPerSession>0</MaxSniperAlertsPerSession>
       <SelectionBufferBars>0</SelectionBufferBars>

@@ -608,9 +608,19 @@ namespace NinjaTrader.NinjaScript.Indicators
                 r.Momentum = Math.Min(effWMomentum, momentumNorm * effWMomentum);
                 r.Context = Math.Min(wContext, contextNorm * wContext);
 
-                // Modulateurs HTF, M5 et Initial Balance (IB)
+                // Modulateurs HTF, M5 et Initial Balance (IB) - Plafonnement anti-double pénalité
                 double htfMod = ctx.HtfModifier;
                 double m5Mod = ctx.M5Modifier;
+                if (htfMod < 0 && m5Mod < 0)
+                {
+                    // Si les deux modificateurs sont négatifs (désalignement double M15 + H4/H5), on plafonne le cumul à -5.0 max
+                    double combinedHtf = htfMod + m5Mod;
+                    if (combinedHtf < -5.0)
+                    {
+                        htfMod = -3.0;
+                        m5Mod = -2.0;
+                    }
+                }
                 double ibMod = 0.0;
 
                 if (ctx.IsIbComplete)
