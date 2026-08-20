@@ -1088,13 +1088,13 @@ namespace NinjaTrader.NinjaScript.Indicators
             string n = candidateName != null ? candidateName.ToUpperInvariant() : "";
             bool isExtremeReversal = n.Contains("NPOC") || n.Contains("FAILED_AUCTION") || n.Contains("EXHAUSTION");
 
-            // Penalite asymetrique : les SHORT contre tendance haussiere sont plus penalises (-2.0 de plus)
-            double shortExtraPenalty = (!isBuy) ? -2.0 : 0.0;
+            // Penalite asymetrique adoucie pour eviter un blocage excessif en session US
+            double shortExtraPenalty = (!isBuy) ? -1.0 : 0.0;
 
-            if (isExtremeReversal) return -1.0 + shortExtraPenalty;
-            if (setupType == SetupType.Reversal) return -2.0 + shortExtraPenalty;
-            if (setupType == SetupType.Breakout) return -4.0 + shortExtraPenalty;
-            if (setupType == SetupType.Continuation) return -6.0 + shortExtraPenalty;
+            if (isExtremeReversal) return -0.5 + shortExtraPenalty;
+            if (setupType == SetupType.Reversal) return -1.0 + shortExtraPenalty;
+            if (setupType == SetupType.Breakout) return -2.0 + shortExtraPenalty;
+            if (setupType == SetupType.Continuation) return -3.0 + shortExtraPenalty;
 
             return 0.0;
         }
