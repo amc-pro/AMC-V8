@@ -822,8 +822,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             MinRiskReward = 1.0;
             TargetR1 = 1.0;
             TargetR2 = 2.0;
-            StopAtrMultiple = 1.25;
-            StopBufferTicks = 4;
+            StopAtrMultiple = 1.75; // Élargi de 1.25 à 1.75 pour éviter les stops trop serrés
+            StopBufferTicks = 6;  // Élargi de 4 à 6 ticks
             ExecutionCostTicks = 1;
 
             // de 200 / 5 contrats sur un profil d'execution reelle. On le fixe.
