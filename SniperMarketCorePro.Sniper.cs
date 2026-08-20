@@ -2335,12 +2335,24 @@ namespace NinjaTrader.NinjaScript.Indicators
                 return null;
             }
 
-            // EXIGENCE MICROSTRUCTURE STRICTE : Pour Finished Auction, exiger un score N3 minimum (ex: 3.5) 
-            // pour garantir une vraie preuve d'absorption passive ou d'iceberg avant d'entrer.
-            if (IsScalpingPro && c.Name == "FINISHED_AUCTION" && c.N3 < 3.5)
+            // EXIGENCE MICROSTRUCTURE STRICTE & VOLATILITÉ : Pour Finished Auction, exiger un score N3 minimum de 6.0 
+            // et rejeter si la volatilité (ATR) est trop élevée (éviter les faux retournements en tendance forte).
+            if (IsScalpingPro && c.Name == "FINISHED_AUCTION")
             {
-                c.Detail.Add("REJET SCALPING PRO: Finished Auction rejeté car microstructure N3 insuffisante (< 3.5)");
-                return null;
+                if (c.N3 < 6.0)
+                {
+                    c.Detail.Add("REJET SCALPING PRO: Finished Auction rejeté car microstructure N3 insuffisante (< 6.0)");
+                    return null;
+                }
+                
+                // Si l'ATR de la barre dépasse 3.5 fois la taille de tick moyenne, le marché est en mode trend/breakout, 
+                // le finished auction (mean reversion) est donc proscrit pour éviter de "prendre un couteau qui tombe".
+                double avgTickSize = tickSize > 0 ? tickSize : 0.25;
+                if (c.Atr > avgTickSize * 140)
+                {
+                    c.Detail.Add("REJET SCALPING PRO: Finished Auction rejeté car volatilité (ATR) trop excessive pour du mean-reversion");
+                    return null;
+                }
             }
 
             bool g3 = c.N3 >= GateN3MinScore;
