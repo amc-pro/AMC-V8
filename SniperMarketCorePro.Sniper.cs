@@ -2209,14 +2209,30 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             // 4. MOMENTUM (Vitesse du Delta)
             double volRank = VolumeRankCurrent();
+            double momentumScore = 0;
             if (volRank >= 70)
             {
-                double momPts = Clamp((volRank - 50) / 50.0, 0, 1.0) * 4.0;
-                s += momPts;
-                detail.Add(string.Format(CultureInfo.InvariantCulture, "N3: Momentum VolRank={0:0} (+{1:0.0})", volRank, momPts));
+                momentumScore = Clamp((volRank - 50) / 50.0, 0, 1.0) * 4.0;
+                s += momentumScore;
+                detail.Add(string.Format(CultureInfo.InvariantCulture, "N3: Momentum VolRank={0:0} (+{1:0.0})", volRank, momentumScore));
             }
 
-            return Math.Min(25.0, s);
+            // 5. BONUS DE CONFLUENCE (MNQ 16H35 Fix)
+            // Si au moins 3 familles sur 4 sont présentes, on ajoute un bonus de confluence.
+            int families = 0;
+            if (passiveScore > 0) families++;
+            if (aggressiveScore > 0) families++;
+            if (structuralScore > 0) families++;
+            if (momentumScore > 0) families++;
+
+            if (families >= 3)
+            {
+                double bonus = families == 4 ? 6.0 : 4.0;
+                s += bonus;
+                detail.Add(string.Format(CultureInfo.InvariantCulture, "N3: Bonus Confluence x{0} (+{1:0.0})", families, bonus));
+            }
+
+            return Math.Min(30.0, s);
         }
 
         /// <summary>Finished auction a l'extreme : le verdict de l'AMC Pro (seuil
@@ -2400,11 +2416,13 @@ namespace NinjaTrader.NinjaScript.Indicators
             // FILTRE ANTI-CONTRE-TENDANCE ROBUSTE (respectant HtfSoftMode via htfIsGate) :
             // Si htfIsGate est false (HtfSoftMode actif), un désalignement HTF ne provoque pas un rejet dur (null),
             // mais applique uniquement la pénalité de score (géré en amont).
-            // NOUVEAU (MNQ 16H35 Fix) : Si la microstructure N3 est EXTREMEMENT forte (>= 20), on autorise le reversal 
-            // meme en mode strict, car l'orderflow local prime sur la tendance HTF.
-            if (IsScalpingPro && (c.Name == "FINISHED_AUCTION" || c.Name == "DELTA_FLIP") && !c.HtfAligned && htfIsGate && c.N3 < 20.0)
+            // NOUVEAU (MNQ 16H35 Fix) : Si la microstructure N3 est EXTREMEMENT forte (>= 20) 
+            // OU si le score global avant HTF est déjà très élevé (> 60), on autorise le reversal 
+            // même en mode strict, car l'orderflow local prime sur la tendance HTF.
+            double preHtfScore = Clamp(c.N1 + c.N2 + c.N3 + c.N4 + c.Penalty, 0, 100);
+            if (IsScalpingPro && (c.Name == "FINISHED_AUCTION" || c.Name == "DELTA_FLIP") && !c.HtfAligned && htfIsGate && c.N3 < 20.0 && preHtfScore < 60.0)
             {
-                c.Detail.Add("REJET SCALPING PRO: " + c.Name + " rejeté car non aligné avec la tendance HTF (mode strict)");
+                c.Detail.Add(string.Format(CultureInfo.InvariantCulture, "REJET SCALPING PRO: {0} rejeté (HTF opposé, score {1:0.0} insuffisant)", c.Name, preHtfScore));
                 return null;
             }
 
