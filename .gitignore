@@ -6,4 +6,5 @@ obj/
 .idea/
 __pycache__/
 *.pyc
+shadow/
 
