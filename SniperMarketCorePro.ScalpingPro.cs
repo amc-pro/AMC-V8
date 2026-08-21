@@ -182,6 +182,16 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 get { return EvidenceScore >= 0.30; }
             }
+
+            public string Status
+            {
+                get
+                {
+                    if (EvidenceScore <= 0) return "ABSENT";
+                    if (EvidenceScore < 0.30) return "WEAK";
+                    return "STRONG";
+                }
+            }
         }
 
         /// <summary>Decomposition du score pondere (somme = 100 maximum).</summary>
@@ -552,9 +562,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 e.Strength = Clamp(s, 0, 1);
                 e.EvidenceScore = e.Strength;
-                e.Detail = e.IsValid
-                    ? string.Format(CultureInfo.InvariantCulture, "EVIDENCE={0:0.00} {1}", e.EvidenceScore, sb.ToString().Trim())
-                    : string.Format(CultureInfo.InvariantCulture, "EVIDENCE={0:0.00} aucune preuve footprint suffisante", e.EvidenceScore);
+                e.Detail = string.Format(CultureInfo.InvariantCulture, "FOOTPRINT {0} (score={1:0.00}): {2}", 
+                    e.Status, e.EvidenceScore, e.EvidenceScore > 0 ? sb.ToString().Trim() : "Aucune preuve");
                 return e;
             }
         }
@@ -928,7 +937,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 " ({0:0.0}/{1:0} => {2:0.00})", smc.Points, smc.MaxPoints, smc.Normalized));
 
             FootprintEvidence fp = footprintValidator.Validate(ctx);
-            c.Detail.Add("FOOTPRINT " + fp.Detail + string.Format(CultureInfo.InvariantCulture, " (force {0:0.00})", fp.Strength));
+            c.Detail.Add(fp.Detail);
 
             WeightedScore ws = scalpingProScorer.Compute(ctx, smc, fp);
             c.Detail.Add(ws.Detail);
@@ -941,10 +950,17 @@ namespace NinjaTrader.NinjaScript.Indicators
             bool isBreakout = c.SetupType == SetupType.Breakout;
             bool requireFootprint = RequireFootprintEvidence && !isBreakout;
 
-            if (requireFootprint && !fp.IsValid && !c.Gated)
+            // LOGIQUE DE PORTE FOOTPRINT (MNQ 16H35 Fix) : 
+            // Si le Footprint est "WEAK" (0.15-0.29) mais que la Microstructure N3 est tres forte (>= 18), 
+            // on autorise le signal pour ne pas rater des setups impulsifs clairs (comme le Delta Flip).
+            bool footprintPass = fp.IsValid || (fp.Status == "WEAK" && c.N3 >= 18.0);
+
+            if (requireFootprint && !footprintPass && !c.Gated)
             {
-                c.GateFailed = "FOOTPRINT_ABSENT";
+                c.GateFailed = "FOOTPRINT_" + fp.Status;
                 c.Gated = true;
+                c.Detail.Add(string.Format(CultureInfo.InvariantCulture, 
+                    "REJET SCALPING PRO: Footprint {0} (score={1:0.00}) insuffisant pour un reversal", fp.Status, fp.EvidenceScore));
             }
 
             // Filtre de qualité pour FINISHED_AUCTION : éliminer le bruit sous le seuil Silver (46)
