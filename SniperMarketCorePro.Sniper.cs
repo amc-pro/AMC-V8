@@ -937,6 +937,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             SelectionBufferBars = 1;                 // Sniper : 3
 
             HtfStrictMode = false;                   // Sniper : true
+            HtfSoftMode = true;
             // setups de mean-reversion (cf. htfIsGate ligne ~2036) et desactivait au
             // passage la penalite modulatrice. Le mode Scanner etait donc PLUS strict
             // que Sniper sur les reversals, l'inverse de l'objectif annonce.
@@ -2038,7 +2039,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             // pas un contact exact avec un niveau profil fixe (POC/VAH/VAL/NPOC)
             if (isOrderflowSetup && IsScalpingPro)
             {
-                // Utiliser les zones d'imbalance existantes comme proxy de confluence SMC
+                // Utiliser les zones d'imbalance ou FVG existantes comme proxy de confluence SMC
                 bool hasImbalance = false;
                 for (int i = 0; i < imbalanceZones.Count; i++)
                 {
@@ -2047,6 +2048,18 @@ namespace NinjaTrader.NinjaScript.Indicators
                     {
                         hasImbalance = true;
                         break;
+                    }
+                }
+                if (!hasImbalance)
+                {
+                    for (int i = 0; i < fvgEngineZones.Count; i++)
+                    {
+                        FvgEngineZone fz = fvgEngineZones[i];
+                        if (fz.IsBull == isBuy && evalBarIndex - fz.BarIndex <= SmcEventMaxAgeBars)
+                        {
+                            hasImbalance = true;
+                            break;
+                        }
                     }
                 }
                 

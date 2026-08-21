@@ -763,7 +763,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         /// Appele depuis ApplySniperDefaults() (State.SetDefaults).</summary>
         private void ApplyScalpingProDefaults()
         {
-            HtfSoftMode = false;              // desactive hors preset Scalping Pro
+            HtfSoftMode = true;               // Actif par défaut : le désalignement HTF devient une pénalité modulatrice plutôt qu'un rejet bloquant
             SmcEventMaxAgeBars = 12;
             RequireFootprintEvidence = true;
             TierSilverScore = 46;
