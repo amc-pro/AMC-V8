@@ -2404,6 +2404,56 @@ namespace NinjaTrader.NinjaScript.Indicators
                                  "Zone imbalance vendeuse défendue", false, 2.5 * w, true);
                 }
             }
+
+            // --- NOUVEAU : RETEST FVG AUTONOME ---
+            if (EnableFvgRetestTrigger && FvgZoneMemoryBars > 0)
+            {
+                if (count >= 3 && barIdx != lastFvgRegisteredBarIdx)
+                {
+                    double l0 = L(0), h2 = H(2);
+                    double h0 = H(0), l2 = L(2);
+                    if (l0 > h2) // Bullish FVG
+                    {
+                        fvgEngineZones.Add(new FvgEngineZone { Bottom = h2, Top = l0, IsBull = true, BarIndex = barIdx, Retested = false });
+                        lastFvgRegisteredBarIdx = barIdx;
+                    }
+                    if (h0 < l2) // Bearish FVG
+                    {
+                        fvgEngineZones.Add(new FvgEngineZone { Bottom = l2, Top = h0, IsBull = false, BarIndex = barIdx, Retested = false });
+                        lastFvgRegisteredBarIdx = barIdx;
+                    }
+                }
+
+                for (int i = fvgEngineZones.Count - 1; i >= 0; i--)
+                {
+                    if (barIdx - fvgEngineZones[i].BarIndex > FvgZoneMemoryBars)
+                        fvgEngineZones.RemoveAt(i);
+                }
+
+                double fvgTol = FvgZoneRetestTicks * TickSize;
+                for (int i = 0; i < fvgEngineZones.Count; i++)
+                {
+                    FvgEngineZone fz = fvgEngineZones[i];
+                    if (fz.BarIndex >= barIdx) continue;
+
+                    if (fz.IsBull
+                        && lowPrice <= fz.Top + fvgTol && lowPrice >= fz.Bottom - fvgTol
+                        && closePrice > fz.Top
+                        && (!RequireDeltaConfirmation || currentBarDelta > 0))
+                    {
+                        fz.Retested = true;
+                        AddCandidate("RETEST FVG (BUY)", "Fair Value Gap acheteur défendu", true, 2.5, true);
+                    }
+                    else if (!fz.IsBull
+                        && highPrice >= fz.Bottom - fvgTol && highPrice <= fz.Top + fvgTol
+                        && closePrice < fz.Bottom
+                        && (!RequireDeltaConfirmation || currentBarDelta < 0))
+                    {
+                        fz.Retested = true;
+                        AddCandidate("RETEST FVG (SELL)", "Fair Value Gap vendeur défendu", false, 2.5, true);
+                    }
+                }
+            }
         }
 
         private int EffectiveAbsorptionDeltaThreshold()

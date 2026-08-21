@@ -1966,7 +1966,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Classification dynamique des setups en 3 familles (harmonisée avec N3/N4)
             string upperSetup = setup != null ? setup.ToUpperInvariant() : "";
             bool isBreakoutOrAcceptance = upperSetup.Contains("BREAKOUT") || upperSetup.Contains("ACCEPTANCE");
-            bool pureTrend = setup == "STACKED_IMB_RETEST" || isBreakoutOrAcceptance;
+            bool pureTrend = setup == "STACKED_IMB_RETEST" || upperSetup.Contains("RETEST FVG") || upperSetup.Contains("RETEST_FVG") || isBreakoutOrAcceptance;
             bool dualHybrid = setup == "DELTA_FLIP" || setup == "CUM_DELTA_DIV" || setup == "LVN_REJECTION";
             bool meanReversion = !pureTrend && !dualHybrid;
 
@@ -2347,7 +2347,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             string upperSetupName = name != null ? name.ToUpperInvariant() : "";
             bool isBreakoutOrAcceptanceName = upperSetupName.Contains("BREAKOUT") || upperSetupName.Contains("ACCEPTANCE");
-            bool meanReversion = name != "STACKED_IMB_RETEST" && !isBreakoutOrAcceptanceName;
+            bool upperName = name != null ? name.ToUpperInvariant() : "";
+            bool meanReversion = name != "STACKED_IMB_RETEST" && !upperName.Contains("RETEST FVG") && !upperName.Contains("RETEST_FVG") && !isBreakoutOrAcceptanceName;
 
             // Volume Profile V2 Context Attachment
             if (currentVpContext != null)

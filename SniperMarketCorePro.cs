@@ -467,6 +467,17 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Niveaux Min Zone Mémorisée", Order = 10, GroupName = "Détection Imbalance")]
         public int ImbalanceZoneMinLevels { get; set; }
 
+        [Display(Name = "Activer Retest FVG Autonome", Order = 11, GroupName = "Détection Imbalance")]
+        public bool EnableFvgRetestTrigger { get; set; }
+
+        [Range(1, 50)]
+        [Display(Name = "Mémoire Zones FVG (barres)", Order = 12, GroupName = "Détection Imbalance")]
+        public int FvgZoneMemoryBars { get; set; }
+
+        [Range(0, 20)]
+        [Display(Name = "Tolérance Retest FVG (ticks)", Order = 13, GroupName = "Détection Imbalance")]
+        public int FvgZoneRetestTicks { get; set; }
+
         [Display(Name = "Activer Finished Auction", Order = 1, GroupName = "Auction & Épuisement")]
         public bool EnableFinishedAuction { get; set; }
 
@@ -919,6 +930,17 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private readonly List<ImbalanceZone> imbalanceZones = new List<ImbalanceZone>(64);
         private int lastZoneRegisteredBarIdx = -1;
+
+        private sealed class FvgEngineZone
+        {
+            public double Bottom;
+            public double Top;
+            public bool IsBull;
+            public int BarIndex;
+            public bool Retested;
+        }
+        private readonly List<FvgEngineZone> fvgEngineZones = new List<FvgEngineZone>(64);
+        private int lastFvgRegisteredBarIdx = -1;
 
         // absDeltaHistory ne contient que des valeurs ABSOLUES : impossible d'y lire
         // un changement de signe. Ces listes conservent le delta signe, le cumulatif
@@ -1443,6 +1465,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 ImbalanceZoneMemoryBars = 20;
                 ImbalanceZoneRetestTicks = 2;
                 ImbalanceZoneMinLevels = 3;
+                EnableFvgRetestTrigger = true;
+                FvgZoneMemoryBars = 20;
+                FvgZoneRetestTicks = 2;
 
                 EnableDeltaFlip = true;
                 DeltaFlipLookback = 3;
