@@ -2145,7 +2145,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (isBreakoutOrAcceptance) passiveScore *= 0.5;
             s += Math.Min(10.0, passiveScore);
 
-            // 2. PREUVES AGRESSIVES (CVD / Delta Z)
+            // 2. PREUVES AGRESSIVES (CVD / Delta Z / Delta Flip)
             double aggressiveScore = 0;
             double zSlope;
             if (CvdSlopeDivergence(isBuy, out zSlope))
@@ -2162,6 +2162,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                 detail.Add("N3: CumDeltaDiv AMC (+" + pts + ")");
             }
 
+            // Delta Flip (Reequilibrage MNQ 16H35)
+            if (isDeltaFlip)
+            {
+                double pts = 8.0;
+                aggressiveScore += pts;
+                detail.Add("N3: DeltaFlip (+" + pts + ")");
+            }
+
             // Z-Delta en N3 (Reequilibrage MNQ 16H35)
             double zDelta = ZDeltaCurrent();
             if ((isBuy && zDelta >= 1.0) || (!isBuy && zDelta <= -1.0))
@@ -2171,7 +2179,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 aggressiveScore += pts;
                 detail.Add(string.Format(CultureInfo.InvariantCulture, "N3: Delta Z={0:0.00} (+{1:0.0})", zDelta, pts));
             }
-            s += Math.Min(12.0, aggressiveScore);
+            s += Math.Min(15.0, aggressiveScore);
 
             // 3. PREUVES STRUCTURELLES LOCALES (Imbalance / Finished Auction)
             double structuralScore = 0;
@@ -2441,6 +2449,18 @@ namespace NinjaTrader.NinjaScript.Indicators
             else if (!gNews) c.GateFailed = "NEWS_BLACKOUT";
 
             c.Gated = c.GateFailed.Length > 0;
+            
+            if (c.Gated)
+            {
+                // Diagnostic détaillé de rejet (MNQ 16H35 Fix)
+                string missing = "";
+                if (c.GateFailed == "N3_MICROSTRUCTURE") missing = "Microstructure (N3)";
+                else if (c.GateFailed == "N4_TRIGGER") missing = "Trigger (N4)";
+                else if (c.GateFailed == "HTF") missing = "HTF Alignment";
+                
+                if (!string.IsNullOrEmpty(missing))
+                    c.Detail.Add("REJET FINAL: " + c.GateFailed + " | Manquant: " + missing);
+            }
 
             // grade). Score = 0 ne sert plus qu'a la decision d'emission.
             c.ScoreRaw = Clamp(c.N1 + c.N2 + c.N3 + c.N4 + c.Penalty, 0, 100);
