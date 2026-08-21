@@ -2360,8 +2360,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             string upperSetupName = name != null ? name.ToUpperInvariant() : "";
             bool isBreakoutOrAcceptanceName = upperSetupName.Contains("BREAKOUT") || upperSetupName.Contains("ACCEPTANCE");
-            bool upperName = name != null ? name.ToUpperInvariant() : "";
-            bool meanReversion = name != "STACKED_IMB_RETEST" && !upperName.Contains("RETEST FVG") && !upperName.Contains("RETEST_FVG") && !isBreakoutOrAcceptanceName;
+            bool meanReversion = name != "STACKED_IMB_RETEST" && !upperSetupName.Contains("RETEST FVG") && !upperSetupName.Contains("RETEST_FVG") && !isBreakoutOrAcceptanceName;
 
             // Volume Profile V2 Context Attachment
             if (currentVpContext != null)
