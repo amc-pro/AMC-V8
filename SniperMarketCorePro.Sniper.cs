@@ -2269,7 +2269,6 @@ namespace NinjaTrader.NinjaScript.Indicators
             double s = 0;
             string upperSetup = setupName != null ? setupName.ToUpperInvariant() : "";
             bool isBreakoutOrAcceptance = upperSetup.Contains("BREAKOUT") || upperSetup.Contains("ACCEPTANCE");
-            bool isDeltaFlip = upperSetup.Contains("DELTA_FLIP");
             bool isRetest = upperSetup.Contains("RETEST");
 
             double range = snHigh - snLow;
@@ -2304,14 +2303,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 if (reentry) { s += 5; detail.Add("Reintegration VA (+5)"); }
             }
 
-            double z = ZDeltaCurrent();
-            double zThreshold = isDeltaFlip ? 1.5 : 1.0;
-            if ((isBuy && z >= zThreshold) || (!isBuy && z <= -zThreshold))
-            {
-                double pts = (isDeltaFlip || isBreakoutOrAcceptance) ? 5.0 : 4.0;
-                s += pts;
-                detail.Add(string.Format(CultureInfo.InvariantCulture, "Delta Z={0:0.00} (+" + pts + ")", z));
-            }
+            // Z-Delta est déjà scoré en N3 (ScoreMicrostructure) avec des multiplicateurs
+            // setup-aware. Ne pas le re-scorer ici pour éviter le double-comptage.
 
             return s;
         }
@@ -2432,7 +2425,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             // NOUVEAU (MNQ 16H35 Fix) : Si la microstructure N3 est EXTREMEMENT forte (>= 20) 
             // OU si le score global avant HTF est déjà très élevé (> 60), on autorise le reversal 
             // même en mode strict, car l'orderflow local prime sur la tendance HTF.
-            double preHtfScore = Clamp(c.N1 + c.N2 + c.N3 + c.N4 + c.Penalty, 0, 100);
+            // Conviction brute (hors pénalités situationnelles) pour évaluer la force intrinsèque du setup
+            double preHtfScore = Clamp(c.N1 + c.N2 + c.N3 + c.N4, 0, 100);
             if (IsScalpingPro && (c.Name == "FINISHED_AUCTION" || c.Name == "DELTA_FLIP") && !c.HtfAligned && htfIsGate && c.N3 < 20.0 && preHtfScore < 60.0)
             {
                 c.Detail.Add(string.Format(CultureInfo.InvariantCulture, "REJET SCALPING PRO: {0} rejeté (HTF opposé, score {1:0.0} insuffisant)", c.Name, preHtfScore));
@@ -2503,7 +2497,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             c.Detail.Add(string.Format(CultureInfo.InvariantCulture,
                 // Le libelle le precise pour que le journal reste interpretable.
-                "N1={0:0.0}/30 N2={1:0.0}/30 N3={2:0.0}/25 N4={3:0.0}/15 pen={4:0.0} RR={5:0.00} "
+                "N1={0:0.0}/30 N2={1:0.0}/30 N3={2:0.0}/30 N4={3:0.0}/15 pen={4:0.0} RR={5:0.00} "
                 + (IsScalpingPro ? "score pondere={6:0.0}/100" : "raw={6:0.0}") + " htf={7}",
                 c.N1, c.N2, c.N3, c.N4, c.Penalty, c.Rr, c.ScoreRaw, c.HtfAligned ? "ok" : "ko"));
 
@@ -2544,11 +2538,11 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (!NormalizeScoresPerSetup) return;
 
             double n2Max = meanReversion ? 26.0 : 28.0;
-            double n3Max = meanReversion ? 17.0 : 22.0;
+            double n3Max = meanReversion ? 20.0 : 25.0;
             double n4Max = meanReversion ? 10.0 : 13.0;
 
             c.N2 = Math.Min(30.0, c.N2 * (30.0 / n2Max));
-            c.N3 = Math.Min(25.0, c.N3 * (25.0 / n3Max));
+            c.N3 = Math.Min(30.0, c.N3 * (30.0 / n3Max));
             c.N4 = Math.Min(15.0, c.N4 * (15.0 / n4Max));
 
             c.Detail.Add(string.Format(CultureInfo.InvariantCulture,

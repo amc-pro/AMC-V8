@@ -2457,6 +2457,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
 
             // 1b. Enregistrement des Fair Value Gaps HTF (M5 / M15 / M60) si disponible
+            // NOTE INDEXATION : on utilise [1] et [3] (au lieu de [0] et [2]) pour ne considérer
+            // que des bougies HTF entièrement clôturées. Bar[0] est potentiellement en cours de
+            // formation. Le FVG est donc : bar[3]=bougie ancienne, bar[2]=gap, bar[1]=bougie récente.
             if (EnableHtfFilter && htfBarsIndex > 0 && htfBarsIndex < BarsArray.Length
                 && CurrentBars[htfBarsIndex] >= 3)
             {
@@ -2501,10 +2504,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
             }
 
-            if (fvgEngineZones.Count > 64)
-                fvgEngineZones.RemoveRange(0, fvgEngineZones.Count - 64);
-
-            // 2. Purge des zones expirées, invalidées ou consommées
+            // 2. Purge des zones expirées, invalidées ou consommées (AVANT troncature
+            // pour ne pas éjecter des zones valides récentes au profit de zones mortes)
             for (int i = fvgEngineZones.Count - 1; i >= 0; i--)
             {
                 if (barIdx - fvgEngineZones[i].BarIndex > FvgZoneMemoryBars 
@@ -2515,8 +2516,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
             }
 
+            if (fvgEngineZones.Count > 64)
+                fvgEngineZones.RemoveRange(0, fvgEngineZones.Count - 64);
+
             // 3. Évaluation du retest des zones FVG actives (avec Consequent Encroachment à 50%)
+            // Garde anti-doublon : un seul signal FVG par direction et par barre
             double fvgTol = FvgZoneRetestTicks * TickSize;
+            bool fvgBuyEmitted = false;
+            bool fvgSellEmitted = false;
             for (int i = 0; i < fvgEngineZones.Count; i++)
             {
                 FvgEngineZone fz = fvgEngineZones[i];
@@ -2538,7 +2545,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     // Défense valide : soit clôture au-dessus du 50% (C.E.) avec barre verte (Close > Open), soit rejet net au-dessus du Top
                     bool defended = (closePrice >= midCe && closePrice > openPrice) || closePrice > fz.Top;
 
-                    if (touchedZone && defended && (!RequireDeltaConfirmation || currentBarDelta > 0))
+                    if (touchedZone && defended && !fvgBuyEmitted && (!RequireDeltaConfirmation || currentBarDelta > 0))
                     {
                         fz.RetestCount++;
                         if (fz.RetestCount >= Math.Max(1, MaxFvgRetests)) fz.Retested = true;
@@ -2547,6 +2554,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         string desc = fz.IsHtf ? "Fair Value Gap HTF acheteur défendu (50% C.E.)" : "Fair Value Gap acheteur défendu (50% C.E.)";
                         double weight = fz.IsHtf ? 3.0 : 2.5;
                         AddCandidate(label, desc, true, weight, true);
+                        fvgBuyEmitted = true;
                     }
                 }
                 else
@@ -2563,7 +2571,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     // Défense valide : soit clôture sous le 50% (C.E.) avec barre rouge (Close < Open), soit rejet net sous le Bottom
                     bool defended = (closePrice <= midCe && closePrice < openPrice) || closePrice < fz.Bottom;
 
-                    if (touchedZone && defended && (!RequireDeltaConfirmation || currentBarDelta < 0))
+                    if (touchedZone && defended && !fvgSellEmitted && (!RequireDeltaConfirmation || currentBarDelta < 0))
                     {
                         fz.RetestCount++;
                         if (fz.RetestCount >= Math.Max(1, MaxFvgRetests)) fz.Retested = true;
@@ -2572,6 +2580,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         string desc = fz.IsHtf ? "Fair Value Gap HTF vendeur défendu (50% C.E.)" : "Fair Value Gap vendeur défendu (50% C.E.)";
                         double weight = fz.IsHtf ? 3.0 : 2.5;
                         AddCandidate(label, desc, false, weight, true);
+                        fvgSellEmitted = true;
                     }
                 }
             }
