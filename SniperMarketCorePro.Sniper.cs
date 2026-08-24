@@ -2609,8 +2609,18 @@ namespace NinjaTrader.NinjaScript.Indicators
                 c.Stop = c.IsBuy ? c.Entry - minStopDist : c.Entry + minStopDist;
             }
 
-            // Cap en pips : le stop ne doit JAMAIS depasser MaxStopPips de l'entree,
-            // meme apres l'ajustement structurel.
+            // Cap en ticks : le stop ne doit jamais dépasser MaxStopTicks
+            if (MaxStopTicks > 0 && tickSize > 0)
+            {
+                double maxRiskTicks = MaxStopTicks * tickSize;
+                double currentRisk = Math.Abs(c.Entry - c.Stop);
+                if (currentRisk > maxRiskTicks)
+                {
+                    c.Stop = c.IsBuy ? c.Entry - maxRiskTicks : c.Entry + maxRiskTicks;
+                }
+            }
+
+            // Cap en pips : si activé (> 0), le stop ne doit JAMAIS depasser MaxStopPips de l'entree
             if (MaxStopPips > 0 && PipSize > 0)
             {
                 double maxRiskPips = MaxStopPips * PipSize;

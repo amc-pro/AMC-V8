@@ -775,6 +775,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             GateN2MinScore = 3;
             GateN3MinScore = 3;
             GateN4MinScore = 2;
+            MaxStopPips = 0;                  // Désactivé : stop dynamique ATR + structure
+            MinStopTicks = 12;
+            MaxStopTicks = 160;
         }
 
         /// <summary>Cablage des dependances + remise a zero de l'etat structurel.
@@ -858,9 +861,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             // de 200 / 5 contrats sur un profil d'execution reelle. On le fixe.
             RiskPerTradeCurrency = 100;
             MaxContracts = 2;
-            MinStopTicks = 8;
+            MinStopTicks = 12;
             MaxStopTicks = 160; // Élargi à 160 pour supporter la volatilité US du NQ
-            MaxStopPips = 30;
+            MaxStopPips = 0;   // 0 = Désactivé (stop dynamique ATR + structure)
             PipSize = 0.1;
 
             UseTrailingStop = true;

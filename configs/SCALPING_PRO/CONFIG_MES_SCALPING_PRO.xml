@@ -146,7 +146,7 @@
       <MaxAlertsPerSession>0</MaxAlertsPerSession>
       <EnableRiskManagement>true</EnableRiskManagement>
       <RiskAtrPeriod>14</RiskAtrPeriod>
-      <StopAtrMultiple>1.25</StopAtrMultiple>
+      <StopAtrMultiple>1.75</StopAtrMultiple>
       <StopBufferTicks>4</StopBufferTicks>
       <TargetR1>1</TargetR1>
       <TargetR2>2</TargetR2>
