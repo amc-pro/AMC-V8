@@ -2439,7 +2439,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 double c1Body = Math.Abs(c1Close - c1Open);
                 double dispRatio = c1Range > 0 ? c1Body / c1Range : 0.5;
                 long c1Vol = Volumes[volumetricBarsIndex].Count > regOffset + 1 ? (long)Volumes[volumetricBarsIndex][regOffset + 1] : 0L;
-                double avgVol = avgBarVolume > 0 ? avgBarVolume : 100.0;
+                double avgVol = cachedAvgVolume > 0 ? (double)cachedAvgVolume : 100.0;
 
                 double effTick = TickSize > 0 ? TickSize : 0.25;
 
