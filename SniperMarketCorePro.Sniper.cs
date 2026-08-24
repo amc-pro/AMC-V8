@@ -2914,6 +2914,24 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 if (!QuotaAvailable()) continue;
 
+                // Filtre Anti-Doublon / Anti-Empilement : Ne pas ouvrir un nouveau trade
+                // dans le même sens tant qu'un trade de même direction est déjà actif.
+                bool hasActiveTradeSameDirection = false;
+                for (int k = 0; k < openTrades.Count; k++)
+                {
+                    if (openTrades[k].IsBuy == c.IsBuy)
+                    {
+                        hasActiveTradeSameDirection = true;
+                        break;
+                    }
+                }
+
+                if (hasActiveTradeSameDirection)
+                {
+                    sniperLastStatus = "FILTRE DOUBLON : Trade " + (c.IsBuy ? "LONG" : "SHORT") + " deja actif";
+                    continue;
+                }
+
                 c.EntryAtEmission = snClose;
                 EmitAlert(c);
             }
