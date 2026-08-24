@@ -6,12 +6,19 @@
 
 ## 🚀 Dernières Mises à Jour & Optimisations (Août 2026)
 
-* **Optimisation de la Sélectivité (Scalping Pro)** : Le seuil minimal d'alerte a été ajusté à **45/100** pour garantir un flux régulier de 5 à 8 setups par session tout en maintenant un *Profit Factor* élevé [2].
-* **Mode Souple HTF (`HtfSoftMode = true`)** : Les désalignements sur les unités de temps supérieures se traduisent désormais par une simple pénalité de score et non par un blocage éliminatoire [2].
-* **Réhabilitation de `FINISHED_AUCTION`** : Réintégration de ce setup précoce dans les dérogations de la porte de localisation N2 [3].
-* **Gestion Avancée du Risque** : Élargissement du Stop Loss à **1.75 ATR** (avec un buffer de 6 ticks) pour immuniser les positions contre le bruit de marché intra-barre [2].
-* **Synchronisation Automatique des News** : Ajout d'un module de récupération en temps réel du calendrier économique (`sync_news.py`) connectable à l'API *Fair Economy* pour automatiser le blocage des trades (`NEWS_BLACKOUT`) lors des annonces majeures (CPI, FOMC, etc.) [4].
-* **Outils de Test et Données Historiques** : Intégration d'un dossier `tests_and_data/` contenant des archives de données 1-minute (2022-2025) et des scripts de simulation [5].
+### 1. Déverrouillage & Spécialisation des Gates (Scalping Pro)
+* **Seuil Minimal d'Alerte** : Calibré à **`50/100`** pour un flux équilibré de 5 à 10 opportunités de qualité par session (Paliers : *Moyen* $\ge 45$, *Fort* $\ge 50$, *Très Fort* $\ge 65$) [2].
+* **Spécialisation des Portes par Famille de Setup** : Les setups de flux/momentum (`DELTA_FLIP`, `CUM_DELTA_DIV`, `BREAKOUT_VAH/VAL`) ne sont plus bloqués par l'absence d'absorption passive ($N3$) ou de mèche contre-tendance ($N4$) lorsqu'une impulsion directionnelle de delta est confirmée [3].
+* **Levée Intelligente des Portes Secondaires** : Lorsqu'un setup atteint un score global fort ($\ge 50$), les sous-notes marginales non-critiques n'entraînent plus de rejet éliminatoire [2].
+
+### 2. Architecture Avancée du Risque & Stop Loss Dynamique
+* **Stop Loss Dynamique Réel (`1.75 ATR`)** : Suppression du bridage artificiel en pips (`MaxStopPips = 0`) au profit d'un dimensionnement adapté à la volatilité de chaque instrument (15 à 40 points sur NQ/MNQ, 2 à 8 points sur ES, etc.) protégé par les niveaux structurels et un buffer de 6 ticks [2].
+* **Filtre Anti-Doublon & Anti-Empilement** : Interdiction d'ouvrir un nouveau trade dans le même sens tant qu'une position de même direction est active (`openTrades`), éliminant l'accumulation de pertes consécutives sur les faux départs [3].
+
+### 3. Gestion Adaptative des News & Contexte
+* **Mode Pénalité News** : `NewsHardBlock = false` avec pénalité adaptative de **`-15 points`** (`NewsWindowPenalty = 15`) pendant les fenêtres économiques, permettant aux opportunités de très haute conviction d'être exécutées [2].
+* **Mode Souple HTF (`HtfSoftMode = true`)** : Les désalignements sur les unités de temps supérieures appliquent une pénalité modulatrice de score sans rejet bloquant [2].
+* **Configurations Multi-Actifs Synchronisées** : Alignement complet des 8 fichiers XML de configuration (`MNQ`, `NQ`, `ES`, `MES`, `GC`, `MGC`, `CL`, `MCL`) dans `configs/SCALPING_PRO/`.
 
 ---
 
@@ -22,14 +29,21 @@ AMC-V8/
 ├── SniperMarketCorePro.cs              # Moteur principal de l'indicateur
 ├── SniperMarketCorePro.Sniper.cs       # Logique du module Sniper & Journaling (Shadow)
 ├── SniperMarketCorePro.ScalpingPro.cs  # Implémentation du preset Scalping Pro & Seuils
+├── SniperMarketCorePro.Engine.cs       # Moteur de calcul des flux, deltas et profils
+├── SniperMarketCorePro.Features.cs     # Extraction des features de microstructure
 ├── MarketIntelligence/                 # Moteur de rapports de marché et contextes
-├── configs/                            # Fichiers de configuration XML par instrument (CL, GC, NQ, ES)
-│   └── SCALPING_PRO/                   # Presets et réglages spécifiques Scalping Pro
-├── tests_and_data/                     # Outils de test, scripts de news et données historiques
-│   ├── long_term_data/                 # Archives ZIP (NQ 1min 2022-2025, Données récentes 5min)
+├── VolumeProfile/                      # Gestion et persistance des profils de volume
+├── configs/                            # Fichiers de configuration XML par instrument
+│   ├── SCALPING_PRO/                   # Presets et réglages spécifiques Scalping Pro
+│   ├── SNIPER/                         # Presets et réglages spécifiques Sniper
+│   ├── STANDARD/                       # Presets Standard
+│   └── SCANNER/                        # Presets Scanner
+├── Python/                             # Scripts d'audit, simulations et tests de signaux
+├── historical-data/                    # Données de marché haute résolution (MNQ/NQ)
+├── shadow/                             # Journaux d'audit et exécutions shadow
+├── tests_and_data/                     # Outils de test et synchronisation des news
 │   ├── sync_news.py                    # Script de synchronisation des annonces économiques
 │   └── simulate_blocking.py            # Testeur de la logique de blackout news
-├── GUIDE_MARKET_REPLAY.md              # Guide complet pour les tests en Market Replay
 └── README.md                           # Documentation générale du projet
 ```
 
@@ -37,29 +51,36 @@ AMC-V8/
 
 ## 🛠️ Installation et Configuration
 
-1. **Compilation NinjaTrader** : Copiez les fichiers source dans votre répertoire personnalisé NinjaTrader 8 (`Documents\NinjaTrader 8\bin\Custom\Indicators\`) et compilez le projet.
-2. **Chargement du Preset** : Appliquez l'indicateur `SniperMarketCorePro` sur votre graphique et chargez le preset **Scalping Pro** [2].
-3. **Synchronisation Quotidienne des News** : Avant chaque session de trading, exécutez le script pour actualiser les filtres de volatilité :
+1. **Compilation NinjaTrader** : Copiez les fichiers source dans votre répertoire personnalisé NinjaTrader 8 (`Documents\NinjaTrader 8\bin\Custom\Indicators\`) et compilez le projet via l'éditeur NinjaScript.
+2. **Chargement du Preset** : Appliquez l'indicateur `SniperMarketCorePro` sur votre graphique et chargez le preset XML correspondant à votre instrument dans `configs/SCALPING_PRO/` [2].
+3. **Synchronisation Quotidienne des News** : Avant chaque session de trading, exécutez le script pour actualiser le calendrier économique :
    ```bash
-   python3 tests_and_data/sync_news.py
+   python tests_and_data/sync_news.py
    ```
 
 ---
 
-## 📊 Backtest et Market Replay
+## 📊 Analyse des Performances & Audit Shadow
 
-Pour valider les performances du système :
-* Référez-vous au guide complet **[GUIDE_MARKET_REPLAY.md](./GUIDE_MARKET_REPLAY.md)** pour configurer correctement le **Tick Replay** et importer les données historiques incluses dans le dossier `tests_and_data/long_term_data/` [6].
-* Consultez les journaux d'audit (mode Shadow) situés dans `Documents\NinjaTrader 8\bin\Custom\sniper/` pour analyser chaque signal généré (`LONG` / `SHORT`, scores et R-multiples) [7].
+Pour analyser et valider les performances du système :
+* Exécutez le script d'analyse sur vos journaux d'audit shadow récents :
+  ```bash
+  python Python/analyze_latest_shadow.py
+  ```
+* Testez l'impact du stop dynamique et du filtre anti-doublon :
+  ```bash
+  python Python/test_cooldown_impact.py
+  ```
+* Consultez les journaux d'audit situés dans `shadow/` pour analyser chaque opportunité détectée, son score pondéré, ses sous-notes ($N1$ à $N4$) et ses $R$-multiples [7].
 
 ---
 
 ## Références
 
 [1] Documentation technique du projet AMC-V8, *Architecture institutionnelle*, Août 2026.  
-[2] Fichier `SniperMarketCorePro.ScalpingPro.cs`, Paramètres de seuil et de risque.  
-[3] Fichier `SniperMarketCorePro.Sniper.cs`, Ligne 2322.  
+[2] Fichier `SniperMarketCorePro.ScalpingPro.cs`, Paramètres de seuil, scoring pondéré et risque.  
+[3] Fichier `SniperMarketCorePro.Sniper.cs`, Spécialisation des Gates, gestion du risque et filtres d'émission.  
 [4] Script utilitaire `tests_and_data/sync_news.py` (API Fair Economy).  
-[5] Dépôt GitHub `amc-pro/AMC-V8`, Dossier `/tests_and_data/`.  
-[6] Guide opérationnel `GUIDE_MARKET_REPLAY.md`.  
-[7] Système de journalisation Shadow, AMC-V8, Lignes 3110-3185.
+[5] Dépôt GitHub `amc-pro/AMC-V8`, Dossier `/configs/SCALPING_PRO/`.  
+[6] Fichiers de configuration XML institutionnels par instrument.  
+[7] Système de journalisation Shadow, `shadow/AuctionMarketCorePro_journal_sniper.csv`.
