@@ -219,7 +219,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             private const int Capacity = 256;
             private const int PivotStrength = 2;
-            private const int MaxFvgZones = 8;
+            private const int MaxFvgZones = 16;
 
             private struct FvgZone
             {
@@ -436,6 +436,19 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             private void AddFvgZone(bool isBull, double top, double bottom, int barIndex)
             {
+                // Purge préalable des zones mitigées ou obsolètes pour ne pas éjecter prématurément des zones actives
+                int writeIdx = 0;
+                for (int i = 0; i < fvgCount; i++)
+                {
+                    bool isOld = (barIndex - fvgZones[i].BarIndex > maxAgeBars * 2);
+                    if (!fvgZones[i].Mitigated && !isOld)
+                    {
+                        if (writeIdx != i) fvgZones[writeIdx] = fvgZones[i];
+                        writeIdx++;
+                    }
+                }
+                fvgCount = writeIdx;
+
                 if (fvgCount < MaxFvgZones)
                 {
                     fvgZones[fvgCount] = new FvgZone { IsBull = isBull, Top = top, Bottom = bottom, BarIndex = barIndex, Mitigated = false, Inverted = false };

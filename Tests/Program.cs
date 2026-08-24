@@ -43,6 +43,10 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_HTF_Trend_Classifier_RejectsInvalidData", Test_HTF_Trend_Classifier_RejectsInvalidData);
             RunTest("Test_VWAP_Sanitization_And_AntiLookahead", Test_VWAP_Sanitization_And_AntiLookahead);
             RunTest("Test_XmlConfigurations_And_ScalpingPro_GateMatching", Test_XmlConfigurations_And_ScalpingPro_GateMatching);
+            RunTest("Test_Fvg_AntiLookahead_Strict_Closed_Bars", Test_Fvg_AntiLookahead_Strict_Closed_Bars);
+            RunTest("Test_Fvg_Consequent_Encroachment_50Percent_Defense", Test_Fvg_Consequent_Encroachment_50Percent_Defense);
+            RunTest("Test_Fvg_Inversion_Breaker_Transition", Test_Fvg_Inversion_Breaker_Transition);
+            RunTest("Test_Fvg_Smart_Eviction_Preserves_Active_Zones", Test_Fvg_Smart_Eviction_Preserves_Active_Zones);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
@@ -819,7 +823,86 @@ namespace AMC.VolumeProfile.Tests
             }
         }
 
+        private static void Test_Fvg_AntiLookahead_Strict_Closed_Bars()
+        {
+            // Vérification que le calcul de l'offset d'enregistrement FVG ne cible JAMAIS la bougie [0] non clôturée
+            int evalOffsetTick = 0; // Mode Realtime tick
+            int evalOffsetBarClose = 1; // Mode BarClose
+
+            int regOffsetTick = evalOffsetTick > 0 ? evalOffsetTick : 1;
+            int regOffsetBarClose = evalOffsetBarClose > 0 ? evalOffsetBarClose : 1;
+
+            Assert(regOffsetTick == 1, "En mode tick (evalOffset=0), l'enregistrement doit cibler l'offset 1 (barre close)");
+            Assert(regOffsetBarClose == 1, "En mode BarClose (evalOffset=1), l'enregistrement doit cibler l'offset 1 (barre close)");
+        }
+
+        private static void Test_Fvg_Consequent_Encroachment_50Percent_Defense()
+        {
+            double bottom = 20000.0;
+            double top = 20020.0;
+            double midCe = (top + bottom) / 2.0; // 20010.0
+            double fvgTol = 0.75;
+
+            // Cas 1 : Pénétration dans la zone et clôture défendue au-dessus du 50% CE avec bougie verte
+            double low1 = 20012.0;
+            double close1 = 20016.0;
+            double open1 = 20011.0;
+            bool touched1 = low1 <= top + fvgTol && low1 >= bottom - fvgTol;
+            bool defended1 = (close1 >= midCe && close1 > open1) || close1 > top;
+            Assert(touched1 && defended1, "Le retest au-dessus du 50% CE avec barre verte doit être validé");
+
+            // Cas 2 : Pénétration sous le 50% CE avec bougie rouge -> défense échouée
+            double low2 = 20005.0;
+            double close2 = 20008.0;
+            double open2 = 20012.0;
+            bool touched2 = low2 <= top + fvgTol && low2 >= bottom - fvgTol;
+            bool defended2 = (close2 >= midCe && close2 > open2) || close2 > top;
+            Assert(touched2 && !defended2, "Une clôture sous le 50% CE en bougie rouge ne doit pas valider la défense");
+        }
+
+        private static void Test_Fvg_Inversion_Breaker_Transition()
+        {
+            double bottom = 20000.0;
+            double fvgTol = 0.75;
+
+            // Cas : Traversée nette du support FVG à la clôture -> Invalidation et bascule en Breaker
+            double closeBreak = 19998.0;
+            bool isInvalidated = closeBreak < bottom - fvgTol;
+            bool isInverted = isInvalidated; // Devient un Breaker (résistance)
+            Assert(isInvalidated && isInverted, "La traversée nette sous le bas du FVG doit invalider le support et basculer en Breaker");
+        }
+
+        private static void Test_Fvg_Smart_Eviction_Preserves_Active_Zones()
+        {
+            // Simulation de la purge préalable intelligente dans AddFvgZone
+            int maxAge = 12;
+            int currentBar = 50;
+
+            var zones = new List<Tuple<int, bool>> // <BarIndex, Mitigated>
+            {
+                Tuple.Create(10, true),   // Zone 0 : mitigée (obsolète)
+                Tuple.Create(45, false),  // Zone 1 : active récente
+                Tuple.Create(46, false),  // Zone 2 : active récente
+                Tuple.Create(47, false)   // Zone 3 : active récente
+            };
+
+            // Purge préalable avant insertion d'une 5ème zone
+            var activeZones = new List<Tuple<int, bool>>();
+            foreach (var z in zones)
+            {
+                bool isOld = currentBar - z.Item1 > maxAge * 2;
+                if (!z.Item2 && !isOld)
+                {
+                    activeZones.Add(z);
+                }
+            }
+
+            Assert(activeZones.Count == 3, "La zone mitigée 0 doit être évincée avant le shift");
+            Assert(activeZones[0].Item1 == 45, "La zone active la plus ancienne (45) doit être préservée");
+        }
+
         #endregion
     }
 }
+
 

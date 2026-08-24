@@ -482,6 +482,13 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Max Retests par Zone FVG", Order = 14, GroupName = "Détection Imbalance")]
         public int MaxFvgRetests { get; set; }
 
+        [Range(1, 20)]
+        [Display(Name = "Taille Min Gap FVG (ticks)", Order = 15, GroupName = "Détection Imbalance")]
+        public int FvgMinGapTicks { get; set; }
+
+        [Display(Name = "Exiger Déplacement FVG (Displacement)", Order = 16, GroupName = "Détection Imbalance")]
+        public bool FvgRequireDisplacement { get; set; }
+
         [Display(Name = "Activer Finished Auction", Order = 1, GroupName = "Auction & Épuisement")]
         public bool EnableFinishedAuction { get; set; }
 
@@ -945,6 +952,11 @@ namespace NinjaTrader.NinjaScript.Indicators
             public int RetestCount;
             public bool Invalidated;
             public bool IsHtf;
+            public bool Inverted;            // Bascule en Breaker si traverse a la cloture
+            public double QualityScore;      // 1.0 a 3.0+ (calibre selon taille, displacement et volume)
+            public double GapSizeTicks;      // Taille en ticks du gap
+            public double DisplacementRatio; // Ratio corps/range de la bougie centrale d'impulsion
+            public DateTime CreationTime;
         }
         private readonly List<FvgEngineZone> fvgEngineZones = new List<FvgEngineZone>(64);
         private int lastFvgRegisteredBarIdx = -1;
@@ -1477,6 +1489,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 FvgZoneMemoryBars = 200;
                 FvgZoneRetestTicks = 3;
                 MaxFvgRetests = 2;
+                FvgMinGapTicks = 2;
+                FvgRequireDisplacement = true;
 
                 EnableDeltaFlip = true;
                 DeltaFlipLookback = 3;

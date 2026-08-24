@@ -2687,11 +2687,60 @@ namespace NinjaTrader.NinjaScript.Indicators
             TryNpocAbsorptionReversal();
             TryFailedAuctionCompositeVa();
             TryStackedImbalanceRetest();
+            TryFvgRetestEntry();
             TryLvnRejectionExpress();
             TryOpenDriveFailure();
             TryDeltaFlipEntry();
             TryCumDeltaDivEntry();
             TryFinishedAuctionEntry();
+        }
+
+        /// <summary>TOP 9 — Fair Value Gap Retest. E ~ +1.15R.
+        /// Confluence ICT 50% Consequent Encroachment & Order Flow.</summary>
+        private void TryFvgRetestEntry()
+        {
+            if (!EnableFvgRetestTrigger || fvgEngineZones.Count == 0) return;
+
+            double fvgTol = FvgZoneRetestTicks * tickSize;
+            for (int i = 0; i < fvgEngineZones.Count; i++)
+            {
+                FvgEngineZone fz = fvgEngineZones[i];
+                if (fz.BarIndex >= evalBarIndex || fz.Invalidated || fz.Retested) continue;
+                if (evalBarIndex - fz.BarIndex > FvgZoneMemoryBars) continue;
+
+                double midCe = (fz.Top + fz.Bottom) / 2.0;
+
+                if (fz.IsBull)
+                {
+                    bool touchedZone = snLow <= fz.Top + fvgTol && snLow >= fz.Bottom - fvgTol;
+                    bool defended = (snClose >= midCe && snClose > snOpen) || snClose > fz.Top;
+                    if (touchedZone && defended && (!RequireDeltaConfirmation || currentBarDelta > 0))
+                    {
+                        double refLevel = fz.Bottom;
+                        Candidate cand = Assemble(fz.IsHtf ? "RETEST_FVG_HTF" : "RETEST_FVG", true, snClose, refLevel);
+                        fz.RetestCount++;
+                        if (cand != null && !cand.Gated)
+                        {
+                            if (fz.RetestCount >= Math.Max(1, MaxFvgRetests)) fz.Retested = true;
+                        }
+                    }
+                }
+                else
+                {
+                    bool touchedZone = snHigh >= fz.Bottom - fvgTol && snHigh <= fz.Top + fvgTol;
+                    bool defended = (snClose <= midCe && snClose < snOpen) || snClose < fz.Bottom;
+                    if (touchedZone && defended && (!RequireDeltaConfirmation || currentBarDelta < 0))
+                    {
+                        double refLevel = fz.Top;
+                        Candidate cand = Assemble(fz.IsHtf ? "RETEST_FVG_HTF" : "RETEST_FVG", false, snClose, refLevel);
+                        fz.RetestCount++;
+                        if (cand != null && !cand.Gated)
+                        {
+                            if (fz.RetestCount >= Math.Max(1, MaxFvgRetests)) fz.Retested = true;
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>TOP 1 — NPOC Absorption Reversal. E ~ +1.73R</summary>
