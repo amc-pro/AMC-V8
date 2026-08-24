@@ -2453,8 +2453,24 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
             }
 
+            bool isOrderflowMomentum = c.Name == "DELTA_FLIP" || c.Name == "CUM_DELTA_DIV" || isBreakoutOrAcceptanceName;
             bool g3 = c.N3 >= GateN3MinScore;
             bool g4 = c.N4 >= GateN4MinScore;
+
+            // Spécialisation ScalpingPro pour les setups de flux/momentum : 
+            // N3 (absorption passive) et N4 (mèche de rejet) ne doivent pas bloquer un flux agressif confirmé
+            if (IsScalpingPro && isOrderflowMomentum)
+            {
+                if (c.N3 >= 0 && (Math.Abs(ZDeltaCurrent()) >= 1.0 || isDeltaFlipBullish || isDeltaFlipBearish || isCumDeltaDivBullish || isCumDeltaDivBearish))
+                {
+                    g3 = true;
+                }
+                if (c.N4 >= 0)
+                {
+                    g4 = true;
+                }
+            }
+
             // Quand MinRiskReward == TargetR1 (cas du preset Scanner : 1.2 / 1.2), un
             // arrondi vers le bas d'un demi-tick suffit a faire echouer le gate alors
             // que le setup est conforme. Tolerance = 1 tick ramene en unites de R.

@@ -766,8 +766,15 @@ namespace NinjaTrader.NinjaScript.Indicators
             HtfSoftMode = true;               // Actif par défaut : le désalignement HTF devient une pénalité modulatrice plutôt qu'un rejet bloquant
             SmcEventMaxAgeBars = 12;
             RequireFootprintEvidence = true;
-            TierSilverScore = 46;
-            TierGoldScore = 66;
+            TierSilverScore = 45;
+            TierGoldScore = 65;
+            MinScoreToAlert = 50;
+            NewsHardBlock = false;
+            NewsWindowPenalty = 15;
+            GateN1MinScore = 6;
+            GateN2MinScore = 3;
+            GateN3MinScore = 3;
+            GateN4MinScore = 2;
         }
 
         /// <summary>Cablage des dependances + remise a zero de l'etat structurel.
@@ -816,15 +823,18 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Un preset d'EXECUTION REELLE ne peut pas s'en accommoder.
             EvaluateOnBarClose = true;
 
-            MinScoreToAlert = 55; // Abaissé à 35 pour les tests en Replay
+            MinScoreToAlert = 50;                     // Seuil d'alerte équilibré à 50
             MaxSniperAlertsPerSession = 0;            // Illimité (0 = illimité)
             MaxAlertsPerWeek = 0;                     // Illimité (0 = illimité)
             MaxAlertsPerSession = 0;                  // Illimité (0 = illimité)
 
-            GateN1MinScore = 6;                      // Contexte      (/30)
-            GateN2MinScore = 4;                      // Localisation  (/30) - Assoupli pour US session
-            GateN3MinScore = 4;                      // Microstructure(/25) - Assoupli pour US session
-            GateN4MinScore = 4;                      // Trigger       (/15)
+            GateN1MinScore = 6;                       // Contexte      (/30)
+            GateN2MinScore = 3;                       // Localisation  (/30) - Assoupli pour US session
+            GateN3MinScore = 3;                       // Microstructure(/25) - Assoupli pour US session
+            GateN4MinScore = 2;                       // Trigger       (/15)
+
+            NewsHardBlock = false;                    // Mode pénalité pour laisser passer les setups ultra-forts
+            NewsWindowPenalty = 15;                   // Pénalité de -15 points pendant les fenêtres de news
 
             SelectionBufferBars = 0;
             // Le buffer est nul mais le controle de derive reste actif : en reel,
@@ -866,10 +876,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             AbsorptionMinBars = 1;
             IcebergMinScore = 70;
 
-            RequireFootprintEvidence = true;         // footprint obligatoire
+            RequireFootprintEvidence = true;         // footprint obligatoire pour reversals
             SmcEventMaxAgeBars = 12;
-            TierSilverScore = 46;
-            TierGoldScore = 66;
+            TierSilverScore = 45;
+            TierGoldScore = 65;
 
             EnableShadowJournal = true;
             // et le mode debug sont desactives (charge CPU + volume de logs). Ils
@@ -892,11 +902,11 @@ namespace NinjaTrader.NinjaScript.Indicators
             Print("SniperMarketCorePro V7.3 (SCALPING PRO) : preset d'execution reelle applique "
                 + "(seuil " + MinScoreToAlert + "/100 pondere, gates " + GateN1MinScore + "/" + GateN2MinScore
                 + "/" + GateN3MinScore + "/" + GateN4MinScore + ", buffer " + SelectionBufferBars
-                + ", HTF Strict (rejet si contre tendance M15), R:R min " + MinRiskReward.ToString("F1", CultureInfo.InvariantCulture)
+                + ", HTF SoftMode (modulateur de score), News Penalite -" + NewsWindowPenalty + " pts, R:R min " + MinRiskReward.ToString("F1", CultureInfo.InvariantCulture)
                 + ", stop " + StopAtrMultiple.ToString("F1", CultureInfo.InvariantCulture)
                 + " ATR, quota " + MaxSniperAlertsPerSession + "/seance). "
                 + "Bareme : Structure 30% / Footprint 30% / Volume 15% / Momentum 15% / Contexte 10%. "
-                + "Footprint obligatoire, alertes Moyen/Fort/Tres Fort.");
+                + "Footprint obligatoire pour reversals, alertes Moyen(45)/Fort(50)/Tres Fort(65).");
         }
 
         #endregion
@@ -946,14 +956,16 @@ namespace NinjaTrader.NinjaScript.Indicators
             // dashboard et decision d'emission lisent ScoreRaw / Score).
             c.ScoreRaw = ws.Total;
 
-            // Footprint est obligatoire pour les Reversals (R1-R4), mais optionnel pour les Breakouts (B1-B2)
-            bool isBreakout = c.SetupType == SetupType.Breakout;
-            bool requireFootprint = RequireFootprintEvidence && !isBreakout;
+            // Footprint est obligatoire pour les Reversals purs (Finished Auction, NPOC, Failed Auction),
+            // mais assoupli pour les Breakouts (B1-B2) et les flux OrderFlow confirmés (Delta Flip, Cum Delta Div).
+            bool isBreakout = c.SetupType == SetupType.Breakout || c.Name.Contains("BREAKOUT");
+            bool isOrderflow = c.Name == "DELTA_FLIP" || c.Name == "CUM_DELTA_DIV";
+            bool requireFootprint = RequireFootprintEvidence && !isBreakout && !isOrderflow;
 
-            // LOGIQUE DE PORTE FOOTPRINT (MNQ 16H35 Fix) : 
-            // Si le Footprint est "WEAK" (0.15-0.29) mais que la Microstructure N3 est tres forte (>= 18), 
-            // on autorise le signal pour ne pas rater des setups impulsifs clairs (comme le Delta Flip).
-            bool footprintPass = fp.IsValid || (fp.Status == "WEAK" && c.N3 >= 18.0);
+            // LOGIQUE DE PORTE FOOTPRINT : 
+            // Si le Footprint est "WEAK" (0.15-0.29) ou que le setup est OrderFlow/Breakout avec score solide, 
+            // on autorise le signal pour ne pas rater des setups impulsifs clairs.
+            bool footprintPass = fp.IsValid || isOrderflow || isBreakout || (fp.Status == "WEAK" && c.N3 >= 8.0);
 
             if (requireFootprint && !footprintPass && !c.Gated)
             {
@@ -963,7 +975,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     "REJET SCALPING PRO: Footprint {0} (score={1:0.00}) insuffisant pour un reversal", fp.Status, fp.EvidenceScore));
             }
 
-            // Filtre de qualité pour FINISHED_AUCTION : éliminer le bruit sous le seuil Silver (46)
+            // Filtre de qualité pour FINISHED_AUCTION : éliminer le bruit sous le seuil Silver (45)
             if (c.Name == "FINISHED_AUCTION" && c.ScoreRaw < TierSilverScore && !c.Gated)
             {
                 c.GateFailed = "FA_SCORE_LOW";
@@ -972,17 +984,18 @@ namespace NinjaTrader.NinjaScript.Indicators
                     "FINISHED_AUCTION score {0:0.0} < {1} (seuil de qualite)", c.ScoreRaw, TierSilverScore));
             }
 
-            // Seule la porte N2 (localisation) peut être levée si le score ou footprint est fort.
-            // Les portes critiques (Risk/Reward, Drift, HTF Strict) restent strictement applicables.
-            bool strongScore = c.ScoreRaw >= 50;
-            bool strongFootprint = fp.IsValid;
-            bool isOnlyN2GateFailed = c.GateFailed == "N2_LOCALISATION" || c.GateFailed == "GATE_N2_FAILED" || c.GateFailed == "N2_LOW" || string.IsNullOrEmpty(c.GateFailed);
+            // En ScalpingPro, si le score brut atteint le seuil d'alerte (>= MinScoreToAlert, ex: 50),
+            // les portes de sous-notes secondaires (N2, N3, N4, FOOTPRINT) sont levées pour privilégier la confluence globale.
+            bool strongScore = c.ScoreRaw >= MinScoreToAlert;
+            bool isRecoverableGate = c.GateFailed == "N2_LOCALISATION" || c.GateFailed == "GATE_N2_FAILED" || c.GateFailed == "N2_LOW"
+                                    || c.GateFailed == "N3_MICROSTRUCTURE" || c.GateFailed == "N4_TRIGGER" 
+                                    || c.GateFailed == "FOOTPRINT_WEAK" || c.GateFailed == "FOOTPRINT_ABSENT";
 
-            if (c.Gated && isOnlyN2GateFailed && (strongScore || strongFootprint))
+            if (c.Gated && isRecoverableGate && (strongScore || (fp.IsValid && (isOrderflow || isBreakout))))
             {
                 c.Gated = false;
                 c.GateFailed = "";
-                c.Detail.Add("ScalpingPro: Porte N2 levée (score/footprint fort)");
+                c.Detail.Add(string.Format(CultureInfo.InvariantCulture, "ScalpingPro: Porte levée ({0} admissible avec score {1:0.0})", c.Name, c.ScoreRaw));
             }
 
             // niveau (le dashboard laissait passer un "TRESFORT" sur un setup non emis).
@@ -1087,7 +1100,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (string.IsNullOrEmpty(name)) return CandidateFamily.Reversal;
             string n = name.ToUpperInvariant();
 
-            if (n.Contains("RETEST") || n.Contains("ACCEPTANCE"))
+            if (n.Contains("RETEST") || n.Contains("ACCEPTANCE") || n.Contains("DELTA_FLIP") || n.Contains("CUM_DELTA_DIV"))
                 return CandidateFamily.Continuation;
 
             if (n.Contains("BREAKOUT") || n.Contains("IMBALANCE") || n.Contains("OPEN_DRIVE"))
