@@ -6,16 +6,19 @@
 
 ## 🚀 Dernières Mises à Jour & Optimisations (Août 2026)
 
-* **Déverrouillage & Optimisation des Gates (Scalping Pro)** :
-  * **Seuil Minimal d'Alerte** : Calibré à **`50/100`** pour un flux équilibré de 5 à 10 opportunités de qualité par session (Paliers : *Moyen* $\ge 45$, *Fort* $\ge 50$, *Très Fort* $\ge 65$) [2].
-  * **Spécialisation des Portes par Famille de Setup** : Les setups de flux/momentum (`DELTA_FLIP`, `CUM_DELTA_DIV`, `BREAKOUT_VAH/VAL`) ne sont plus bloqués par l'absence d'absorption passive ($N3$) ou de mèche contre-tendance ($N4$) lorsqu'une impulsion directionnelle de delta est confirmée [3].
-  * **Levée Intelligente des Portes Secondaires** : Lorsqu'un setup atteint un score global fort ($\ge 50$), les sous-notes marginales non-critiques n'entraînent plus de rejet éliminatoire [2].
-* **Gestion des News en Mode Pénalité** :
-  * Passage à `NewsHardBlock = false` avec une pénalité adaptative de **`-15 points`** (`NewsWindowPenalty = 15`) pendant les fenêtres économiques, permettant aux opportunités ultra-fortes d'être exécutées sans blocage dur [2].
-* **Mode Souple HTF (`HtfSoftMode = true`)** : Les désalignements sur les unités de temps supérieures se traduisent par une pénalité modulatrice de score et non par un blocage éliminatoire [2].
-* **Gestion Avancée du Risque** : Stop Loss calibré à **1.75 ATR** (avec un buffer de 6 ticks) pour immuniser les positions contre le bruit de marché intra-barre [2].
-* **Synchronisation & Configurations Multi-Actifs** : Mise à jour et alignement complet des 8 fichiers XML de configuration (`MNQ`, `NQ`, `ES`, `MES`, `GC`, `MGC`, `CL`, `MCL`) dans `configs/SCALPING_PRO/`.
-* **Outils d'Analyse & Diagnostic Microstructure** : Intégration dans `/Python` de scripts d'audit, de simulation et d'analyse des journaux shadow.
+### 1. Déverrouillage & Spécialisation des Gates (Scalping Pro)
+* **Seuil Minimal d'Alerte** : Calibré à **`50/100`** pour un flux équilibré de 5 à 10 opportunités de qualité par session (Paliers : *Moyen* $\ge 45$, *Fort* $\ge 50$, *Très Fort* $\ge 65$) [2].
+* **Spécialisation des Portes par Famille de Setup** : Les setups de flux/momentum (`DELTA_FLIP`, `CUM_DELTA_DIV`, `BREAKOUT_VAH/VAL`) ne sont plus bloqués par l'absence d'absorption passive ($N3$) ou de mèche contre-tendance ($N4$) lorsqu'une impulsion directionnelle de delta est confirmée [3].
+* **Levée Intelligente des Portes Secondaires** : Lorsqu'un setup atteint un score global fort ($\ge 50$), les sous-notes marginales non-critiques n'entraînent plus de rejet éliminatoire [2].
+
+### 2. Architecture Avancée du Risque & Stop Loss Dynamique
+* **Stop Loss Dynamique Réel (`1.75 ATR`)** : Suppression du bridage artificiel en pips (`MaxStopPips = 0`) au profit d'un dimensionnement adapté à la volatilité de chaque instrument (15 à 40 points sur NQ/MNQ, 2 à 8 points sur ES, etc.) protégé par les niveaux structurels et un buffer de 6 ticks [2].
+* **Filtre Anti-Doublon & Anti-Empilement** : Interdiction d'ouvrir un nouveau trade dans le même sens tant qu'une position de même direction est active (`openTrades`), éliminant l'accumulation de pertes consécutives sur les faux départs [3].
+
+### 3. Gestion Adaptative des News & Contexte
+* **Mode Pénalité News** : `NewsHardBlock = false` avec pénalité adaptative de **`-15 points`** (`NewsWindowPenalty = 15`) pendant les fenêtres économiques, permettant aux opportunités de très haute conviction d'être exécutées [2].
+* **Mode Souple HTF (`HtfSoftMode = true`)** : Les désalignements sur les unités de temps supérieures appliquent une pénalité modulatrice de score sans rejet bloquant [2].
+* **Configurations Multi-Actifs Synchronisées** : Alignement complet des 8 fichiers XML de configuration (`MNQ`, `NQ`, `ES`, `MES`, `GC`, `MGC`, `CL`, `MCL`) dans `configs/SCALPING_PRO/`.
 
 ---
 
@@ -35,7 +38,7 @@ AMC-V8/
 │   ├── SNIPER/                         # Presets et réglages spécifiques Sniper
 │   ├── STANDARD/                       # Presets Standard
 │   └── SCANNER/                        # Presets Scanner
-├── Python/                             # Scripts d'audit, tests de signaux et diagnostic
+├── Python/                             # Scripts d'audit, simulations et tests de signaux
 ├── historical-data/                    # Données de marché haute résolution (MNQ/NQ)
 ├── shadow/                             # Journaux d'audit et exécutions shadow
 ├── tests_and_data/                     # Outils de test et synchronisation des news
@@ -57,12 +60,16 @@ AMC-V8/
 
 ---
 
-## 📊 Backtest et Analyse des Performances
+## 📊 Analyse des Performances & Audit Shadow
 
 Pour analyser et valider les performances du système :
-* Exécutez le script d'analyse sur vos journaux d'audit shadow :
+* Exécutez le script d'analyse sur vos journaux d'audit shadow récents :
   ```bash
-  python Python/analyze_all_shadow.py
+  python Python/analyze_latest_shadow.py
+  ```
+* Testez l'impact du stop dynamique et du filtre anti-doublon :
+  ```bash
+  python Python/test_cooldown_impact.py
   ```
 * Consultez les journaux d'audit situés dans `shadow/` pour analyser chaque opportunité détectée, son score pondéré, ses sous-notes ($N1$ à $N4$) et ses $R$-multiples [7].
 
@@ -72,7 +79,7 @@ Pour analyser et valider les performances du système :
 
 [1] Documentation technique du projet AMC-V8, *Architecture institutionnelle*, Août 2026.  
 [2] Fichier `SniperMarketCorePro.ScalpingPro.cs`, Paramètres de seuil, scoring pondéré et risque.  
-[3] Fichier `SniperMarketCorePro.Sniper.cs`, Spécialisation des Gates et logique d'évaluation.  
+[3] Fichier `SniperMarketCorePro.Sniper.cs`, Spécialisation des Gates, gestion du risque et filtres d'émission.  
 [4] Script utilitaire `tests_and_data/sync_news.py` (API Fair Economy).  
 [5] Dépôt GitHub `amc-pro/AMC-V8`, Dossier `/configs/SCALPING_PRO/`.  
 [6] Fichiers de configuration XML institutionnels par instrument.  
