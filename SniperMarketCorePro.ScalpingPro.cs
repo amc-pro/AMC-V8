@@ -1105,6 +1105,23 @@ namespace NinjaTrader.NinjaScript.Indicators
             ctx.ClosedVwapSdExtremeName = extremeVwapName;
             ctx.VwapSigmaDistance = VwapSigmaDistance(snClose);
 
+            // Rebound Window propagation : si le plancher/plafond a été touché récemment,
+            // étendre le statut d'extrême pour que les modulateurs HTF/IB soient amortis.
+            if (!ctx.IsNearClosedVwapSdExtreme)
+            {
+                const int ReboundWindowBars = 15;
+                if (isBuy && (evalBarIndex - lastMacroSdFloorTouchBar) <= ReboundWindowBars)
+                {
+                    ctx.IsNearClosedVwapSdExtreme = true;
+                    ctx.ClosedVwapSdExtremeName = "Rebound Window SD Floor (" + (evalBarIndex - lastMacroSdFloorTouchBar) + " bars)";
+                }
+                else if (!isBuy && (evalBarIndex - lastMacroSdCeilingTouchBar) <= ReboundWindowBars)
+                {
+                    ctx.IsNearClosedVwapSdExtreme = true;
+                    ctx.ClosedVwapSdExtremeName = "Rebound Window SD Ceiling (" + (evalBarIndex - lastMacroSdCeilingTouchBar) + " bars)";
+                }
+            }
+
             ctx.HtfModifier = CalculateHtfModifier(c.SetupType, c.HtfAligned, c.Name, isBuy, ctx.IsNearClosedVwapSdExtreme, ctx.VwapSigmaDistance);
             ctx.M5Modifier = CalculateM5Modifier(isBuy, ctx.MiBias, ctx.MiConfidence);
             c.HtfModifier = ctx.HtfModifier;

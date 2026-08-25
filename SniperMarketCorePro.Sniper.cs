@@ -847,6 +847,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         private double snClose, snOpen, snHigh, snLow, snClose1, snHigh1, snHigh2, snLow1, snLow2;
         private long snVolume;
         private DateTime snTime;
+        private int lastMacroSdFloorTouchBar = -1000;
+        private int lastMacroSdCeilingTouchBar = -1000;
 
         #endregion
 
@@ -1264,6 +1266,13 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 // 3. Contexte : day type et overlap de value area
                 UpdateSniperContext();
+
+                // 3b. Tracking des touches macro SD floor/ceiling (Rebound Window + Anti-Suicide)
+                string _floorN, _ceilN;
+                if (IsNearClosedVwapSdFloor(snLow, out _floorN))
+                    lastMacroSdFloorTouchBar = evalBarIndex;
+                if (IsNearClosedVwapSdCeiling(snHigh, out _ceilN))
+                    lastMacroSdCeilingTouchBar = evalBarIndex;
 
                 // 4. Microstructure : evenements d'absorption normalises
                 DetectSniperAbsorption();
@@ -1896,7 +1905,53 @@ namespace NinjaTrader.NinjaScript.Indicators
             return false;
         }
 
-        /// <summary>Qualite LVN : creux local (derivee seconde) + largeur minimale.
+        /// <summary>Détecte si le prix est à proximité d'un plancher macro SD-2 / SD-3 Lower
+        /// (support institutionnel). Direction-agnostique : sert à détecter les ventes suicidaires
+        /// sur un support extrême et à tracker les touches pour la fenêtre de rebond.</summary>
+        private bool IsNearClosedVwapSdFloor(double price, out string floorName)
+        {
+            floorName = "";
+            if (vpManager == null) return false;
+            double tol = Math.Max(SniperKeyLevelTolerance() * 2.0, SniperAtr() * 0.5);
+
+            if (vpManager.PrevMonth != null && vpManager.PrevMonth.Valid)
+            {
+                var m = vpManager.PrevMonth;
+                if (m.VwapSd2Lower > 0 && Math.Abs(price - m.VwapSd2Lower) <= tol) { floorName = "VWAP SD-2 Mois Préc"; return true; }
+                if (m.VwapSd3Lower > 0 && Math.Abs(price - m.VwapSd3Lower) <= tol) { floorName = "VWAP SD-3 Mois Préc"; return true; }
+            }
+            if (vpManager.PrevWeek != null && vpManager.PrevWeek.Valid)
+            {
+                var w = vpManager.PrevWeek;
+                if (w.VwapSd2Lower > 0 && Math.Abs(price - w.VwapSd2Lower) <= tol) { floorName = "VWAP SD-2 Sem Préc"; return true; }
+                if (w.VwapSd3Lower > 0 && Math.Abs(price - w.VwapSd3Lower) <= tol) { floorName = "VWAP SD-3 Sem Préc"; return true; }
+            }
+            return false;
+        }
+
+        /// <summary>Détecte si le prix est à proximité d'un plafond macro SD+2 / SD+3 Upper
+        /// (résistance institutionnelle). Direction-agnostique.</summary>
+        private bool IsNearClosedVwapSdCeiling(double price, out string ceilingName)
+        {
+            ceilingName = "";
+            if (vpManager == null) return false;
+            double tol = Math.Max(SniperKeyLevelTolerance() * 2.0, SniperAtr() * 0.5);
+
+            if (vpManager.PrevMonth != null && vpManager.PrevMonth.Valid)
+            {
+                var m = vpManager.PrevMonth;
+                if (m.VwapSd2Upper > 0 && Math.Abs(price - m.VwapSd2Upper) <= tol) { ceilingName = "VWAP SD+2 Mois Préc"; return true; }
+                if (m.VwapSd3Upper > 0 && Math.Abs(price - m.VwapSd3Upper) <= tol) { ceilingName = "VWAP SD+3 Mois Préc"; return true; }
+            }
+            if (vpManager.PrevWeek != null && vpManager.PrevWeek.Valid)
+            {
+                var w = vpManager.PrevWeek;
+                if (w.VwapSd2Upper > 0 && Math.Abs(price - w.VwapSd2Upper) <= tol) { ceilingName = "VWAP SD+2 Sem Préc"; return true; }
+                if (w.VwapSd3Upper > 0 && Math.Abs(price - w.VwapSd3Upper) <= tol) { ceilingName = "VWAP SD+3 Sem Préc"; return true; }
+            }
+            return false;
+        }
+
         /// Le veto binaire IsLowVolumeNode de l'AMC Pro reste la condition prealable.</summary>
         private double LvnQuality(double price)
         {
@@ -2047,6 +2102,27 @@ namespace NinjaTrader.NinjaScript.Indicators
             double vwapSigDist = Math.Abs(VwapSigmaDistance(snClose));
             bool isMacroInflection = isMacroSdExtreme || vwapSigDist >= 2.0;
 
+            // Rebound Window : si le plancher/plafond macro a été touché dans les 15 dernières barres,
+            // on étend le statut d'inflexion même si le prix a rebondi au-delà de la tolérance directe.
+            // Cela permet aux DELTA_FLIP / CUM_DELTA_DIV LONG de bénéficier du contexte de rebond.
+            const int ReboundWindowBars = 15;
+            bool isReboundWindow = false;
+            if (!isMacroInflection)
+            {
+                if (isBuy && (evalBarIndex - lastMacroSdFloorTouchBar) <= ReboundWindowBars)
+                {
+                    isMacroInflection = true;
+                    isReboundWindow = true;
+                    extremeVwapName = "Rebound Window SD Floor (" + (evalBarIndex - lastMacroSdFloorTouchBar) + " bars)";
+                }
+                else if (!isBuy && (evalBarIndex - lastMacroSdCeilingTouchBar) <= ReboundWindowBars)
+                {
+                    isMacroInflection = true;
+                    isReboundWindow = true;
+                    extremeVwapName = "Rebound Window SD Ceiling (" + (evalBarIndex - lastMacroSdCeilingTouchBar) + " bars)";
+                }
+            }
+
             // DayType: les setups Dual/Hybride sont valides en Trend Day ET Normal Day.
             // En zone d'inflexion macro (SD extrême ou Z >= 2.0σ), un retournement est légitime même en Trend Day.
             bool dtOk;
@@ -2062,7 +2138,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 // Reversal/Inflexion soutenu par niveau institutionnel macro (SD-2/-3) ou épuisement statistique
                 dtOk = true;
                 s += 10;
-                string label = isMacroSdExtreme ? extremeVwapName : string.Format(CultureInfo.InvariantCulture, "VWAP {0:0.0}sigma", vwapSigDist);
+                string label = (isMacroSdExtreme || isReboundWindow) ? extremeVwapName : string.Format(CultureInfo.InvariantCulture, "VWAP {0:0.0}sigma", vwapSigDist);
                 detail.Add("Macro-Inflection " + label + " (+10)");
             }
             else if (meanReversion)
@@ -2445,6 +2521,20 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (volRank <= 20) { p -= 5; detail.Add("Liquidite faible (-5)"); }
 
             if (!IsRegimeValid()) { p -= 10; detail.Add("Regime ATR hors plage (-10)"); }
+
+            // Anti-Suicide : pénaliser les SHORT sur plancher macro SD-2/SD-3 Lower
+            // et les LONG sur plafond macro SD+2/SD+3 Upper (vente/achat contre mur institutionnel)
+            string antiSuicideName;
+            if (!isBuy && IsNearClosedVwapSdFloor(snClose, out antiSuicideName))
+            {
+                p -= 15;
+                detail.Add("Anti-Suicide SHORT sur plancher " + antiSuicideName + " (-15)");
+            }
+            else if (isBuy && IsNearClosedVwapSdCeiling(snClose, out antiSuicideName))
+            {
+                p -= 15;
+                detail.Add("Anti-Suicide LONG sur plafond " + antiSuicideName + " (-15)");
+            }
 
             return p;
         }
