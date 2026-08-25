@@ -2189,9 +2189,13 @@ namespace NinjaTrader.NinjaScript.Indicators
                 detail.Add(string.Format(CultureInfo.InvariantCulture, "NPOC {0:0.00} fresh={1:0.00} (+{2:0.0})", np, fresh, pts));
             }
 
-            double vwapSig = Math.Abs(VwapSigmaDistance(price));
-            if (vwapSig >= 2.0) { s += 4; detail.Add(string.Format(CultureInfo.InvariantCulture, "VWAP {0:0.0}sigma (+4)", vwapSig)); }
-            else if (vwapSig >= 1.0) { s += 2; detail.Add(string.Format(CultureInfo.InvariantCulture, "VWAP {0:0.0}sigma (+2)", vwapSig)); }
+            // VWAP sigma bonus — only add if NOT already awarded in the orderflow fallback above
+            if (!isOrderflowSetup || hasClassA || lvn > 0)
+            {
+                double vwapSig = Math.Abs(VwapSigmaDistance(price));
+                if (vwapSig >= 2.0) { s += 4; detail.Add(string.Format(CultureInfo.InvariantCulture, "VWAP {0:0.0}sigma (+4)", vwapSig)); }
+                else if (vwapSig >= 1.0) { s += 2; detail.Add(string.Format(CultureInfo.InvariantCulture, "VWAP {0:0.0}sigma (+2)", vwapSig)); }
+            }
 
             return s;
         }
