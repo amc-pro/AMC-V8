@@ -2230,39 +2230,54 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             // Classification des setups d'orderflow pour scoring adaptatif
             bool isOrderflowSetup = setup == "DELTA_FLIP" || setup == "CUM_DELTA_DIV" || setup == "LVN_REJECTION";
+            
+            string extremeVwapName;
+            bool isMacroSdExtreme = IsNearClosedVwapSdExtreme(price, isBuy, out extremeVwapName);
+            bool isReboundWindow = (isBuy && (evalBarIndex - lastMacroSdFloorTouchBar) <= 15)
+                                || (!isBuy && (evalBarIndex - lastMacroSdCeilingTouchBar) <= 15);
 
             // Pour les setups d'orderflow, on utilise un scoring adaptatif qui ne requiert
             // pas un contact exact avec un niveau profil fixe (POC/VAH/VAL/NPOC)
             if (isOrderflowSetup && IsScalpingPro)
             {
-                // Utiliser les zones d'imbalance ou FVG existantes comme proxy de confluence SMC
-                bool hasImbalance = false;
-                for (int i = 0; i < imbalanceZones.Count; i++)
+                if (isMacroSdExtreme || isReboundWindow)
                 {
-                    ImbalanceZone z = imbalanceZones[i];
-                    if (z.IsBull == isBuy && evalBarIndex - z.BarIndex <= SmcEventMaxAgeBars)
-                    {
-                        hasImbalance = true;
-                        break;
-                    }
+                    s += 12;
+                    detail.Add("Niveau classe A (" + (isMacroSdExtreme ? extremeVwapName : "Rebond Inflexion Macro") + ") (+12)");
+                    s += 6;
+                    detail.Add("Confluence Inflexion Macro x2 (+6)");
                 }
-                if (!hasImbalance)
+                else
                 {
-                    for (int i = 0; i < fvgEngineZones.Count; i++)
+                    // Utiliser les zones d'imbalance ou FVG existantes comme proxy de confluence SMC
+                    bool hasImbalance = false;
+                    for (int i = 0; i < imbalanceZones.Count; i++)
                     {
-                        FvgEngineZone fz = fvgEngineZones[i];
-                        if (fz.IsBull == isBuy && evalBarIndex - fz.BarIndex <= SmcEventMaxAgeBars)
+                        ImbalanceZone z = imbalanceZones[i];
+                        if (z.IsBull == isBuy && evalBarIndex - z.BarIndex <= SmcEventMaxAgeBars)
                         {
                             hasImbalance = true;
                             break;
                         }
                     }
-                }
-                
-                if (hasImbalance)
-                {
-                    s += 8;
-                    detail.Add("Confluence Imbalance/FVG (+8)");
+                    if (!hasImbalance)
+                    {
+                        for (int i = 0; i < fvgEngineZones.Count; i++)
+                        {
+                            FvgEngineZone fz = fvgEngineZones[i];
+                            if (fz.IsBull == isBuy && evalBarIndex - fz.BarIndex <= SmcEventMaxAgeBars)
+                            {
+                                hasImbalance = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (hasImbalance)
+                    {
+                        s += 8;
+                        detail.Add("Confluence Imbalance/FVG (+8)");
+                    }
                 }
                 
                 // Si confluence solide, on autorise le score même sans niveau profil exact
@@ -2592,13 +2607,14 @@ namespace NinjaTrader.NinjaScript.Indicators
             double reward = Math.Abs(c.Target1 - c.Entry);
             c.Rr = risk > 0 ? reward / risk : 0;
 
-            // (et double-compte un facteur deja score en N1). Il reste un gate pour le
-            // setup de tendance, et devient un simple modulateur ailleurs.
             c.HtfAligned = IsHtfAligned(isBuy);
-            // (il continue d'alimenter le score et la penalite) mais il n'est jamais
-            // eliminatoire : un desalignement coute HtfMisalignmentPenalty points.
+            string extremeVwapNameEval;
+            bool isMacroSdExtremeEval = IsNearClosedVwapSdExtreme(c.Entry, isBuy, out extremeVwapNameEval);
+            double vwapSigDistEval = Math.Abs(VwapSigmaDistance(c.Entry));
+            bool isMacroInflectionEval = isMacroSdExtremeEval || vwapSigDistEval >= 2.0 || (isBuy ? (evalBarIndex - lastMacroSdFloorTouchBar <= 15) : (evalBarIndex - lastMacroSdCeilingTouchBar <= 15));
+
             bool htfIsGate = (!meanReversion || HtfGateAppliesToMeanReversion) && !HtfSoftMode;
-            if (!c.HtfAligned && !htfIsGate && HtfMisalignmentPenalty > 0)
+            if (!c.HtfAligned && !htfIsGate && HtfMisalignmentPenalty > 0 && !isMacroInflectionEval)
             {
                 c.Penalty -= HtfMisalignmentPenalty;
                 c.Detail.Add("HTF non aligne, modulateur (-" + HtfMisalignmentPenalty + ")");
