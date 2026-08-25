@@ -1800,7 +1800,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         }
 
         /// <summary>Confluence multi-niveaux : composite (classe A), session courante,
-        /// session precedente et Naked POC.</summary>
+        /// session precedente, Naked POC et VWAP HTF Clôturés (Semaine & Mois SD±1/±2/±3).</summary>
         private int CountConfluentLevels(double price, out bool hasClassA)
         {
             double tol = SniperKeyLevelTolerance();
@@ -1823,7 +1823,77 @@ namespace NinjaTrader.NinjaScript.Indicators
                 count++;
                 if (isNakedPoc) hasClassA = true;
             }
+
+            // Intégration des bandes VWAP HTF (Mois et Semaine clôturés)
+            if (vpManager != null)
+            {
+                if (vpManager.PrevMonth != null && vpManager.PrevMonth.Valid)
+                {
+                    var m = vpManager.PrevMonth;
+                    if (m.VwapSd2Upper > 0 && Math.Abs(price - m.VwapSd2Upper) <= tol) { count++; hasClassA = true; }
+                    if (m.VwapSd2Lower > 0 && Math.Abs(price - m.VwapSd2Lower) <= tol) { count++; hasClassA = true; }
+                    if (m.VwapSd3Upper > 0 && Math.Abs(price - m.VwapSd3Upper) <= tol) { count++; hasClassA = true; }
+                    if (m.VwapSd3Lower > 0 && Math.Abs(price - m.VwapSd3Lower) <= tol) { count++; hasClassA = true; }
+                    if (m.Vwap > 0 && Math.Abs(price - m.Vwap) <= tol) { count++; hasClassA = true; }
+                    if (m.VwapSd1Upper > 0 && Math.Abs(price - m.VwapSd1Upper) <= tol) count++;
+                    if (m.VwapSd1Lower > 0 && Math.Abs(price - m.VwapSd1Lower) <= tol) count++;
+                }
+
+                if (vpManager.PrevWeek != null && vpManager.PrevWeek.Valid)
+                {
+                    var w = vpManager.PrevWeek;
+                    if (w.VwapSd2Upper > 0 && Math.Abs(price - w.VwapSd2Upper) <= tol) { count++; hasClassA = true; }
+                    if (w.VwapSd2Lower > 0 && Math.Abs(price - w.VwapSd2Lower) <= tol) { count++; hasClassA = true; }
+                    if (w.VwapSd3Upper > 0 && Math.Abs(price - w.VwapSd3Upper) <= tol) { count++; hasClassA = true; }
+                    if (w.VwapSd3Lower > 0 && Math.Abs(price - w.VwapSd3Lower) <= tol) { count++; hasClassA = true; }
+                    if (w.Vwap > 0 && Math.Abs(price - w.Vwap) <= tol) count++;
+                    if (w.VwapSd1Upper > 0 && Math.Abs(price - w.VwapSd1Upper) <= tol) count++;
+                    if (w.VwapSd1Lower > 0 && Math.Abs(price - w.VwapSd1Lower) <= tol) count++;
+                }
+            }
+
             return count;
+        }
+
+        private bool IsNearClosedVwapSdExtreme(double price, bool isBuy, out string extremeName)
+        {
+            extremeName = "";
+            if (vpManager == null) return false;
+            double tol = Math.Max(SniperKeyLevelTolerance() * 2.0, SniperAtr() * 0.5);
+
+            // 1. Mois clôturé (Prior Month)
+            if (vpManager.PrevMonth != null && vpManager.PrevMonth.Valid)
+            {
+                var m = vpManager.PrevMonth;
+                if (isBuy)
+                {
+                    if (m.VwapSd2Lower > 0 && Math.Abs(price - m.VwapSd2Lower) <= tol) { extremeName = "VWAP SD-2 Mois Préc"; return true; }
+                    if (m.VwapSd3Lower > 0 && Math.Abs(price - m.VwapSd3Lower) <= tol) { extremeName = "VWAP SD-3 Mois Préc"; return true; }
+                }
+                else
+                {
+                    if (m.VwapSd2Upper > 0 && Math.Abs(price - m.VwapSd2Upper) <= tol) { extremeName = "VWAP SD+2 Mois Préc"; return true; }
+                    if (m.VwapSd3Upper > 0 && Math.Abs(price - m.VwapSd3Upper) <= tol) { extremeName = "VWAP SD+3 Mois Préc"; return true; }
+                }
+            }
+
+            // 2. Semaine clôturée (Prior Week)
+            if (vpManager.PrevWeek != null && vpManager.PrevWeek.Valid)
+            {
+                var w = vpManager.PrevWeek;
+                if (isBuy)
+                {
+                    if (w.VwapSd2Lower > 0 && Math.Abs(price - w.VwapSd2Lower) <= tol) { extremeName = "VWAP SD-2 Sem Préc"; return true; }
+                    if (w.VwapSd3Lower > 0 && Math.Abs(price - w.VwapSd3Lower) <= tol) { extremeName = "VWAP SD-3 Sem Préc"; return true; }
+                }
+                else
+                {
+                    if (w.VwapSd2Upper > 0 && Math.Abs(price - w.VwapSd2Upper) <= tol) { extremeName = "VWAP SD+2 Sem Préc"; return true; }
+                    if (w.VwapSd3Upper > 0 && Math.Abs(price - w.VwapSd3Upper) <= tol) { extremeName = "VWAP SD+3 Sem Préc"; return true; }
+                }
+            }
+
+            return false;
         }
 
         /// <summary>Qualite LVN : creux local (derivee seconde) + largeur minimale.

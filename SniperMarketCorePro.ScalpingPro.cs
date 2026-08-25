@@ -89,6 +89,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             public bool HasUnfinishedMagnet;
             public double UnfinishedMagnetPrice;
 
+            // NOUVEAU : Extrêmes VWAP HTF Clôturés (SD ±2 / ±3 Mois & Semaine)
+            public bool IsNearClosedVwapSdExtreme;
+            public string ClosedVwapSdExtremeName;
+
             // Contexte Market Intelligence, fourni sans recalcul.
             public SMI.MiBias MiBias;
             public int MiConfidence;
@@ -655,12 +659,26 @@ namespace NinjaTrader.NinjaScript.Indicators
                         bool trendAligned = (ctx.IsBuy && ctx.IsIbUpExtension) || (!ctx.IsBuy && ctx.IsIbDownExtension);
                         if (isBreakout || ctx.SetupType == SetupType.Continuation)
                         {
-                            if (trendAligned) ibMod += 4.0;
-                            else ibMod -= 5.0;
+                            // Si continuation dans le sens de la tendance mais contre un mur macro SD-2 / SD+2 extrême, bloquer/pénaliser
+                            bool againstExtremeWall = (ctx.IsBuy && ctx.IsNearClosedVwapSdExtreme && ctx.ClosedVwapSdExtremeName != null && ctx.ClosedVwapSdExtremeName.Contains("SD+"))
+                                                   || (!ctx.IsBuy && ctx.IsNearClosedVwapSdExtreme && ctx.ClosedVwapSdExtremeName != null && ctx.ClosedVwapSdExtremeName.Contains("SD-"));
+
+                            if (againstExtremeWall)
+                                ibMod -= 5.0; // Interdiction d'acheter sur SD+2/+3 ou vendre sur SD-2/-3
+                            else if (trendAligned)
+                                ibMod += 4.0;
+                            else
+                                ibMod -= 5.0;
                         }
                         else if (ctx.SetupType == SetupType.Reversal)
                         {
-                            if (!trendAligned) ibMod -= 4.0;
+                            if (!trendAligned)
+                            {
+                                if (ctx.IsNearClosedVwapSdExtreme)
+                                    ibMod += 2.0; // Reversal soutenu par support/résistance macro SD ±2 / ±3
+                                else
+                                    ibMod -= 4.0;
+                            }
                         }
                     }
                     else if (isRangeDay && ctx.SetupType == SetupType.Reversal)
@@ -1058,7 +1076,13 @@ namespace NinjaTrader.NinjaScript.Indicators
             ctx.CandidateFamily = c.Family;
             ctx.SetupType = c.SetupType;
             ctx.CandidateName = c.Name;
-            ctx.HtfModifier = CalculateHtfModifier(c.SetupType, c.HtfAligned, c.Name, isBuy);
+
+            // Détection du test d'extrême VWAP HTF Clôturé (SD ±2 / ±3 Mois & Semaine)
+            string extremeVwapName;
+            ctx.IsNearClosedVwapSdExtreme = IsNearClosedVwapSdExtreme(snClose, isBuy, out extremeVwapName);
+            ctx.ClosedVwapSdExtremeName = extremeVwapName;
+
+            ctx.HtfModifier = CalculateHtfModifier(c.SetupType, c.HtfAligned, c.Name, isBuy, ctx.IsNearClosedVwapSdExtreme);
             ctx.M5Modifier = CalculateM5Modifier(isBuy, ctx.MiBias, ctx.MiConfidence);
             c.HtfModifier = ctx.HtfModifier;
             c.M5Modifier = ctx.M5Modifier;
@@ -1135,9 +1159,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             return SetupType.Reversal;
         }
 
-        private double CalculateHtfModifier(SetupType setupType, bool htfAligned, string candidateName, bool isBuy)
+        private double CalculateHtfModifier(SetupType setupType, bool htfAligned, string candidateName, bool isBuy, bool isNearClosedVwapSdExtreme = false)
         {
             if (htfAligned) return 4.0; // Bonus +4.0 pour HTF M15 aligne
+
+            // Reversal sur extrême macro VWAP (SD ±2/±3) : bonus de mean-reversion au lieu de pénalité
+            if (isNearClosedVwapSdExtreme) return 2.0;
 
             // HTF Oppose : penalite adaptative selon le setup et le sens
             string n = candidateName != null ? candidateName.ToUpperInvariant() : "";
