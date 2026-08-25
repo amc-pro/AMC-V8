@@ -1866,47 +1866,14 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private bool IsNearClosedVwapSdExtreme(double price, bool isBuy, out string extremeName)
         {
-            extremeName = "";
-            if (vpManager == null) return false;
-            double tol = Math.Max(SniperKeyLevelTolerance() * 2.0, SniperAtr() * 0.5);
-
-            // 1. Mois clôturé (Prior Month)
-            if (vpManager.PrevMonth != null && vpManager.PrevMonth.Valid)
-            {
-                var m = vpManager.PrevMonth;
-                if (isBuy)
-                {
-                    if (m.VwapSd2Lower > 0 && Math.Abs(price - m.VwapSd2Lower) <= tol) { extremeName = "VWAP SD-2 Mois Préc"; return true; }
-                    if (m.VwapSd3Lower > 0 && Math.Abs(price - m.VwapSd3Lower) <= tol) { extremeName = "VWAP SD-3 Mois Préc"; return true; }
-                }
-                else
-                {
-                    if (m.VwapSd2Upper > 0 && Math.Abs(price - m.VwapSd2Upper) <= tol) { extremeName = "VWAP SD+2 Mois Préc"; return true; }
-                    if (m.VwapSd3Upper > 0 && Math.Abs(price - m.VwapSd3Upper) <= tol) { extremeName = "VWAP SD+3 Mois Préc"; return true; }
-                }
-            }
-
-            // 2. Semaine clôturée (Prior Week)
-            if (vpManager.PrevWeek != null && vpManager.PrevWeek.Valid)
-            {
-                var w = vpManager.PrevWeek;
-                if (isBuy)
-                {
-                    if (w.VwapSd2Lower > 0 && Math.Abs(price - w.VwapSd2Lower) <= tol) { extremeName = "VWAP SD-2 Sem Préc"; return true; }
-                    if (w.VwapSd3Lower > 0 && Math.Abs(price - w.VwapSd3Lower) <= tol) { extremeName = "VWAP SD-3 Sem Préc"; return true; }
-                }
-                else
-                {
-                    if (w.VwapSd2Upper > 0 && Math.Abs(price - w.VwapSd2Upper) <= tol) { extremeName = "VWAP SD+2 Sem Préc"; return true; }
-                    if (w.VwapSd3Upper > 0 && Math.Abs(price - w.VwapSd3Upper) <= tol) { extremeName = "VWAP SD+3 Sem Préc"; return true; }
-                }
-            }
-
-            return false;
+            if (isBuy)
+                return IsNearClosedVwapSdFloor(price, out extremeName);
+            else
+                return IsNearClosedVwapSdCeiling(price, out extremeName);
         }
 
-        /// <summary>Détecte si le prix est à proximité d'un plancher macro SD-2 / SD-3 Lower
-        /// (support institutionnel). Direction-agnostique : sert à détecter les ventes suicidaires
+        /// <summary>Détecte si le prix est dans la zone ou à proximité d'un plancher macro SD-2 / SD-3 Lower
+        /// (support institutionnel [SD-2, SD-3]). Direction-agnostique : sert à détecter les ventes suicidaires
         /// sur un support extrême et à tracker les touches pour la fenêtre de rebond.</summary>
         private bool IsNearClosedVwapSdFloor(double price, out string floorName)
         {
@@ -1914,41 +1881,89 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (vpManager == null) return false;
             double tol = Math.Max(SniperKeyLevelTolerance() * 2.0, SniperAtr() * 0.5);
 
+            // 1. Mois clôturé (Prior Month)
             if (vpManager.PrevMonth != null && vpManager.PrevMonth.Valid)
             {
                 var m = vpManager.PrevMonth;
-                if (m.VwapSd2Lower > 0 && Math.Abs(price - m.VwapSd2Lower) <= tol) { floorName = "VWAP SD-2 Mois Préc"; return true; }
-                if (m.VwapSd3Lower > 0 && Math.Abs(price - m.VwapSd3Lower) <= tol) { floorName = "VWAP SD-3 Mois Préc"; return true; }
+                if (m.VwapSd2Lower > 0 && m.VwapSd3Lower > 0)
+                {
+                    double topZone = Math.Max(m.VwapSd2Lower, m.VwapSd3Lower) + tol;
+                    double btmZone = Math.Min(m.VwapSd2Lower, m.VwapSd3Lower) - tol;
+                    if (price >= btmZone && price <= topZone)
+                    {
+                        floorName = "VWAP SD-2/-3 Mois Préc";
+                        return true;
+                    }
+                }
+                else if (m.VwapSd2Lower > 0 && Math.Abs(price - m.VwapSd2Lower) <= tol) { floorName = "VWAP SD-2 Mois Préc"; return true; }
+                else if (m.VwapSd3Lower > 0 && Math.Abs(price - m.VwapSd3Lower) <= tol) { floorName = "VWAP SD-3 Mois Préc"; return true; }
             }
+
+            // 2. Semaine clôturée (Prior Week)
             if (vpManager.PrevWeek != null && vpManager.PrevWeek.Valid)
             {
                 var w = vpManager.PrevWeek;
-                if (w.VwapSd2Lower > 0 && Math.Abs(price - w.VwapSd2Lower) <= tol) { floorName = "VWAP SD-2 Sem Préc"; return true; }
-                if (w.VwapSd3Lower > 0 && Math.Abs(price - w.VwapSd3Lower) <= tol) { floorName = "VWAP SD-3 Sem Préc"; return true; }
+                if (w.VwapSd2Lower > 0 && w.VwapSd3Lower > 0)
+                {
+                    double topZone = Math.Max(w.VwapSd2Lower, w.VwapSd3Lower) + tol;
+                    double btmZone = Math.Min(w.VwapSd2Lower, w.VwapSd3Lower) - tol;
+                    if (price >= btmZone && price <= topZone)
+                    {
+                        floorName = "VWAP SD-2/-3 Sem Préc";
+                        return true;
+                    }
+                }
+                else if (w.VwapSd2Lower > 0 && Math.Abs(price - w.VwapSd2Lower) <= tol) { floorName = "VWAP SD-2 Sem Préc"; return true; }
+                else if (w.VwapSd3Lower > 0 && Math.Abs(price - w.VwapSd3Lower) <= tol) { floorName = "VWAP SD-3 Sem Préc"; return true; }
             }
+
             return false;
         }
 
-        /// <summary>Détecte si le prix est à proximité d'un plafond macro SD+2 / SD+3 Upper
-        /// (résistance institutionnelle). Direction-agnostique.</summary>
+        /// <summary>Détecte si le prix est dans la zone ou à proximité d'un plafond macro SD+2 / SD+3 Upper
+        /// (résistance institutionnelle [SD+2, SD+3]). Direction-agnostique.</summary>
         private bool IsNearClosedVwapSdCeiling(double price, out string ceilingName)
         {
             ceilingName = "";
             if (vpManager == null) return false;
             double tol = Math.Max(SniperKeyLevelTolerance() * 2.0, SniperAtr() * 0.5);
 
+            // 1. Mois clôturé (Prior Month)
             if (vpManager.PrevMonth != null && vpManager.PrevMonth.Valid)
             {
                 var m = vpManager.PrevMonth;
-                if (m.VwapSd2Upper > 0 && Math.Abs(price - m.VwapSd2Upper) <= tol) { ceilingName = "VWAP SD+2 Mois Préc"; return true; }
-                if (m.VwapSd3Upper > 0 && Math.Abs(price - m.VwapSd3Upper) <= tol) { ceilingName = "VWAP SD+3 Mois Préc"; return true; }
+                if (m.VwapSd2Upper > 0 && m.VwapSd3Upper > 0)
+                {
+                    double btmZone = Math.Min(m.VwapSd2Upper, m.VwapSd3Upper) - tol;
+                    double topZone = Math.Max(m.VwapSd2Upper, m.VwapSd3Upper) + tol;
+                    if (price >= btmZone && price <= topZone)
+                    {
+                        ceilingName = "VWAP SD+2/+3 Mois Préc";
+                        return true;
+                    }
+                }
+                else if (m.VwapSd2Upper > 0 && Math.Abs(price - m.VwapSd2Upper) <= tol) { ceilingName = "VWAP SD+2 Mois Préc"; return true; }
+                else if (m.VwapSd3Upper > 0 && Math.Abs(price - m.VwapSd3Upper) <= tol) { ceilingName = "VWAP SD+3 Mois Préc"; return true; }
             }
+
+            // 2. Semaine clôturée (Prior Week)
             if (vpManager.PrevWeek != null && vpManager.PrevWeek.Valid)
             {
                 var w = vpManager.PrevWeek;
-                if (w.VwapSd2Upper > 0 && Math.Abs(price - w.VwapSd2Upper) <= tol) { ceilingName = "VWAP SD+2 Sem Préc"; return true; }
-                if (w.VwapSd3Upper > 0 && Math.Abs(price - w.VwapSd3Upper) <= tol) { ceilingName = "VWAP SD+3 Sem Préc"; return true; }
+                if (w.VwapSd2Upper > 0 && w.VwapSd3Upper > 0)
+                {
+                    double btmZone = Math.Min(w.VwapSd2Upper, w.VwapSd3Upper) - tol;
+                    double topZone = Math.Max(w.VwapSd2Upper, w.VwapSd3Upper) + tol;
+                    if (price >= btmZone && price <= topZone)
+                    {
+                        ceilingName = "VWAP SD+2/+3 Sem Préc";
+                        return true;
+                    }
+                }
+                else if (w.VwapSd2Upper > 0 && Math.Abs(price - w.VwapSd2Upper) <= tol) { ceilingName = "VWAP SD+2 Sem Préc"; return true; }
+                else if (w.VwapSd3Upper > 0 && Math.Abs(price - w.VwapSd3Upper) <= tol) { ceilingName = "VWAP SD+3 Sem Préc"; return true; }
             }
+
             return false;
         }
 
