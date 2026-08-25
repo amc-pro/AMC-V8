@@ -2041,7 +2041,14 @@ namespace NinjaTrader.NinjaScript.Indicators
             bool dualHybrid = setup == "DELTA_FLIP" || setup == "CUM_DELTA_DIV" || setup == "LVN_REJECTION";
             bool meanReversion = !pureTrend && !dualHybrid;
 
-            // DayType: les setups Dual/Hybride sont valides en Trend Day ET Normal Day
+            // Détection de zone d'inflexion macro (SD ±2 / ±3 d'un VWAP clôturé ou étirement statistique ≥ 2.0σ)
+            string extremeVwapName;
+            bool isMacroSdExtreme = IsNearClosedVwapSdExtreme(snClose, isBuy, out extremeVwapName);
+            double vwapSigDist = Math.Abs(VwapSigmaDistance(snClose));
+            bool isMacroInflection = isMacroSdExtreme || vwapSigDist >= 2.0;
+
+            // DayType: les setups Dual/Hybride sont valides en Trend Day ET Normal Day.
+            // En zone d'inflexion macro (SD extrême ou Z >= 2.0σ), un retournement est légitime même en Trend Day.
             bool dtOk;
             if (dualHybrid)
             {
@@ -2049,6 +2056,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                 dtOk = true;
                 s += 10;
                 detail.Add("DayType=" + sniperDayType + " (Setup Hybride valide) (+10)");
+            }
+            else if (isMacroInflection && (!pureTrend || !isBreakoutOrAcceptance))
+            {
+                // Reversal/Inflexion soutenu par niveau institutionnel macro (SD-2/-3) ou épuisement statistique
+                dtOk = true;
+                s += 10;
+                string label = isMacroSdExtreme ? extremeVwapName : string.Format(CultureInfo.InvariantCulture, "VWAP {0:0.0}sigma", vwapSigDist);
+                detail.Add("Macro-Inflection " + label + " (+10)");
             }
             else if (meanReversion)
             {
@@ -2064,15 +2079,28 @@ namespace NinjaTrader.NinjaScript.Indicators
                 else detail.Add("DayType=" + sniperDayType + " " + (trendDirectionOk ? "INCOMPATIBLE" : "CONTRE-TENDANCE") + " (+0)");
             }
 
-            bool ibDirectionAligned = meanReversion || (isBuy && isIbUpExtension) || (!isBuy && isIbDownExtension);
-            bool ibOk = meanReversion
-                ? (ibExtensionRatio >= IbExtensionMin && ibExtensionRatio <= IbExtensionMax)
+            bool ibDirectionAligned = meanReversion || isMacroInflection || (isBuy && isIbUpExtension) || (!isBuy && isIbDownExtension);
+            bool ibOk = (meanReversion || isMacroInflection)
+                ? (isMacroInflection ? (ibExtensionRatio >= 0.0) : (ibExtensionRatio >= IbExtensionMin && ibExtensionRatio <= IbExtensionMax))
                 : (ibExtensionRatio >= IbExtensionTrendMin && ibDirectionAligned);
-            if (ibOk) { s += 6; detail.Add(string.Format(CultureInfo.InvariantCulture, "IBext={0:0.00} (+6)", ibExtensionRatio)); }
+            if (ibOk)
+            {
+                s += 6;
+                if (isMacroInflection && ibExtensionRatio > IbExtensionMax)
+                    detail.Add(string.Format(CultureInfo.InvariantCulture, "IBext={0:0.00} Overextended (+6)", ibExtensionRatio));
+                else
+                    detail.Add(string.Format(CultureInfo.InvariantCulture, "IBext={0:0.00} (+6)", ibExtensionRatio));
+            }
             else detail.Add(string.Format(CultureInfo.InvariantCulture, "IBext={0:0.00} " + (ibDirectionAligned ? "hors plage" : "contre-sens") + " (+0)", ibExtensionRatio));
 
-            bool ovOk = meanReversion ? sniperVaOverlap >= VaOverlapRangeThreshold : sniperVaOverlap < VaOverlapRangeThreshold;
-            if (ovOk) { s += 6; detail.Add(string.Format(CultureInfo.InvariantCulture, "VAoverlap={0:0.00} (+6)", sniperVaOverlap)); }
+            bool ovOk = (meanReversion || isMacroInflection)
+                ? (isMacroInflection || sniperVaOverlap >= VaOverlapRangeThreshold)
+                : (sniperVaOverlap < VaOverlapRangeThreshold);
+            if (ovOk)
+            {
+                s += 6;
+                detail.Add(string.Format(CultureInfo.InvariantCulture, "VAoverlap={0:0.00} (+6)", sniperVaOverlap));
+            }
             else detail.Add(string.Format(CultureInfo.InvariantCulture, "VAoverlap={0:0.00} (+0)", sniperVaOverlap));
 
             double ar = AtrPercentileRank();
@@ -2087,10 +2115,17 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (sniperPrevProfileValid && sniperSessionProfile.Valid)
             {
                 double migration = sniperSessionProfile.Poc - sniperPrevPoc;
-                bool aligned = meanReversion
-                    ? Math.Abs(migration) < SniperKeyLevelTolerance() * 2
+                bool aligned = (meanReversion || isMacroInflection)
+                    ? (isMacroInflection || Math.Abs(migration) < SniperKeyLevelTolerance() * 2)
                     : (isBuy ? migration > 0 : migration < 0);
-                if (aligned && IsHtfAligned(isBuy)) { s += 4; detail.Add("POCmigration + HTF OK (+4)"); }
+                if (aligned && (IsHtfAligned(isBuy) || isMacroInflection))
+                {
+                    s += 4;
+                    if (isMacroInflection && !IsHtfAligned(isBuy))
+                        detail.Add("POCmigration Inflection OK (+4)");
+                    else
+                        detail.Add("POCmigration + HTF OK (+4)");
+                }
                 else if (aligned) { s += 2; detail.Add("POCmigration OK, HTF neutre/oppose (+2)"); }
                 else detail.Add("POCmigration KO (+0)");
             }

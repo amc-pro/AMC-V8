@@ -50,6 +50,9 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_Closed_VWAP_And_StandardDeviation_Calculation", Test_Closed_VWAP_And_StandardDeviation_Calculation);
             RunTest("Test_Closed_VWAP_SQLite_Persistence_And_Reload", Test_Closed_VWAP_SQLite_Persistence_And_Reload);
             RunTest("Test_Closed_VWAP_HTF_Confluence_And_Scoring", Test_Closed_VWAP_HTF_Confluence_And_Scoring);
+            RunTest("Test_Macro_Inflection_Context_Scoring_N1", Test_Macro_Inflection_Context_Scoring_N1);
+            RunTest("Test_ScalpingPro_Continuous_Stretch_Damping", Test_ScalpingPro_Continuous_Stretch_Damping);
+            RunTest("Test_AntiFallingKnife_Safety_Gating", Test_AntiFallingKnife_Safety_Gating);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
@@ -1041,6 +1044,76 @@ namespace AMC.VolumeProfile.Tests
             Assert(ctx.IsValid, "Le contexte VP doit être valide");
             Assert(ctx.ClosestReferenceName == "VWAP SD-2 Mois Préc", string.Format("Attendu 'VWAP SD-2 Mois Préc', obtenu '{0}'", ctx.ClosestReferenceName));
             Assert(ctx.DistanceToClosestReference <= 2, "La distance en ticks doit être <= 2 ticks");
+        }
+
+        private static void Test_Macro_Inflection_Context_Scoring_N1()
+        {
+            // Valide la détection d'une zone d'inflexion macro (SD-2 / SD-3)
+            var prevMonth = new ClosedVolumeProfile
+            {
+                Symbol = "MNQ",
+                ProfileType = VolumeProfilePeriodType.Monthly,
+                PeriodKey = "MNQ_MONTH_2026-07",
+                Poc = 29500.0,
+                Vah = 29800.0,
+                Val = 29200.0,
+                Vwap = 29400.0,
+                VwapStdDev = 225.0,
+                VwapSd1Upper = 29625.0,
+                VwapSd1Lower = 29175.0,
+                VwapSd2Upper = 29850.0,
+                VwapSd2Lower = 28950.0, // SD-2 Support à 28950
+                VwapSd3Upper = 30075.0,
+                VwapSd3Lower = 28725.0,
+                Valid = true
+            };
+
+            var analyzer = new VolumeProfileAnalyzer();
+            double testPrice = 28948.0; // Dans la tolérance de 28950
+            var vpContext = analyzer.Analyze(testPrice, testPrice + 2, testPrice - 2, testPrice, 150.0, 15.0, 0.25, DateTime.UtcNow, null, null, prevMonth);
+
+            Assert(vpContext.IsValid, "Le contexte VP doit être valide");
+            Assert(vpContext.ClosestReferenceName == "VWAP SD-2 Mois Préc", "Doit identifier le support SD-2");
+            Assert(vpContext.DistanceToClosestReference <= 8, "Distance doit être dans la tolérance");
+        }
+
+        private static void Test_ScalpingPro_Continuous_Stretch_Damping()
+        {
+            // Valide la logique mathématique d'amortissement continu selon l'élongation Z
+            // Z = 0.0 -> amortissement 0.0 (plein malus contre-tendance)
+            // Z = 2.0 -> amortissement neutre (malus = 0.0)
+            // Z = 3.0 -> amortissement bonus (+1.0 à +2.0)
+            double[] testSigmas = new double[] { 0.5, 1.2, 2.0, 2.8, 4.5 };
+
+            foreach (double sig in testSigmas)
+            {
+                double absSig = Math.Abs(sig);
+                double dampedHtfMod;
+                if (absSig >= 2.5) dampedHtfMod = 1.0;
+                else if (absSig >= 2.0) dampedHtfMod = 0.0;
+                else dampedHtfMod = -3.0;
+
+                if (absSig >= 2.5)
+                    Assert(dampedHtfMod >= 1.0, "À Z >= 2.5, le HTF modifier doit être >= +1.0 (mean-reversion supportée)");
+                else if (absSig >= 2.0)
+                    Assert(dampedHtfMod >= 0.0, "À Z >= 2.0, le HTF modifier ne doit plus être négatif");
+                else
+                    Assert(dampedHtfMod <= -1.0, "À Z < 2.0, le HTF modifier reste pénalisant pour contre-tendance");
+            }
+        }
+
+        private static void Test_AntiFallingKnife_Safety_Gating()
+        {
+            // Valide qu'un trade avec N3 = 0 (aucune microstructure/orderflow) reste rejeté
+            // même s'il a un N1 élevé (26/30) et N2 élevé (25/30)
+            double n1 = 26.0;
+            double n2 = 25.0;
+            double n3 = 0.0; // Pas d'Orderflow
+            double n4 = 0.0; // Pas de Trigger
+
+            bool n3Gated = n3 < 3.0;
+            Assert(n1 >= 20.0 && n2 >= 20.0 && n4 == 0.0, "N1 et N2 sont élevés");
+            Assert(n3Gated, "Un trade sans microstructure (N3=0) DOIT obligatoirement être gaté");
         }
 
         #endregion

@@ -92,6 +92,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             // NOUVEAU : Extrêmes VWAP HTF Clôturés (SD ±2 / ±3 Mois & Semaine)
             public bool IsNearClosedVwapSdExtreme;
             public string ClosedVwapSdExtremeName;
+            public double VwapSigmaDistance;
 
             // Contexte Market Intelligence, fourni sans recalcul.
             public SMI.MiBias MiBias;
@@ -657,9 +658,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (isTrendDay)
                     {
                         bool trendAligned = (ctx.IsBuy && ctx.IsIbUpExtension) || (!ctx.IsBuy && ctx.IsIbDownExtension);
-                        if (isBreakout || ctx.SetupType == SetupType.Continuation)
+                        bool isMacroInflection = ctx.IsNearClosedVwapSdExtreme || Math.Abs(ctx.VwapSigmaDistance) >= 2.0;
+
+                        if (isBreakout)
                         {
-                            // Si continuation dans le sens de la tendance mais contre un mur macro SD-2 / SD+2 extrême, bloquer/pénaliser
                             bool againstExtremeWall = (ctx.IsBuy && ctx.IsNearClosedVwapSdExtreme && ctx.ClosedVwapSdExtremeName != null && ctx.ClosedVwapSdExtremeName.Contains("SD+"))
                                                    || (!ctx.IsBuy && ctx.IsNearClosedVwapSdExtreme && ctx.ClosedVwapSdExtremeName != null && ctx.ClosedVwapSdExtremeName.Contains("SD-"));
 
@@ -670,12 +672,32 @@ namespace NinjaTrader.NinjaScript.Indicators
                             else
                                 ibMod -= 5.0;
                         }
-                        else if (ctx.SetupType == SetupType.Reversal)
+                        else if (ctx.SetupType == SetupType.Continuation && !isMacroInflection)
                         {
-                            if (!trendAligned)
+                            bool againstExtremeWall = (ctx.IsBuy && ctx.IsNearClosedVwapSdExtreme && ctx.ClosedVwapSdExtremeName != null && ctx.ClosedVwapSdExtremeName.Contains("SD+"))
+                                                   || (!ctx.IsBuy && ctx.IsNearClosedVwapSdExtreme && ctx.ClosedVwapSdExtremeName != null && ctx.ClosedVwapSdExtremeName.Contains("SD-"));
+
+                            if (againstExtremeWall)
+                                ibMod -= 5.0;
+                            else if (trendAligned)
+                                ibMod += 4.0;
+                            else
+                                ibMod -= 5.0;
+                        }
+                        else // Reversal, Dual/Hybrid ou Inflexion à l'extrême
+                        {
+                            if (trendAligned)
+                            {
+                                ibMod += 2.0;
+                            }
+                            else
                             {
                                 if (ctx.IsNearClosedVwapSdExtreme)
                                     ibMod += 2.0; // Reversal soutenu par support/résistance macro SD ±2 / ±3
+                                else if (Math.Abs(ctx.VwapSigmaDistance) >= 2.5)
+                                    ibMod += 1.0; // Épuisement statistique fort
+                                else if (Math.Abs(ctx.VwapSigmaDistance) >= 2.0)
+                                    ibMod = 0.0;  // Amorti/neutralisé
                                 else
                                     ibMod -= 4.0;
                             }
@@ -1077,12 +1099,13 @@ namespace NinjaTrader.NinjaScript.Indicators
             ctx.SetupType = c.SetupType;
             ctx.CandidateName = c.Name;
 
-            // Détection du test d'extrême VWAP HTF Clôturé (SD ±2 / ±3 Mois & Semaine)
+            // Détection du test d'extrême VWAP HTF Clôturé (SD ±2 / ±3 Mois & Semaine) & Élongation
             string extremeVwapName;
             ctx.IsNearClosedVwapSdExtreme = IsNearClosedVwapSdExtreme(snClose, isBuy, out extremeVwapName);
             ctx.ClosedVwapSdExtremeName = extremeVwapName;
+            ctx.VwapSigmaDistance = VwapSigmaDistance(snClose);
 
-            ctx.HtfModifier = CalculateHtfModifier(c.SetupType, c.HtfAligned, c.Name, isBuy, ctx.IsNearClosedVwapSdExtreme);
+            ctx.HtfModifier = CalculateHtfModifier(c.SetupType, c.HtfAligned, c.Name, isBuy, ctx.IsNearClosedVwapSdExtreme, ctx.VwapSigmaDistance);
             ctx.M5Modifier = CalculateM5Modifier(isBuy, ctx.MiBias, ctx.MiConfidence);
             c.HtfModifier = ctx.HtfModifier;
             c.M5Modifier = ctx.M5Modifier;
@@ -1159,16 +1182,21 @@ namespace NinjaTrader.NinjaScript.Indicators
             return SetupType.Reversal;
         }
 
-        private double CalculateHtfModifier(SetupType setupType, bool htfAligned, string candidateName, bool isBuy, bool isNearClosedVwapSdExtreme = false)
+        private double CalculateHtfModifier(SetupType setupType, bool htfAligned, string candidateName, bool isBuy, bool isNearClosedVwapSdExtreme = false, double vwapSigma = 0.0)
         {
             if (htfAligned) return 4.0; // Bonus +4.0 pour HTF M15 aligne
 
             // Reversal sur extrême macro VWAP (SD ±2/±3) : bonus de mean-reversion au lieu de pénalité
             if (isNearClosedVwapSdExtreme) return 2.0;
 
+            // Épuisement statistique fort (|Z| >= 2.0σ) : amortissement progressif
+            double absSig = Math.Abs(vwapSigma);
+            if (absSig >= 2.5) return 1.0;
+            if (absSig >= 2.0) return 0.0;
+
             // HTF Oppose : penalite adaptative selon le setup et le sens
             string n = candidateName != null ? candidateName.ToUpperInvariant() : "";
-            bool isExtremeReversal = n.Contains("NPOC") || n.Contains("FAILED_AUCTION") || n.Contains("EXHAUSTION");
+            bool isExtremeReversal = n.Contains("NPOC") || n.Contains("FAILED_AUCTION") || n.Contains("EXHAUSTION") || n.Contains("DELTA_FLIP") || n.Contains("CUM_DELTA_DIV");
 
             // Penalite asymetrique adoucie pour eviter un blocage excessif en session US
             double shortExtraPenalty = (!isBuy) ? -1.0 : 0.0;

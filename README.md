@@ -113,7 +113,22 @@ Volume
 
 ---
 
-### 4. Indicateurs Dashboard & Confluences : `VP LOC` & `VP CONF`
+### 4. Moteur d'Inflexion & Régime Adaptatif Multi-Actifs (*Macro-Inflection & Continuous Stretch Engine*)
+Le système intègre un moteur continu d'adaptation multi-régimes permettant de capturer les retournements majeurs d'épuisement tout en protégeant le capital lors des vraies tendances lourdes :
+
+* **Reconnaissance Dynamique du Contexte ($N1$)** :
+  * Lors d'une journée en forte tendance impulsive (*Trend Day*), les tests de bandes extrêmes ($SD \pm 2 / \pm 3$ ou $|Z_{\text{vwap}}| \ge 2.0\sigma$) sont identifiés comme des **zones d'inflexion macro valides** (+10 pts en $N1$).
+  * L'extension d'$IB$ extrême ($IB_{\text{ext}} \ge 2.0$) et le non-chevauchement de Value Area sont valorisés (+6 pts chacun) comme signatures d'élongation terminale.
+  * La note de contexte $N1$ passe ainsi de **4.0/30 à 26.0/30**, déverrouillant les opportunités d'inversion statistique.
+* **Amortissement Continu d'Étirement dans ScalpingPro** :
+  * Les pénalités de contre-tendance (`htfM15`, `ibMod`) s'amortissent progressivement au fur et à mesure que l'élongation augmente ($|Z| \ge 2.0\sigma \rightarrow 0.0$, $|Z| \ge 2.5\sigma \rightarrow +1.0$).
+  * Maintien strict du filtre anti-continuation interdisant les achats sous $SD +2/+3$ ou les ventes sur $SD -2/-3$ (`ibMod -= 5.0`).
+* **Verrou de Sécurité Anti-Couteau Tombant ($N3 / N4$)** :
+  * Aucun trade n'est pris au simple toucher passif d'une bande : l'obligation de preuve par la microstructure et l'Orderflow ($N3 \ge 3.0$ : DeltaFlip validé, divergence CVD, bougie de rejet $\ge 40\%$, ou Finished Auction) reste **infranchissable**, éliminant les faux rebonds sur les instruments directionnels lourds (Gold, Crude Oil).
+
+---
+
+### 5. Indicateurs Dashboard & Confluences : `VP LOC` & `VP CONF`
 * **`VP LOC` (*Volume Profile Location*)** : Synthétise la position exacte du prix par rapport à la structure globale (`INSIDE_VALUE`, `ABOVE_VAH`, `BELOW_VAL`, `TEST_POC`, `TEST_SD2_MONTH`, etc.).
 * **`VP CONF` (*Volume Profile Confluence*)** : Identifie les intersections multi-temporelles et multi-modèles (ex: $\text{VAL Semaine} + \text{VWAP } SD -2\text{ Mois} + \text{NPOC}$), déclenchant des alertes Telegram prioritaires et le scoring maximal de confluence.
 
@@ -124,8 +139,8 @@ Volume
 ```text
 AMC-V8/
 ├── SniperMarketCorePro.cs              # Moteur principal de l'indicateur & Intégration NinjaTrader
-├── SniperMarketCorePro.Sniper.cs       # Logique du module Sniper, N2 Localisation & Shadow Journal
-├── SniperMarketCorePro.ScalpingPro.cs  # Modulateurs N1, Scoring pondéré & Détection extrêmes VWAP
+├── SniperMarketCorePro.Sniper.cs       # Logique du module Sniper, N1 Contexte Adaptatif, N2 Localisation & Shadow Journal
+├── SniperMarketCorePro.ScalpingPro.cs  # Modulateurs N1, Scoring pondéré, Amortissement continu & Détection extrêmes VWAP
 ├── SniperMarketCorePro.Engine.cs       # Moteur de calcul des flux, deltas, CVD et microstructure
 ├── SniperMarketCorePro.Features.cs     # Extraction des patterns de footprint & absorption
 ├── SniperMarketCorePro.VolumeProfile.cs# Gestion des événements VP, contextes et alertes Telegram
@@ -137,7 +152,7 @@ AMC-V8/
 │   ├── VolumeProfileManager.cs         # Transitions de sessions (RTH/Jour/Sem/Mois) et cache RAM
 │   └── VolumeProfileAnalyzer.cs        # Analyse de proximité, confluences et VP LOC / VP CONF
 ├── Tests/                              # Suite de tests de production (.NET Core)
-│   ├── Program.cs                      # 32 tests unitaires validant calculs, SQLite et scoring
+│   ├── Program.cs                      # 35 tests unitaires validant calculs, SQLite, scoring et inflexion
 │   └── VolumeProfileTests.csproj       # Projet de tests automatisés
 ├── MD/                                 # Guides techniques et documentation approfondie
 │   └── VOLUME_PROFILE_GUIDE.md         # Manuel complet Volume Profile, mathématiques et playbooks
@@ -156,7 +171,7 @@ AMC-V8/
 ## 🛠️ Installation et Validation
 
 ### 1. Compilation & Tests Automatisés
-Le projet intègre une suite complète de **32 tests unitaires de non-régression** (Volume Profile, VWAP, SD Bands, SQLite, SMC, FVG, Footprint, Dashboard) :
+Le projet intègre une suite complète de **35 tests unitaires de non-régression** (Volume Profile, VWAP Clôturé, SD Bands, SQLite, Inflexion Macro N1, Amortissement Continu, SMC, FVG, Footprint, Dashboard) :
 ```powershell
 dotnet run --project Tests/VolumeProfileTests.csproj
 ```
