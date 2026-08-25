@@ -825,6 +825,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             imbalanceZones.Clear();
             lastZoneRegisteredBarIdx = -1;
 
+            fvgEngineZones.Clear();
+            lastFvgRegisteredBarIdx = -1;
+            lastHtfFvgRegisteredBar = -1;
+
             absDeltaHistoryEth.Clear();
             barRangeHistoryEth.Clear();
             barVolumeHistoryEth.Clear();
@@ -2406,6 +2410,262 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
+        private void EvaluateFvgZoneRetests(int barIdx, double highPrice, double lowPrice, double closePrice, double openPrice)
+        {
+            if (!EnableFvgRetestTrigger || FvgZoneMemoryBars <= 0) return;
+
+            // 1. Enregistrement des nouveaux Fair Value Gaps LTF (série volumétrique)
+            // SÉCURITÉ ANTI-LOOKAHEAD : L'enregistrement d'un nouveau FVG s'effectue EXCLUSIVEMENT
+            // sur des bougies 100% clôturées. Si evalOffset == 0 (évaluation en cours de tick), on force
+            // un décalage regOffset = 1 pour ne considérer que la dernière bougie close [1] et [3].
+            int regOffset = evalOffset > 0 ? evalOffset : 1;
+            int regBarIdx = CurrentBars[volumetricBarsIndex] - regOffset;
+
+            if (volumetricBarsIndex >= 0 && volumetricBarsIndex < BarsArray.Length
+                && CurrentBars[volumetricBarsIndex] >= regOffset + 2
+                && regBarIdx != lastFvgRegisteredBarIdx)
+            {
+                double l0 = Lows[volumetricBarsIndex][regOffset];
+                double h0 = Highs[volumetricBarsIndex][regOffset];
+                double l2 = Lows[volumetricBarsIndex][regOffset + 2];
+                double h2 = Highs[volumetricBarsIndex][regOffset + 2];
+
+                // Analyse de la bougie centrale d'impulsion (Displacement & Volume)
+                double c1Open = Opens[volumetricBarsIndex][regOffset + 1];
+                double c1Close = Closes[volumetricBarsIndex][regOffset + 1];
+                double c1High = Highs[volumetricBarsIndex][regOffset + 1];
+                double c1Low = Lows[volumetricBarsIndex][regOffset + 1];
+                double c1Range = c1High - c1Low;
+                double c1Body = Math.Abs(c1Close - c1Open);
+                double dispRatio = c1Range > 0 ? c1Body / c1Range : 0.5;
+                long c1Vol = Volumes[volumetricBarsIndex].Count > regOffset + 1 ? (long)Volumes[volumetricBarsIndex][regOffset + 1] : 0L;
+                double avgVol = cachedAvgVolume > 0 ? (double)cachedAvgVolume : 100.0;
+
+                double effTick = TickSize > 0 ? TickSize : 0.25;
+
+                if (l0 > h2) // Bullish FVG
+                {
+                    double gapSize = l0 - h2;
+                    double gapTicks = gapSize / effTick;
+
+                    if (gapTicks >= FvgMinGapTicks && (!FvgRequireDisplacement || dispRatio >= 0.40))
+                    {
+                        // Calcul du score de qualité institutionnel (1.0 à 3.0)
+                        double q = 1.5;
+                        if (gapTicks >= 4.0) q += 0.5;
+                        if (dispRatio >= 0.60) q += 0.5;
+                        if (c1Vol >= avgVol * 1.1) q += 0.5;
+
+                        fvgEngineZones.Add(new FvgEngineZone
+                        {
+                            Bottom = h2,
+                            Top = l0,
+                            IsBull = true,
+                            BarIndex = regBarIdx,
+                            Retested = false,
+                            RetestCount = 0,
+                            Invalidated = false,
+                            IsHtf = false,
+                            Inverted = false,
+                            QualityScore = Clamp(q, 1.0, 3.0),
+                            GapSizeTicks = gapTicks,
+                            DisplacementRatio = dispRatio,
+                            CreationTime = GetVolumetricTime()
+                        });
+                        lastFvgRegisteredBarIdx = regBarIdx;
+                    }
+                }
+                else if (h0 < l2) // Bearish FVG
+                {
+                    double gapSize = l2 - h0;
+                    double gapTicks = gapSize / effTick;
+
+                    if (gapTicks >= FvgMinGapTicks && (!FvgRequireDisplacement || dispRatio >= 0.40))
+                    {
+                        // Calcul du score de qualité institutionnel (1.0 à 3.0)
+                        double q = 1.5;
+                        if (gapTicks >= 4.0) q += 0.5;
+                        if (dispRatio >= 0.60) q += 0.5;
+                        if (c1Vol >= avgVol * 1.1) q += 0.5;
+
+                        fvgEngineZones.Add(new FvgEngineZone
+                        {
+                            Bottom = h0,
+                            Top = l2,
+                            IsBull = false,
+                            BarIndex = regBarIdx,
+                            Retested = false,
+                            RetestCount = 0,
+                            Invalidated = false,
+                            IsHtf = false,
+                            Inverted = false,
+                            QualityScore = Clamp(q, 1.0, 3.0),
+                            GapSizeTicks = gapTicks,
+                            DisplacementRatio = dispRatio,
+                            CreationTime = GetVolumetricTime()
+                        });
+                        lastFvgRegisteredBarIdx = regBarIdx;
+                    }
+                }
+            }
+
+            // 1b. Enregistrement des Fair Value Gaps HTF (M5 / M15 / M60) si disponible
+            // NOTE INDEXATION : on utilise [1] et [3] (au lieu de [0] et [2]) pour ne considérer
+            // que des bougies HTF entièrement clôturées. Bar[0] est potentiellement en cours de
+            // formation. Le FVG est donc : bar[3]=bougie ancienne, bar[2]=gap, bar[1]=bougie récente.
+            if (EnableHtfFilter && htfBarsIndex > 0 && htfBarsIndex < BarsArray.Length
+                && CurrentBars[htfBarsIndex] >= 3)
+            {
+                int htfBar = CurrentBars[htfBarsIndex];
+                if (htfBar != lastHtfFvgRegisteredBar)
+                {
+                    double htfL0 = Lows[htfBarsIndex][1];
+                    double htfH0 = Highs[htfBarsIndex][1];
+                    double htfL2 = Lows[htfBarsIndex][3];
+                    double htfH2 = Highs[htfBarsIndex][3];
+                    double effTick = TickSize > 0 ? TickSize : 0.25;
+
+                    if (htfL0 > htfH2) // HTF Bullish FVG
+                    {
+                        double gapSize = htfL0 - htfH2;
+                        double gapTicks = gapSize / effTick;
+                        if (gapTicks >= FvgMinGapTicks)
+                        {
+                            fvgEngineZones.Add(new FvgEngineZone
+                            {
+                                Bottom = htfH2,
+                                Top = htfL0,
+                                IsBull = true,
+                                BarIndex = barIdx,
+                                Retested = false,
+                                RetestCount = 0,
+                                Invalidated = false,
+                                IsHtf = true,
+                                Inverted = false,
+                                QualityScore = 2.5,
+                                GapSizeTicks = gapTicks,
+                                DisplacementRatio = 0.70,
+                                CreationTime = GetVolumetricTime()
+                            });
+                            lastHtfFvgRegisteredBar = htfBar;
+                        }
+                    }
+                    else if (htfH0 < htfL2) // HTF Bearish FVG
+                    {
+                        double gapSize = htfL2 - htfH0;
+                        double gapTicks = gapSize / effTick;
+                        if (gapTicks >= FvgMinGapTicks)
+                        {
+                            fvgEngineZones.Add(new FvgEngineZone
+                            {
+                                Bottom = htfH0,
+                                Top = htfL2,
+                                IsBull = false,
+                                BarIndex = barIdx,
+                                Retested = false,
+                                RetestCount = 0,
+                                Invalidated = false,
+                                IsHtf = true,
+                                Inverted = false,
+                                QualityScore = 2.5,
+                                GapSizeTicks = gapTicks,
+                                DisplacementRatio = 0.70,
+                                CreationTime = GetVolumetricTime()
+                            });
+                            lastHtfFvgRegisteredBar = htfBar;
+                        }
+                    }
+                }
+            }
+
+            // 2. Purge des zones expirées, invalidées ou consommées (AVANT troncature
+            // pour ne pas éjecter des zones valides récentes au profit de zones mortes)
+            for (int i = fvgEngineZones.Count - 1; i >= 0; i--)
+            {
+                if (barIdx - fvgEngineZones[i].BarIndex > FvgZoneMemoryBars 
+                    || fvgEngineZones[i].Invalidated 
+                    || fvgEngineZones[i].Retested)
+                {
+                    fvgEngineZones.RemoveAt(i);
+                }
+            }
+
+            if (fvgEngineZones.Count > 64)
+                fvgEngineZones.RemoveRange(0, fvgEngineZones.Count - 64);
+
+            // 3. Évaluation du retest des zones FVG actives (avec Consequent Encroachment à 50%)
+            // Garde anti-doublon : un seul signal FVG par direction et par barre
+            double fvgTol = FvgZoneRetestTicks * TickSize;
+            bool fvgBuyEmitted = false;
+            bool fvgSellEmitted = false;
+            for (int i = 0; i < fvgEngineZones.Count; i++)
+            {
+                FvgEngineZone fz = fvgEngineZones[i];
+                if (fz.BarIndex >= barIdx || fz.Invalidated || fz.Retested) continue;
+
+                double midCe = (fz.Top + fz.Bottom) / 2.0;
+
+                if (fz.IsBull)
+                {
+                    // Invalidation si clôture nette sous le bas du FVG -> Bascule en Breaker
+                    if (closePrice < fz.Bottom - fvgTol)
+                    {
+                        fz.Inverted = true;
+                        fz.Invalidated = true;
+                        continue;
+                    }
+
+                    // Test de la zone (pénétration dans le gap sans rupture)
+                    bool touchedZone = lowPrice <= fz.Top + fvgTol && lowPrice >= fz.Bottom - fvgTol;
+                    // Défense valide : soit clôture au-dessus du 50% (C.E.) avec barre verte (Close > Open), soit rejet net au-dessus du Top
+                    bool defended = (closePrice >= midCe && closePrice > openPrice) || closePrice > fz.Top;
+
+                    if (touchedZone && defended && !fvgBuyEmitted && (!RequireDeltaConfirmation || currentBarDelta > 0))
+                    {
+                        fz.RetestCount++;
+                        if (fz.RetestCount >= Math.Max(1, MaxFvgRetests)) fz.Retested = true;
+
+                        string label = fz.IsHtf ? "RETEST FVG HTF (BUY)" : "RETEST FVG (BUY)";
+                        string desc = fz.IsHtf ? "Fair Value Gap HTF acheteur défendu (50% C.E.)" : "Fair Value Gap acheteur défendu (50% C.E.)";
+                        double baseWeight = fz.IsHtf ? 3.0 : 2.5;
+                        double qualFactor = fz.QualityScore > 0 ? Clamp(fz.QualityScore / 2.0, 0.8, 1.4) : 1.0;
+                        double weight = baseWeight * qualFactor;
+                        AddCandidate(label, desc, true, weight, true);
+                        fvgBuyEmitted = true;
+                    }
+                }
+                else
+                {
+                    // Invalidation si clôture nette au-dessus du haut du FVG -> Bascule en Breaker
+                    if (closePrice > fz.Top + fvgTol)
+                    {
+                        fz.Inverted = true;
+                        fz.Invalidated = true;
+                        continue;
+                    }
+
+                    // Test de la zone (pénétration dans le gap sans rupture)
+                    bool touchedZone = highPrice >= fz.Bottom - fvgTol && highPrice <= fz.Top + fvgTol;
+                    // Défense valide : soit clôture sous le 50% (C.E.) avec barre rouge (Close < Open), soit rejet net sous le Bottom
+                    bool defended = (closePrice <= midCe && closePrice < openPrice) || closePrice < fz.Bottom;
+
+                    if (touchedZone && defended && !fvgSellEmitted && (!RequireDeltaConfirmation || currentBarDelta < 0))
+                    {
+                        fz.RetestCount++;
+                        if (fz.RetestCount >= Math.Max(1, MaxFvgRetests)) fz.Retested = true;
+
+                        string label = fz.IsHtf ? "RETEST FVG HTF (SELL)" : "RETEST FVG (SELL)";
+                        string desc = fz.IsHtf ? "Fair Value Gap HTF vendeur défendu (50% C.E.)" : "Fair Value Gap vendeur défendu (50% C.E.)";
+                        double baseWeight = fz.IsHtf ? 3.0 : 2.5;
+                        double qualFactor = fz.QualityScore > 0 ? Clamp(fz.QualityScore / 2.0, 0.8, 1.4) : 1.0;
+                        double weight = baseWeight * qualFactor;
+                        AddCandidate(label, desc, false, weight, true);
+                        fvgSellEmitted = true;
+                    }
+                }
+            }
+        }
+
         private int EffectiveAbsorptionDeltaThreshold()
         {
             // (bucket horaire courant, encadre plancher/plafond). Repli automatique
@@ -2577,6 +2837,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 AddCandidate("IMBALANCE VENDEUR (zone)", "Imbalance Vendeuse (FVG)", false, 0.0, false);
 
             EvaluateImbalanceZoneRetests(barIdx, highPrice, lowPrice, closePrice);
+            EvaluateFvgZoneRetests(barIdx, highPrice, lowPrice, closePrice, openPrice);
 
             // Delta Flip : réactivé comme déclencheur autonome avec poids 2.5 pour capter les V-bottoms / V-tops
             if (isDeltaFlipBullish)

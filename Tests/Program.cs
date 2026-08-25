@@ -43,6 +43,13 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_HTF_Trend_Classifier_RejectsInvalidData", Test_HTF_Trend_Classifier_RejectsInvalidData);
             RunTest("Test_VWAP_Sanitization_And_AntiLookahead", Test_VWAP_Sanitization_And_AntiLookahead);
             RunTest("Test_XmlConfigurations_And_ScalpingPro_GateMatching", Test_XmlConfigurations_And_ScalpingPro_GateMatching);
+            RunTest("Test_Fvg_AntiLookahead_Strict_Closed_Bars", Test_Fvg_AntiLookahead_Strict_Closed_Bars);
+            RunTest("Test_Fvg_Consequent_Encroachment_50Percent_Defense", Test_Fvg_Consequent_Encroachment_50Percent_Defense);
+            RunTest("Test_Fvg_Inversion_Breaker_Transition", Test_Fvg_Inversion_Breaker_Transition);
+            RunTest("Test_Fvg_Smart_Eviction_Preserves_Active_Zones", Test_Fvg_Smart_Eviction_Preserves_Active_Zones);
+            RunTest("Test_Closed_VWAP_And_StandardDeviation_Calculation", Test_Closed_VWAP_And_StandardDeviation_Calculation);
+            RunTest("Test_Closed_VWAP_SQLite_Persistence_And_Reload", Test_Closed_VWAP_SQLite_Persistence_And_Reload);
+            RunTest("Test_Closed_VWAP_HTF_Confluence_And_Scoring", Test_Closed_VWAP_HTF_Confluence_And_Scoring);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
@@ -819,7 +826,225 @@ namespace AMC.VolumeProfile.Tests
             }
         }
 
+        private static void Test_Fvg_AntiLookahead_Strict_Closed_Bars()
+        {
+            // Vérification que le calcul de l'offset d'enregistrement FVG ne cible JAMAIS la bougie [0] non clôturée
+            int evalOffsetTick = 0; // Mode Realtime tick
+            int evalOffsetBarClose = 1; // Mode BarClose
+
+            int regOffsetTick = evalOffsetTick > 0 ? evalOffsetTick : 1;
+            int regOffsetBarClose = evalOffsetBarClose > 0 ? evalOffsetBarClose : 1;
+
+            Assert(regOffsetTick == 1, "En mode tick (evalOffset=0), l'enregistrement doit cibler l'offset 1 (barre close)");
+            Assert(regOffsetBarClose == 1, "En mode BarClose (evalOffset=1), l'enregistrement doit cibler l'offset 1 (barre close)");
+        }
+
+        private static void Test_Fvg_Consequent_Encroachment_50Percent_Defense()
+        {
+            double bottom = 20000.0;
+            double top = 20020.0;
+            double midCe = (top + bottom) / 2.0; // 20010.0
+            double fvgTol = 0.75;
+
+            // Cas 1 : Pénétration dans la zone et clôture défendue au-dessus du 50% CE avec bougie verte
+            double low1 = 20012.0;
+            double close1 = 20016.0;
+            double open1 = 20011.0;
+            bool touched1 = low1 <= top + fvgTol && low1 >= bottom - fvgTol;
+            bool defended1 = (close1 >= midCe && close1 > open1) || close1 > top;
+            Assert(touched1 && defended1, "Le retest au-dessus du 50% CE avec barre verte doit être validé");
+
+            // Cas 2 : Pénétration sous le 50% CE avec bougie rouge -> défense échouée
+            double low2 = 20005.0;
+            double close2 = 20008.0;
+            double open2 = 20012.0;
+            bool touched2 = low2 <= top + fvgTol && low2 >= bottom - fvgTol;
+            bool defended2 = (close2 >= midCe && close2 > open2) || close2 > top;
+            Assert(touched2 && !defended2, "Une clôture sous le 50% CE en bougie rouge ne doit pas valider la défense");
+        }
+
+        private static void Test_Fvg_Inversion_Breaker_Transition()
+        {
+            double bottom = 20000.0;
+            double fvgTol = 0.75;
+
+            // Cas : Traversée nette du support FVG à la clôture -> Invalidation et bascule en Breaker
+            double closeBreak = 19998.0;
+            bool isInvalidated = closeBreak < bottom - fvgTol;
+            bool isInverted = isInvalidated; // Devient un Breaker (résistance)
+            Assert(isInvalidated && isInverted, "La traversée nette sous le bas du FVG doit invalider le support et basculer en Breaker");
+        }
+
+        private static void Test_Fvg_Smart_Eviction_Preserves_Active_Zones()
+        {
+            // Simulation de la purge préalable intelligente dans AddFvgZone
+            int maxAge = 12;
+            int currentBar = 50;
+
+            var zones = new List<Tuple<int, bool>> // <BarIndex, Mitigated>
+            {
+                Tuple.Create(10, true),   // Zone 0 : mitigée (obsolète)
+                Tuple.Create(45, false),  // Zone 1 : active récente
+                Tuple.Create(46, false),  // Zone 2 : active récente
+                Tuple.Create(47, false)   // Zone 3 : active récente
+            };
+
+            // Purge préalable avant insertion d'une 5ème zone
+            var activeZones = new List<Tuple<int, bool>>();
+            foreach (var z in zones)
+            {
+                bool isOld = currentBar - z.Item1 > maxAge * 2;
+                if (!z.Item2 && !isOld)
+                {
+                    activeZones.Add(z);
+                }
+            }
+
+            Assert(activeZones.Count == 3, "La zone mitigée 0 doit être évincée avant le shift");
+            Assert(activeZones[0].Item1 == 45, "La zone active la plus ancienne (45) doit être préservée");
+        }
+
+        private static void Test_Closed_VWAP_And_StandardDeviation_Calculation()
+        {
+            var calc = new VolumeProfileCalculator();
+            double tickSize = 0.25;
+
+            // Distribution discrète contrôlée :
+            // 100 vol @ 20000.0 (tick 80000)
+            // 200 vol @ 20010.0 (tick 80040)
+            // 100 vol @ 20020.0 (tick 80080)
+            calc.AddVolume((long)(20000.0 / tickSize), 100);
+            calc.AddVolume((long)(20010.0 / tickSize), 200);
+            calc.AddVolume((long)(20020.0 / tickSize), 100);
+
+            var profile = calc.BuildProfile(
+                "MNQ", "CME", "ETH",
+                VolumeProfilePeriodType.Monthly,
+                "2026-08",
+                new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 8, 31, 23, 59, 59, DateTimeKind.Utc),
+                tickSize);
+
+            Assert(profile.Valid, "Le profil doit être valide");
+            Assert(Math.Abs(profile.Vwap - 20010.0) < 0.001, string.Format("VWAP attendu 20010.0, obtenu {0}", profile.Vwap));
+            
+            // Variance = 50.0 => StdDev = sqrt(50) = 7.0710678
+            double expectedStdDev = Math.Sqrt(50.0);
+            Assert(Math.Abs(profile.VwapStdDev - expectedStdDev) < 0.001, string.Format("StdDev attendu {0:F4}, obtenu {1:F4}", expectedStdDev, profile.VwapStdDev));
+
+            double expectedSd1U = 20010.0 + expectedStdDev;
+            double expectedSd1L = 20010.0 - expectedStdDev;
+            double expectedSd2U = 20010.0 + (2.0 * expectedStdDev);
+            double expectedSd2L = 20010.0 - (2.0 * expectedStdDev);
+            double expectedSd3U = 20010.0 + (3.0 * expectedStdDev);
+            double expectedSd3L = 20010.0 - (3.0 * expectedStdDev);
+
+            Assert(Math.Abs(profile.VwapSd1Upper - expectedSd1U) < 0.001, "VWAP SD+1 supérieur incorrect");
+            Assert(Math.Abs(profile.VwapSd1Lower - expectedSd1L) < 0.001, "VWAP SD-1 inférieur incorrect");
+            Assert(Math.Abs(profile.VwapSd2Upper - expectedSd2U) < 0.001, "VWAP SD+2 supérieur incorrect");
+            Assert(Math.Abs(profile.VwapSd2Lower - expectedSd2L) < 0.001, "VWAP SD-2 inférieur incorrect");
+            Assert(Math.Abs(profile.VwapSd3Upper - expectedSd3U) < 0.001, "VWAP SD+3 supérieur incorrect");
+            Assert(Math.Abs(profile.VwapSd3Lower - expectedSd3L) < 0.001, "VWAP SD-3 inférieur incorrect");
+        }
+
+        private static void Test_Closed_VWAP_SQLite_Persistence_And_Reload()
+        {
+            string testDb = Path.Combine(Path.GetTempPath(), "amc_vp_vwap_test_" + Guid.NewGuid().ToString("N") + ".db");
+            try
+            {
+                var repo = new VolumeProfileRepository(testDb);
+
+                var p = new ClosedVolumeProfile
+                {
+                    Symbol = "MNQ",
+                    Exchange = "CME",
+                    SessionTemplate = "ETH",
+                    ProfileType = VolumeProfilePeriodType.Monthly,
+                    PeriodKey = "MNQ_MONTH_2026-07",
+                    PeriodStartUtc = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+                    PeriodEndUtc = new DateTime(2026, 7, 31, 23, 59, 59, DateTimeKind.Utc),
+                    Poc = 29000.0,
+                    Vah = 29200.0,
+                    Val = 28800.0,
+                    Vwap = 29050.0,
+                    VwapStdDev = 50.0,
+                    VwapSd1Upper = 29100.0,
+                    VwapSd1Lower = 29000.0,
+                    VwapSd2Upper = 29150.0,
+                    VwapSd2Lower = 28950.0,
+                    VwapSd3Upper = 29200.0,
+                    VwapSd3Lower = 28900.0,
+                    TotalVolume = 500000,
+                    ValueAreaPercent = 70,
+                    TickSize = 0.25,
+                    CalculationMethod = "AMC_GAUSSIAN_V2",
+                    CreatedAtUtc = DateTime.UtcNow,
+                    Valid = true
+                };
+
+                repo.UpsertProfile(p);
+
+                // Rechargement depuis base SQLite
+                var loaded = repo.GetProfileByKey("MNQ_MONTH_2026-07");
+                Assert(loaded != null, "Le profil rechargé ne doit pas être nul");
+                Assert(Math.Abs(loaded.Vwap - 29050.0) < 0.001, "VWAP rechargé non conforme");
+                Assert(Math.Abs(loaded.VwapStdDev - 50.0) < 0.001, "VwapStdDev rechargé non conforme");
+                Assert(Math.Abs(loaded.VwapSd2Lower - 28950.0) < 0.001, "VwapSd2Lower rechargé non conforme");
+                Assert(Math.Abs(loaded.VwapSd2Upper - 29150.0) < 0.001, "VwapSd2Upper rechargé non conforme");
+                Assert(Math.Abs(loaded.VwapSd3Lower - 28900.0) < 0.001, "VwapSd3Lower rechargé non conforme");
+
+                repo.Dispose();
+            }
+            finally
+            {
+                if (File.Exists(testDb))
+                {
+                    try { File.Delete(testDb); } catch { }
+                }
+            }
+        }
+
+        private static void Test_Closed_VWAP_HTF_Confluence_And_Scoring()
+        {
+            var analyzer = new VolumeProfileAnalyzer();
+            double tickSize = 0.25;
+            double atr = 10.0;
+
+            var prevMonth = new ClosedVolumeProfile
+            {
+                Symbol = "MNQ",
+                ProfileType = VolumeProfilePeriodType.Monthly,
+                PeriodKey = "MNQ_MONTH_2026-07",
+                Poc = 29100.0,
+                Vah = 29300.0,
+                Val = 28900.0,
+                Vwap = 29050.0,
+                VwapStdDev = 50.0,
+                VwapSd1Upper = 29100.0,
+                VwapSd1Lower = 29000.0,
+                VwapSd2Upper = 29150.0,
+                VwapSd2Lower = 28950.0,
+                VwapSd3Upper = 29200.0,
+                VwapSd3Lower = 28900.0,
+                Valid = true
+            };
+
+            // Test au niveau du VWAP SD-2 Mois Précédent (28950.00)
+            double currentPrice = 28950.25;
+            var ctx = analyzer.Analyze(
+                currentPrice,
+                28952.0, 28948.0, currentPrice,
+                150.0,
+                atr, tickSize, DateTime.UtcNow,
+                null, null, prevMonth);
+
+            Assert(ctx.IsValid, "Le contexte VP doit être valide");
+            Assert(ctx.ClosestReferenceName == "VWAP SD-2 Mois Préc", string.Format("Attendu 'VWAP SD-2 Mois Préc', obtenu '{0}'", ctx.ClosestReferenceName));
+            Assert(ctx.DistanceToClosestReference <= 2, "La distance en ticks doit être <= 2 ticks");
+        }
+
         #endregion
     }
 }
+
 

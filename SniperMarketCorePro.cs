@@ -467,6 +467,28 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Niveaux Min Zone Mémorisée", Order = 10, GroupName = "Détection Imbalance")]
         public int ImbalanceZoneMinLevels { get; set; }
 
+        [Display(Name = "Activer Retest FVG Autonome", Order = 11, GroupName = "Détection Imbalance")]
+        public bool EnableFvgRetestTrigger { get; set; }
+
+        [Range(1, 500)]
+        [Display(Name = "Mémoire Zones FVG (barres)", Order = 12, GroupName = "Détection Imbalance")]
+        public int FvgZoneMemoryBars { get; set; }
+
+        [Range(0, 20)]
+        [Display(Name = "Tolérance Retest FVG (ticks)", Order = 13, GroupName = "Détection Imbalance")]
+        public int FvgZoneRetestTicks { get; set; }
+
+        [Range(1, 5)]
+        [Display(Name = "Max Retests par Zone FVG", Order = 14, GroupName = "Détection Imbalance")]
+        public int MaxFvgRetests { get; set; }
+
+        [Range(1, 20)]
+        [Display(Name = "Taille Min Gap FVG (ticks)", Order = 15, GroupName = "Détection Imbalance")]
+        public int FvgMinGapTicks { get; set; }
+
+        [Display(Name = "Exiger Déplacement FVG (Displacement)", Order = 16, GroupName = "Détection Imbalance")]
+        public bool FvgRequireDisplacement { get; set; }
+
         [Display(Name = "Activer Finished Auction", Order = 1, GroupName = "Auction & Épuisement")]
         public bool EnableFinishedAuction { get; set; }
 
@@ -919,6 +941,26 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private readonly List<ImbalanceZone> imbalanceZones = new List<ImbalanceZone>(64);
         private int lastZoneRegisteredBarIdx = -1;
+
+        private sealed class FvgEngineZone
+        {
+            public double Bottom;
+            public double Top;
+            public bool IsBull;
+            public int BarIndex;
+            public bool Retested;
+            public int RetestCount;
+            public bool Invalidated;
+            public bool IsHtf;
+            public bool Inverted;            // Bascule en Breaker si traverse a la cloture
+            public double QualityScore;      // 1.0 a 3.0+ (calibre selon taille, displacement et volume)
+            public double GapSizeTicks;      // Taille en ticks du gap
+            public double DisplacementRatio; // Ratio corps/range de la bougie centrale d'impulsion
+            public DateTime CreationTime;
+        }
+        private readonly List<FvgEngineZone> fvgEngineZones = new List<FvgEngineZone>(64);
+        private int lastFvgRegisteredBarIdx = -1;
+        private int lastHtfFvgRegisteredBar = -1;
 
         // absDeltaHistory ne contient que des valeurs ABSOLUES : impossible d'y lire
         // un changement de signe. Ces listes conservent le delta signe, le cumulatif
@@ -1443,6 +1485,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                 ImbalanceZoneMemoryBars = 20;
                 ImbalanceZoneRetestTicks = 2;
                 ImbalanceZoneMinLevels = 3;
+                EnableFvgRetestTrigger = true;
+                FvgZoneMemoryBars = 200;
+                FvgZoneRetestTicks = 3;
+                MaxFvgRetests = 2;
+                FvgMinGapTicks = 2;
+                FvgRequireDisplacement = true;
 
                 EnableDeltaFlip = true;
                 DeltaFlipLookback = 3;
@@ -1642,6 +1690,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 sessionHistory.Clear();
                 imbalanceZones.Clear();
                 lastZoneRegisteredBarIdx = -1;
+                fvgEngineZones.Clear();
+                lastFvgRegisteredBarIdx = -1;
+                lastHtfFvgRegisteredBar = -1;
                 sniperJournalPathCached = null;
                 sniperOutcomePathCached = null;
                 journalHeaderWritten = false;
