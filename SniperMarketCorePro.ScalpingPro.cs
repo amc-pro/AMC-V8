@@ -825,7 +825,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             RequireFootprintEvidence = true;
             TierSilverScore = 45;
             TierGoldScore = 65;
-            MinScoreToAlert = 50;
+            MinScoreToAlert = 45;
             NewsHardBlock = false;
             NewsWindowPenalty = 15;
             GateN1MinScore = 6;
@@ -883,7 +883,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Un preset d'EXECUTION REELLE ne peut pas s'en accommoder.
             EvaluateOnBarClose = true;
 
-            MinScoreToAlert = 50;                     // Seuil d'alerte équilibré à 50
+            MinScoreToAlert = 45;                     // Seuil d'alerte équilibré à 45 (TierSilver / Grade FORT)
             MaxSniperAlertsPerSession = 0;            // Illimité (0 = illimité)
             MaxAlertsPerWeek = 0;                     // Illimité (0 = illimité)
             MaxAlertsPerSession = 0;                  // Illimité (0 = illimité)
