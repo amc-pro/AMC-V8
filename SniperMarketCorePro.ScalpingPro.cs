@@ -1046,7 +1046,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             // En ScalpingPro, si le score brut atteint le seuil d'alerte (>= MinScoreToAlert, ex: 50),
             // les portes de sous-notes secondaires (N2, N3, N4, FOOTPRINT) sont levées pour privilégier la confluence globale.
-            bool strongScore = c.ScoreRaw >= MinScoreToAlert;
+            // Pour RETEST_FVG, exiger un score solide (>= 52) pour lever la porte FOOTPRINT/Microstructure.
+            double minRecoverableScore = (c.Name != null && c.Name.Contains("RETEST_FVG")) ? 52.0 : MinScoreToAlert;
+            bool strongScore = c.ScoreRaw >= minRecoverableScore;
             bool isRecoverableGate = c.GateFailed == "N2_LOCALISATION" || c.GateFailed == "GATE_N2_FAILED" || c.GateFailed == "N2_LOW"
                                     || c.GateFailed == "N3_MICROSTRUCTURE" || c.GateFailed == "N4_TRIGGER" 
                                     || c.GateFailed == "FOOTPRINT_WEAK" || c.GateFailed == "FOOTPRINT_ABSENT";

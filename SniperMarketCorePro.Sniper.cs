@@ -3176,11 +3176,35 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (Math.Abs(o.BarIdx - c.BarIdx) > SelectionBufferBars) continue;
                     if (BeatsForSelection(o, c)) { isBest = false; break; }
                 }
-
+ 
                 pendingCandidates.Remove(c);
 
                 if (!isBest) continue;
-                if (c.Score < MinScoreToAlert) continue;
+
+                // Filtres de Qualité Adaptatifs :
+                // 1. Sur Inflexion Macro institutionnelle (VWAP SD-2/SD-3, Z >= 2.0, Rebound Window) : Seuil assoupli à 45
+                // 2. Sur RETEST_FVG : Seuil élevé à 52 pour exiger une forte confirmation
+                // 3. Intraday ordinaire : Seuil strict à 49-50 pour éliminer le bruit sans edge
+                string extremeVwapNameSel;
+                bool isMacroInflectionSel = IsNearClosedVwapSdExtreme(c.Entry, c.IsBuy, out extremeVwapNameSel)
+                                         || Math.Abs(VwapSigmaDistance(c.Entry)) >= 2.0
+                                         || (c.IsBuy ? (evalBarIndex - lastMacroSdFloorTouchBar <= 15) : (evalBarIndex - lastMacroSdCeilingTouchBar <= 15));
+
+                double requiredScore = MinScoreToAlert > 0 ? MinScoreToAlert : 50.0;
+                if (isMacroInflectionSel)
+                {
+                    requiredScore = Math.Min(requiredScore, 45.0);
+                }
+                else if (c.Name != null && c.Name.Contains("RETEST_FVG"))
+                {
+                    requiredScore = Math.Max(requiredScore, 52.0);
+                }
+                else
+                {
+                    requiredScore = Math.Max(requiredScore, 49.0);
+                }
+
+                if (c.Score < requiredScore) continue;
 
                 double drift = Math.Abs(snClose - c.Entry);
                 double atr = SniperAtr();
