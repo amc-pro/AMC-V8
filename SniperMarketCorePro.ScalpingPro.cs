@@ -722,8 +722,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                     else if (cn.Contains("NPOC_ABSORPTION"))
                         setupBonus = 4.0;
 
-                    // Bonus de confluence d'inflexion macro (reversal sur mur institutionnel SD ±2 / ±3 ou fenêtre de rebond)
-                    if (ctx.IsNearClosedVwapSdExtreme && (ctx.SetupType == SetupType.Reversal || ctx.CandidateFamily == CandidateFamily.Microstructure))
+                    // Bonus de confluence d'inflexion macro (reversal/orderflow sur mur institutionnel SD ±2 / ±3 ou fenêtre de rebond)
+                    if (ctx.IsNearClosedVwapSdExtreme)
                         setupBonus += 3.0;
                 }
 
