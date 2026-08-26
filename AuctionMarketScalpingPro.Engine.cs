@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 
 namespace NinjaTrader.NinjaScript.Indicators
 {
-    public partial class SniperMarketCorePro
+    public partial class AuctionMarketScalpingPro
     {
         #region Gestion du risque
         // Calcule entrée / stop / cibles / taille de position pour le signal courant.

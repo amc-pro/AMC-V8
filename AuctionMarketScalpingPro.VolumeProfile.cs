@@ -16,9 +16,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 {
     /// <summary>
     /// Intégration du module Volume Profile V2 (Historique, Déterministe & Persistant SQLite)
-    /// dans l'indicateur SniperMarketCorePro.
+    /// dans l'indicateur AuctionMarketScalpingPro.
     /// </summary>
-    public partial class SniperMarketCorePro
+    public partial class AuctionMarketScalpingPro
     {
         #region Paramètres Volume Profile V2 (Closed References)
 

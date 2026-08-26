@@ -56,7 +56,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         ScalpingPro,
     }
 
-    public partial class SniperMarketCorePro : Indicator
+    public partial class AuctionMarketScalpingPro : Indicator
     {
         // RingBuffer<T> : buffer circulaire a capacite fixe, O(1) en ajout
         // et suppression du plus ancien. Remplace les List<T>.RemoveAt(0)
@@ -1091,7 +1091,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 log = logger;
                 worker = new Thread(Loop);
                 worker.IsBackground = true;
-                worker.Name = "SniperMarketCorePro.Journal";
+                worker.Name = "AuctionMarketScalpingPro.Journal";
                 worker.Start();
             }
 
@@ -1315,55 +1315,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         // des reglages manuels en changeant de preset.
         private void ApplyTradingPreset()
         {
-            if (TradingPreset == SniperMarketPreset.Standard)
-            {
-                // Standard : seuils relaches. On n'ecrase que si la valeur est
-                // encore celle du preset Sniper (= non personnalisee).
-                // MinConfluencePercentToAlert. Le seuil de confluence est le
-                // parametre de risque le plus structurant : il reste sous le
-                // controle exclusif de l'utilisateur.
-                if (MinConfluencePercentToAlert == 70)
-                    Print("SniperMarketCorePro: preset Standard applique. MinConfluencePercentToAlert reste a "
-                        + MinConfluencePercentToAlert + "% (valeur non modifiee, ajustez-la manuellement si besoin).");
-                if (DirectionalConflictPercent == 70) DirectionalConflictPercent = 80;
-                if (IcebergMinAggression == 750) IcebergMinAggression = 500;
-                if (IcebergMinScore == 85) IcebergMinScore = 80;
-                if (MinRiskReward == 2.0) MinRiskReward = 1.5;
-                if (HtfStrictMode) HtfStrictMode = false;
-                if (UseRegimeFilter) UseRegimeFilter = false;
-            }
-            else if (TradingPreset == SniperMarketPreset.Scanner)
-            {
-                // un profil complet et assume : il ecrase les seuils de selectivite de
-                // maniere deterministe (sinon la moitie de la configuration resterait
-                // aux valeurs Sniper et le mode serait incoherent). Les reglages qui
-                // n'appartiennent pas au profil (Telegram, chemins, risque en devise,
-                // periodes d'indicateurs) ne sont jamais touches.
-                ApplyScannerPreset();
-            }
-            else if (TradingPreset == SniperMarketPreset.Scalping)
-            {
-                // et deterministe), pousse a l'extreme : emission intrabar, gates
-                // quasi neutralises, HTF desactive, R:R 0.5, stop serre.
-                ApplyScalpingPreset();
-            }
-            else if (TradingPreset == SniperMarketPreset.ScalpingPro)
-            {
-                ApplyScalpingProPreset();
-            }
-            else // Sniper
-            {
-                // Sniper : seuils renforces (70% de confluence minimum).
-                if (MinConfluencePercentToAlert < 70)
-                    Print("SniperMarketCorePro: preset Sniper applique. MinConfluencePercentToAlert reste a "
-                        + MinConfluencePercentToAlert + "% (valeur non modifiee, 70% recommande en mode Sniper).");
-                if (DirectionalConflictPercent == 80) DirectionalConflictPercent = 70;
-                if (IcebergMinAggression == 500) IcebergMinAggression = 750;
-                if (IcebergMinScore == 80) IcebergMinScore = 85;
-                if (MinRiskReward == 1.5) MinRiskReward = 2.0;
-                if (!HtfStrictMode) HtfStrictMode = true;
-                if (!UseRegimeFilter) UseRegimeFilter = true;
-            }
+            ApplyScalpingProPreset();
         }
 
         protected override void OnStateChange()
@@ -1372,8 +1324,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 MarketIntelligenceSetDefaults();
                 VolumeProfileSetDefaults();
-                Description = "SniperMarketCorePro V7.9 : fusion AMC Pro + Sniper V2.0 + Scalping Pro V7.8 + Market Intelligence V7.8 + Volume Profile V2 Déterministe & Persistant SQLite.";
-                Name = "SniperMarketCorePro";
+                Description = "AuctionMarketScalpingPro V8.0 : Système institutionnel ScalpingPro — Confluence SMC, Footprint & VWAP Clôturés SQLite.";
+                Name = "AuctionMarketScalpingPro";
                 Calculate = Calculate.OnEachTick;
                 // calcul et donc les alertes Telegram des que le chart passe en
                 // arriere-plan. Inacceptable pour un moteur d'alerte temps reel.
@@ -1398,7 +1350,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 ShowDashboard = true;
                 ShowLevelLines = true;
                 EnableDebugMode = false;
-                TradingPreset = SniperMarketPreset.Sniper;
+                TradingPreset = SniperMarketPreset.ScalpingPro;
                 IbPeriodMinutes = 60;
 
                 EnableBreakoutSignals = true;

@@ -21,7 +21,7 @@ namespace NinjaTrader.NinjaScript.Indicators
     /// pour la consommation par une stratégie NinjaTrader ou le pont MT5 (Fichier & Socket TCP).
     /// Les signaux sont publiés dans EmitAlert() (après validation des portes et filtres).
     /// </summary>
-    public partial class SniperMarketCorePro
+    public partial class AuctionMarketScalpingPro
     {
         #region SNIPER - Section 12 : exports publics (V7.8)
 
@@ -67,7 +67,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         // serveur utilisé par les autres instruments.
         private static AmcTcpBridgeServer tcpBridgeServer;
         private static readonly object tcpBridgeSync = new object();
-        private static readonly List<SniperMarketCorePro> tcpBridgeConsumers = new List<SniperMarketCorePro>();
+        private static readonly List<AuctionMarketScalpingPro> tcpBridgeConsumers = new List<AuctionMarketScalpingPro>();
         private static int tcpBridgePortInUse = -1;
 
         /// <summary>Libelle du signal principal (ex: "NPOC_ABSORPTION_REVERSAL"). Vide tant qu'aucun signal n'a ete emis.</summary>
@@ -247,7 +247,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private static void DispatchMt5Ack(string ackJson)
         {
-            SniperMarketCorePro[] consumers;
+            AuctionMarketScalpingPro[] consumers;
             lock (tcpBridgeSync) consumers = tcpBridgeConsumers.ToArray();
             for (int i = 0; i < consumers.Length; i++)
             {

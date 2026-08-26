@@ -1,6 +1,6 @@
-# Auction Market Core Pro (AMC-V8)
+# AuctionMarketScalpingPro (AMC-V8)
 
-**AMC-V8** est un système de trading algorithmique institutionnel haute performance conçu pour **NinjaTrader 8** [1]. Il combine l'analyse de la théorie des enchères (*Auction Market Theory*), le **Volume Profile institutionnel multi-périodes** (*Closed References*), les **VWAP clôturés avec bandes d'écart-type ($SD \pm 1, \pm 2, \pm 3$)**, les nœuds de volume (**HVN / LVN**), l'ordre de flux (*Footprint / Delta Analysis*), la structure de marché (*Market Structure SMC*) et une gouvernance stricte des risques.
+**AuctionMarketScalpingPro** est un système de trading algorithmique institutionnel haute performance conçu pour **NinjaTrader 8** [1], spécialisé dans le preset ScalpingPro (5 à 10 setups institutionnels par session). Il combine l'analyse de la théorie des enchères (*Auction Market Theory*), le **Volume Profile institutionnel multi-périodes** (*Closed References*), les **VWAP clôturés avec bandes d'écart-type ($SD \pm 1, \pm 2, \pm 3$)**, les nœuds de volume (**HVN / LVN**), l'ordre de flux (*Footprint / Delta Analysis*), la structure de marché (*Market Structure SMC*) et une gouvernance stricte des risques.
 
 ---
 
@@ -138,13 +138,16 @@ Le système intègre un moteur continu d'adaptation multi-régimes permettant de
 
 ```text
 AMC-V8/
-├── SniperMarketCorePro.cs              # Moteur principal de l'indicateur & Intégration NinjaTrader
-├── SniperMarketCorePro.Sniper.cs       # Logique du module Sniper, N1 Contexte Adaptatif, N2 Localisation & Shadow Journal
-├── SniperMarketCorePro.ScalpingPro.cs  # Modulateurs N1, Scoring pondéré, Amortissement continu & Détection extrêmes VWAP
-├── SniperMarketCorePro.Engine.cs       # Moteur de calcul des flux, deltas, CVD et microstructure
-├── SniperMarketCorePro.Features.cs     # Extraction des patterns de footprint & absorption
-├── SniperMarketCorePro.VolumeProfile.cs# Gestion des événements VP, contextes et alertes Telegram
-├── SniperMarketCorePro.Render.cs       # Rendu graphique WPF et affichage du Dashboard
+├── AuctionMarketScalpingPro.cs              # Moteur principal & Intégration NinjaTrader (classe partielle racine)
+├── AuctionMarketScalpingPro.Sniper.cs       # Pipeline N1-N4, Gates, Scoring & Shadow Journal
+├── AuctionMarketScalpingPro.ScalpingPro.cs  # SMC, Footprint, Scoring pondéré 100pts, Amortissement VWAP
+├── AuctionMarketScalpingPro.Engine.cs       # Moteur de calcul des flux, deltas, CVD et microstructure
+├── AuctionMarketScalpingPro.Features.cs     # Extraction des patterns de footprint & absorption
+├── AuctionMarketScalpingPro.VolumeProfile.cs# Gestion des événements VP, contextes et alertes Telegram
+├── AuctionMarketScalpingPro.Render.cs       # Rendu graphique WPF et affichage du Dashboard
+├── AuctionMarketScalpingPro.Network.cs      # Telegram, alertes et communication réseau
+├── AuctionMarketScalpingPro.Exports.cs      # Exports publics pour Strategy Analyzer et pont MT5
+├── AuctionMarketScalpingPro.MarketIntelligence.cs # Module Market Intelligence
 ├── VolumeProfile/                      # Moteur Volume Profile autonome
 │   ├── VolumeProfileModels.cs          # Modèles de données (ClosedVolumeProfile, Nodes, RefLevel)
 │   ├── VolumeProfileCalculator.cs      # Calcul déterministe POC, VA 70%, VWAP, SD1/2/3, HVN/LVN
@@ -157,9 +160,7 @@ AMC-V8/
 ├── MD/                                 # Guides techniques et documentation approfondie
 │   └── VOLUME_PROFILE_GUIDE.md         # Manuel complet Volume Profile, mathématiques et playbooks
 ├── configs/                            # Fichiers de configuration XML institutionnels par instrument
-│   ├── SCALPING_PRO/                   # Presets Scalping Pro (MNQ, NQ, ES, MES, GC, MGC, CL, MCL)
-│   ├── SNIPER/                         # Presets Sniper
-│   └── STANDARD/                       # Presets Standard
+│   └── SCALPING_PRO/                   # Presets Scalping Pro (MNQ, NQ, ES, MES, GC, MGC, CL, MCL)
 ├── Python/                             # Scripts d'audit de performance et analyse de signaux
 ├── historical-data/                    # Données de marché haute résolution (Ticks / 1-Minute)
 ├── shadow/                             # Journaux d'audit de production (Shadow Outlines)
@@ -182,7 +183,7 @@ dotnet run --project Tests/VolumeProfileTests.csproj
    Documents\NinjaTrader 8\bin\Custom\Indicators\
    ```
 2. Compilez via l'éditeur NinjaScript (touche `F5`).
-3. Appliquez l'indicateur `SniperMarketCorePro` sur votre graphique (ex: `MNQ` ou `NQ` en 1-minute / 5-minutes volumétrique).
+3. Appliquez l'indicateur `AuctionMarketScalpingPro` sur votre graphique (ex: `MNQ` ou `NQ` en 1-minute / 5-minutes volumétrique).
 4. Chargez le preset XML correspondant à votre instrument dans `configs/SCALPING_PRO/`.
 
 ---
@@ -205,8 +206,8 @@ Pour analyser et valider les performances du système :
 ## Références
 
 [1] Documentation technique du projet AMC-V8, *Architecture institutionnelle*, Août 2026.  
-[2] Fichier `SniperMarketCorePro.ScalpingPro.cs`, Paramètres de seuil, scoring pondéré, modulateurs VWAP et risque.  
-[3] Fichier `SniperMarketCorePro.Sniper.cs`, Spécialisation des Gates, Confluences Classe A+ et gestion du risque.  
+[2] Fichier `AuctionMarketScalpingPro.ScalpingPro.cs`, Paramètres de seuil, scoring pondéré, modulateurs VWAP et risque.  
+[3] Fichier `AuctionMarketScalpingPro.Sniper.cs`, Pipeline N1-N4, Gates et gestion du risque.  
 [4] Module `VolumeProfile/`, Modèles mathématiques, calcul déterministe et persistance SQLite.  
 [5] Document `MD/VOLUME_PROFILE_GUIDE.md`, Manuel complet Volume Profile et playbooks d'intervention.  
 [6] Dépôt GitHub `amc-pro/AMC-V8`, Dossier `/configs/SCALPING_PRO/`.  

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <NinjaTrader>
-  <SniperMarketCorePro>
-    <SniperMarketCorePro>
+  <AuctionMarketScalpingPro>
+    <AuctionMarketScalpingPro>
       <IsVisible>true</IsVisible>
       <AreLinesConfigurable>true</AreLinesConfigurable>
       <ArePlotsConfigurable>true</ArePlotsConfigurable>
@@ -30,7 +30,7 @@
       <IsOverlay>true</IsOverlay>
       <Lines />
       <MaximumBarsLookBack>TwoHundredFiftySix</MaximumBarsLookBack>
-      <Name>SniperMarketCorePro</Name>
+      <Name>AuctionMarketScalpingPro</Name>
       <Plots />
       <SelectedValueSeries>0</SelectedValueSeries>
       <InputPlot>0</InputPlot>
@@ -206,6 +206,6 @@
       <RejectionWickPercent>40</RejectionWickPercent>
       <OppositeSignalPenalty>3</OppositeSignalPenalty>
       <EnableShadowJournal>true</EnableShadowJournal>
-    </SniperMarketCorePro>
-  </SniperMarketCorePro>
+    </AuctionMarketScalpingPro>
+  </AuctionMarketScalpingPro>
 </NinjaTrader>

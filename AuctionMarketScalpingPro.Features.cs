@@ -16,7 +16,7 @@ namespace NinjaTrader.NinjaScript.Indicators
     //   3. Persistance des statistiques : statsByFamily / globalStats survivent
     // Regle de conception : tout est defensif (try/catch + valeurs neutres).
     // Une panne d'ecriture ne doit jamais interrompre le moteur de signaux.
-    public partial class SniperMarketCorePro
+    public partial class AuctionMarketScalpingPro
     {
         #region V5 Phase 0 - Vecteur de features
 

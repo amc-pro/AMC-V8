@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 
 namespace NinjaTrader.NinjaScript.Indicators
 {
-    public partial class SniperMarketCorePro
+    public partial class AuctionMarketScalpingPro
     {
         #region Dashboard
         private void UpdateDashboard()

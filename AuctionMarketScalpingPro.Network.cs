@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 
 namespace NinjaTrader.NinjaScript.Indicators
 {
-    public partial class SniperMarketCorePro
+    public partial class AuctionMarketScalpingPro
     {
         #region Telegram & Logging
         // Remonte une action sur le thread UI NinjaTrader (OnBarUpdate / Print).

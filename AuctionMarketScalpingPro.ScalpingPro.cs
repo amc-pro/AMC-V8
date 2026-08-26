@@ -46,7 +46,7 @@ namespace NinjaTrader.NinjaScript.Indicators
     /// Preset ScalpingPro : profil destiné au trading réel (5 à 10 setups institutionnels par session).
     /// Pipeline : Contexte -> Market Structure -> Liquidity -> Order Block -> Footprint -> Volume -> Momentum -> Risk -> Alert.
     /// </summary>
-    public partial class SniperMarketCorePro
+    public partial class AuctionMarketScalpingPro
     {
         #region SCALPING PRO - Contrats (interfaces, DI)
 
@@ -790,12 +790,10 @@ namespace NinjaTrader.NinjaScript.Indicators
         private int currentScalpingProDirection;
         private int currentScalpingProTier;
 
-        /// <summary>true si le preset actif est Scalping Pro. Toutes les greffes de
-        /// ce fichier sont conditionnees par ce drapeau : aucun autre preset n'est
-        /// affecte.</summary>
+        /// <summary>true car l'indicateur AuctionMarketScalpingPro exécute nativement le pipeline ScalpingPro.</summary>
         private bool IsScalpingPro
         {
-            get { return TradingPreset == SniperMarketPreset.ScalpingPro; }
+            get { return true; }
         }
 
         [Display(Name = "HTF mode Soft (Scalping Pro)", Description = "true = le filtre HTF reste actif mais n'est jamais eliminatoire : un desalignement devient une penalite de score.", Order = 9, GroupName = "Sniper 02. Gates")]
@@ -959,7 +957,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             InitScalpingPro();
 
-            Print("SniperMarketCorePro V7.3 (SCALPING PRO) : preset d'execution reelle applique "
+            Print("AuctionMarketScalpingPro V8.0 : moteur institutionnel ScalpingPro initialise "
                 + "(seuil " + MinScoreToAlert + "/100 pondere, gates " + GateN1MinScore + "/" + GateN2MinScore
                 + "/" + GateN3MinScore + "/" + GateN4MinScore + ", buffer " + SelectionBufferBars
                 + ", HTF SoftMode (modulateur de score), News Penalite -" + NewsWindowPenalty + " pts, R:R min " + MinRiskReward.ToString("F1", CultureInfo.InvariantCulture)

@@ -18,7 +18,7 @@ namespace NinjaTrader.NinjaScript.Indicators
     /// Aucun moteur existant n'est modifie : ce fichier ne fait qu'alimenter le
     /// module et peut etre desactive via EnableMarketIntelligence.
     /// </summary>
-    public partial class SniperMarketCorePro
+    public partial class AuctionMarketScalpingPro
     {
         #region Market Intelligence — Parametres
 
@@ -62,7 +62,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private SMI.MarketReportEngine miReportEngine;
         private SMI.MarketUpdateEngine miUpdateEngine;
         private SMI.TelegramDispatcher miDispatcher;
-        private SniperMarketIntelligenceSource miSource;
+        private ScalpingProMarketIntelligenceSource miSource;
         private DateTime miLastH4Open = DateTime.MinValue;
         private readonly List<SMI.IMarketIntelligenceModule> miModules = new List<SMI.IMarketIntelligenceModule>();
         private string miDisabledReason;
@@ -141,7 +141,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 logger,
                 () => DateTime.UtcNow);
 
-            miSource = new SniperMarketIntelligenceSource(this);
+            miSource = new ScalpingProMarketIntelligenceSource(this);
             var builder = new SMI.MarketSnapshotBuilder(miSource);
             var formatter = new SMI.TelegramFormatter();
 
@@ -354,10 +354,10 @@ namespace NinjaTrader.NinjaScript.Indicators
         }
 
         /// <summary>Adaptateur NinjaTrader de la source de donnees du module.</summary>
-        private sealed class SniperMarketIntelligenceSource : SMI.IMarketIntelligenceSource
+        private sealed class ScalpingProMarketIntelligenceSource : SMI.IMarketIntelligenceSource
         {
-            private readonly SniperMarketCorePro o;
-            public SniperMarketIntelligenceSource(SniperMarketCorePro owner) { o = owner; }
+            private readonly AuctionMarketScalpingPro o;
+            public ScalpingProMarketIntelligenceSource(AuctionMarketScalpingPro owner) { o = owner; }
 
             public string InstrumentName { get { return o.Instrument != null ? o.Instrument.FullName : "N/A"; } }
             public DateTime MarketTime

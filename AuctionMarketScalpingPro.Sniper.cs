@@ -24,7 +24,7 @@ using NinjaTrader.NinjaScript.Indicators.VolumeProfilePro;
 
 namespace NinjaTrader.NinjaScript.Indicators
 {
-    public partial class SniperMarketCorePro
+    public partial class AuctionMarketScalpingPro
     {
 
         // #                                                                               #
@@ -860,30 +860,28 @@ namespace NinjaTrader.NinjaScript.Indicators
         /// restent la reference et ne sont pas touches ici).</summary>
         private void ApplySniperDefaults()
         {
-            ExecutionMode = SniperExecutionMode.Sniper;
-            EnableSniperEngine = true;
-            // est inferieur a l'ancien seuil de 85 — aucune alerte ne pouvait sortir
-            // et seuls les A+ etaient emissibles. Seuil ramene au niveau "A".
-            MinScoreToAlert = 72;
-            MaxAlertsPerWeek = 0;                 // Illimité (0 = illimité)
-            MaxSniperAlertsPerSession = 2;
-            SelectionBufferBars = 3;
-            SniperRthOnly = true;
-            NewsBlackoutMinutes = 10;
-            NewsTimesCsv = "0830,1000,1430";
-            NewsWindowPenalty = 5;
-            NewsWeekdaysOnly = true;
-            NewsHardBlock = true;
-            MaxEntryDriftAtr = 0.5;
-
             ApplyScalpingProDefaults();
 
-            GateN1MinScore = 18;
-            GateN2MinScore = 20;
-            GateN3MinScore = 15;
-            GateN4MinScore = 8;
+            MinScoreToAlert = 45;
+            MaxAlertsPerWeek = 0;                 // Illimité (0 = illimité)
+            MaxSniperAlertsPerSession = 0;        // Illimité (0 = illimité)
+            SelectionBufferBars = 0;
+            SniperRthOnly = false;
+            NewsBlackoutMinutes = 10;
+            NewsTimesCsv = "0830,1000,1430";
+            NewsWindowPenalty = 15;
+            NewsWeekdaysOnly = true;
+            NewsHardBlock = false;
+            MaxEntryDriftAtr = 0.5;
+
+            GateN1MinScore = 6;
+            GateN2MinScore = 3;
+            GateN3MinScore = 3;
+            GateN4MinScore = 2;
             HtfGateAppliesToMeanReversion = false;
             HtfMisalignmentPenalty = 4;
+            HtfSoftMode = true;
+            RequireFootprintEvidence = true;
             NormalizeScoresPerSetup = true;
             MaxImbalanceRetests = 2;
 
@@ -894,16 +892,16 @@ namespace NinjaTrader.NinjaScript.Indicators
             AtrPercentileMin = 25;
             AtrPercentileMax = 90;
 
-            KeyLevelToleranceAtr = 0.25;
-            CompositeSessions = 10;
+            KeyLevelToleranceAtr = 0.45;
+            CompositeSessions = 15;
             NpocDecayHalfLife = 8.0;
 
-            AbsorptionZScore = -2.0;
-            AbsorptionMinBars = 2;
+            AbsorptionZScore = -1.3;
+            AbsorptionMinBars = 1;
             AbsorptionMaxDisplacementAtr = 0.15;
             CvdSlopeZThreshold = 1.5;
             CvdRegressionBars = 20;
-            ImbalanceMinStack = 4;
+            ImbalanceMinStack = 3;
             ImbalanceRetestVolumeContraction = 0.50;
             BucketCalibrationBars = 500;
 
@@ -1368,7 +1366,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 {
                     System.Reflection.MethodBase m = st.GetFrame(i).GetMethod();
                     if (m == null || m.DeclaringType == null) continue;
-                    if (m.DeclaringType.FullName != null && m.DeclaringType.FullName.IndexOf("SniperMarketCorePro", StringComparison.Ordinal) >= 0)
+                    if (m.DeclaringType.FullName != null && m.DeclaringType.FullName.IndexOf("AuctionMarketScalpingPro", StringComparison.Ordinal) >= 0)
                         return m.Name;
                 }
             }
