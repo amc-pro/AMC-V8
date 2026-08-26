@@ -723,7 +723,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         setupBonus = 4.0;
 
                     // Bonus de confluence d'inflexion macro (reversal sur mur institutionnel SD ±2 / ±3 ou fenêtre de rebond)
-                    if (ctx.IsNearClosedVwapSdExtreme && (ctx.SetupType == SetupType.Reversal || ctx.CandidateFamily == CandidateFamily.Hybrid))
+                    if (ctx.IsNearClosedVwapSdExtreme && (ctx.SetupType == SetupType.Reversal || ctx.CandidateFamily == CandidateFamily.Microstructure))
                         setupBonus += 3.0;
                 }
 
