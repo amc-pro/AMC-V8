@@ -3301,18 +3301,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                 details.Add(string.Format("L4:{0:F0}/10", l4Total));
 
             double totalScore = l1Total + l2Total + l3Total + l4Total;
-
-            // Application des portes d'arrêt en mode Sniper (pénalisation si gating non satisfait)
-            // Pénalisation bornée sur le palier le plus faible pour éviter un écrasement multiplicatif non-linéaire
-            if (TradingPreset == SniperMarketPreset.Sniper)
-            {
-                double penaltyMult = 1.0;
-                if (l1Total < 10.0) penaltyMult = Math.Min(penaltyMult, 0.7); // Gate 1: Contexte faible
-                if ((l1Total + l2Total) < 25.0) penaltyMult = Math.Min(penaltyMult, 0.7); // Gate 2: Localisation faible
-                if ((l1Total + l2Total + l3Total) < 45.0) penaltyMult = Math.Min(penaltyMult, 0.8); // Gate 3: Microstructure faible
-                totalScore *= penaltyMult;
-            }
-
             totalScore = Clamp(totalScore, 0.0, 100.0);
 
             if (details != null)

@@ -798,7 +798,7 @@ namespace AMC.VolumeProfile.Tests
             bool isOnlyN2GateFailed = engineGateFailed == "N2_LOCALISATION" || engineGateFailed == "GATE_N2_FAILED" || engineGateFailed == "N2_LOW" || string.IsNullOrEmpty(engineGateFailed);
             Assert(isOnlyN2GateFailed, "Le libellé de porte N2_LOCALISATION doit être reconnu par le mécanisme de levée de porte de ScalpingPro");
 
-            // 2. Validation que tous les 40 fichiers XML de configs existent et sont bien formés
+            // 2. Validation que les 8 fichiers XML SCALPING_PRO existent et sont bien formés
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             string workspaceRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
             string configsDir = Path.Combine(workspaceRoot, "configs");
@@ -809,23 +809,29 @@ namespace AMC.VolumeProfile.Tests
 
             if (Directory.Exists(configsDir))
             {
-                string[] presets = { "SCALPING_PRO", "SCALPING", "SNIPER", "STANDARD", "SCANNER" };
                 string[] instruments = { "NQ", "MNQ", "ES", "MES", "GC", "MGC", "CL", "MCL" };
 
                 int count = 0;
-                foreach (string p in presets)
+                foreach (string inst in instruments)
                 {
-                    foreach (string inst in instruments)
-                    {
-                        string fpath = Path.Combine(configsDir, p, string.Format("CONFIG_{0}_{1}.xml", inst, p));
-                        Assert(File.Exists(fpath), string.Format("Fichier XML manquant: {0}", fpath));
-                        string content = File.ReadAllText(fpath);
-                        Assert(content.Contains("<NinjaTrader>"), string.Format("XML invalide dans {0}", fpath));
-                        Assert(content.Contains("<AuctionMarketScalpingPro>"), string.Format("Tag <AuctionMarketScalpingPro> absent dans {0}", fpath));
-                        count++;
-                    }
+                    string fpath = Path.Combine(configsDir, "SCALPING_PRO", string.Format("CONFIG_{0}_SCALPING_PRO.xml", inst));
+                    Assert(File.Exists(fpath), string.Format("Fichier XML manquant: {0}", fpath));
+                    string content = File.ReadAllText(fpath);
+                    Assert(content.Contains("<NinjaTrader>"), string.Format("XML invalide dans {0}", fpath));
+                    Assert(content.Contains("<AuctionMarketScalpingPro>"), string.Format("Tag <AuctionMarketScalpingPro> absent dans {0}", fpath));
+                    Assert(content.Contains("<TradingPreset>ScalpingPro</TradingPreset>"), string.Format("TradingPreset ScalpingPro manquant dans {0}", fpath));
+                    count++;
                 }
-                Assert(count == 40, string.Format("40 configurations XML attendues, {0} trouvées", count));
+                Assert(count == 8, string.Format("8 configurations XML attendues pour SCALPING_PRO, {0} trouvées", count));
+
+                // Vérification de la suppression des anciens dossiers de presets
+                string[] legacyPresets = { "SCALPING", "SNIPER", "STANDARD", "SCANNER" };
+                foreach (string lp in legacyPresets)
+                {
+                    string legacyDir = Path.Combine(configsDir, lp);
+                    Assert(!Directory.Exists(legacyDir) || Directory.GetFiles(legacyDir).Length == 0,
+                        string.Format("Le dossier de preset obsolète {0} ne doit plus contenir de configurations actives", lp));
+                }
             }
         }
 

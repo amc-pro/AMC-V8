@@ -1218,13 +1218,6 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             try
             {
-                // Validation preset Sniper
-                if (TradingPreset == SniperMarketPreset.Sniper && MinConfluencePercentToAlert < 80)
-                {
-                    Print("WARNING: Sniper preset requires MinConfluencePercentToAlert >= 80. Auto-adjusting to 80.");
-                    MinConfluencePercentToAlert = 80;
-                }
-                
                 // Validation preset ScalpingPro
                 if (TradingPreset == SniperMarketPreset.ScalpingPro && MaxAlertsPerSession > 10)
                 {

@@ -31,9 +31,20 @@ for f in cs_files:
 vp_src = os.path.join(src_dir, 'VolumeProfile')
 vp_dst = os.path.join(dst_dir, 'VolumeProfile')
 if os.path.exists(vp_src):
+    os.makedirs(vp_dst, exist_ok=True)
     for f in os.listdir(vp_src):
         if f.endswith('.cs'):
             shutil.copy2(os.path.join(vp_src, f), os.path.join(vp_dst, f))
             print(f"Copie VolumeProfile/{f} -> NT8 Custom")
+
+# Sync MarketIntelligence subfolder
+mi_src = os.path.join(src_dir, 'MarketIntelligence')
+mi_dst = os.path.join(dst_dir, 'MarketIntelligence')
+if os.path.exists(mi_src):
+    os.makedirs(mi_dst, exist_ok=True)
+    for f in os.listdir(mi_src):
+        if f.endswith('.cs'):
+            shutil.copy2(os.path.join(mi_src, f), os.path.join(mi_dst, f))
+            print(f"Copie MarketIntelligence/{f} -> NT8 Custom")
 
 print("\nSynchronisation terminée avec succès!")
