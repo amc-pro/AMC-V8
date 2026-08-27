@@ -1,6 +1,6 @@
 # AuctionMarketCore (AMC-V8)
 
-**AuctionMarketCore** est un système de trading algorithmique institutionnel haute performance conçu pour **NinjaTrader 8** [1], spécialisé dans le preset ScalpingPro (5 à 10 setups institutionnels par session). Il combine l'analyse de la théorie des enchères (*Auction Market Theory*), le **Volume Profile institutionnel multi-périodes** (*Closed References*), les **VWAP clôturés avec bandes d'écart-type ($SD \pm 1, \pm 2, \pm 3$)**, les nœuds de volume (**HVN / LVN**), l'ordre de flux (*Footprint / Delta Analysis*), la structure de marché (*Market Structure SMC*) et une gouvernance stricte des risques.
+**AuctionMarketCore** est la version spécialisée du moteur AMC-V8, conçue pour **NinjaTrader 8** et dédiée exclusivement au preset **ScalpingPro** (5 à 10 setups institutionnels par session). Les anciens presets `SCALPING`, `SNIPER`, `SCANNER` et `STANDARD` ainsi que leur code spécifique ont été retirés du périmètre actif. [1] Il combine l'analyse de la théorie des enchères (*Auction Market Theory*), le **Volume Profile institutionnel multi-périodes** (*Closed References*), les **VWAP clôturés avec bandes d'écart-type ($SD \pm 1, \pm 2, \pm 3$)**, les nœuds de volume (**HVN / LVN**), l'ordre de flux (*Footprint / Delta Analysis*), la structure de marché (*Market Structure SMC*) et une gouvernance stricte des risques.
 
 ---
 
@@ -178,12 +178,14 @@ dotnet run --project Tests/VolumeProfileTests.csproj
 ```
 
 ### 2. Déploiement dans NinjaTrader 8
+Le script `Python/sync_nt8_custom.py` synchronise les sources vers le dossier `AuctionMarketCore` de NinjaTrader. Vérifiez les chemins locaux dans le script avant utilisation.
+
 1. Copiez les fichiers `.cs` et les dossiers `VolumeProfile/` et `MarketIntelligence/` dans le répertoire d'indicateurs personnalisés de NinjaTrader 8 :
    ```text
    Documents\NinjaTrader 8\bin\Custom\Indicators\
    ```
 2. Compilez via l'éditeur NinjaScript (touche `F5`).
-3. Appliquez l'indicateur `AuctionMarketCore` sur votre graphique (ex: `MNQ` ou `NQ` en 1-minute / 5-minutes volumétrique).
+3. Appliquez l'indicateur `AuctionMarketCore` sur votre graphique (par exemple `MNQ` ou `NQ` en 1-minute / 5-minutes volumétrique).
 4. Chargez le preset XML correspondant à votre instrument dans `configs/SCALPING_PRO/`.
 
 ---
@@ -199,9 +201,13 @@ Pour analyser et valider les performances du système :
   ```bash
   python Python/test_cooldown_impact.py
   ```
-* Consultez les journaux d'audit situés dans `shadow/AuctionMarketCorePro_journal_sniper.csv` pour analyser chaque opportunité détectée, son score pondéré, ses sous-notes ($N1$ à $N4$) et ses $R$-multiples.
+* Consultez les journaux d'audit situés dans `shadow/AuctionMarketCore_journal_sniper.csv` pour analyser chaque opportunité détectée, son score pondéré, ses sous-notes ($N1$ à $N4$) et ses $R$-multiples.
 
 ---
+
+## Nettoyage et périmètre du projet
+
+Le dépôt ne conserve que le moteur `AuctionMarketCore` et les configurations `SCALPING_PRO`. Les anciens presets et le code mort associé ont été retirés. Toute nouvelle fonctionnalité doit préserver ce périmètre et éviter de réintroduire des branches génériques de preset sans justification d’architecture.
 
 ## Références
 
@@ -211,5 +217,5 @@ Pour analyser et valider les performances du système :
 [4] Module `VolumeProfile/`, Modèles mathématiques, calcul déterministe et persistance SQLite.
 [5] Document `MD/VOLUME_PROFILE_GUIDE.md`, Manuel complet Volume Profile et playbooks d'intervention.
 [6] Dépôt GitHub `amc-pro/AMC-V8`, Dossier `/configs/SCALPING_PRO/`.
-[7] Système de journalisation Shadow, `shadow/AuctionMarketCorePro_journal_sniper.csv`.
+[7] Système de journalisation Shadow, `shadow/AuctionMarketCore_journal_sniper.csv`.
 
