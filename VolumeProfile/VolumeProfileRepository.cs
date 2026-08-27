@@ -169,6 +169,14 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                     vah REAL NOT NULL,
                     poc REAL NOT NULL,
                     val REAL NOT NULL,
+                    vwap REAL,
+                    vwap_std_dev REAL,
+                    vwap_sd1_upper REAL,
+                    vwap_sd1_lower REAL,
+                    vwap_sd2_upper REAL,
+                    vwap_sd2_lower REAL,
+                    vwap_sd3_upper REAL,
+                    vwap_sd3_lower REAL,
                     total_volume REAL NOT NULL,
                     value_area_percent INTEGER NOT NULL,
                     tick_size REAL NOT NULL,
@@ -222,6 +230,29 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             ExecuteNonQuery(ddlProfiles);
             ExecuteNonQuery(ddlNodes);
             ExecuteNonQuery(ddlZoneState);
+
+            // Migration automatique douce pour les bases de données existantes
+            MigrateSchemaIfNeeded();
+        }
+
+        private void MigrateSchemaIfNeeded()
+        {
+            string[] migrationColumns = new[]
+            {
+                "ALTER TABLE vp_profiles ADD COLUMN vwap REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_std_dev REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_sd1_upper REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_sd1_lower REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_sd2_upper REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_sd2_lower REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_sd3_upper REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_sd3_lower REAL;"
+            };
+
+            foreach (var sql in migrationColumns)
+            {
+                try { ExecuteNonQuery(sql); } catch { /* Ignore si déjà existant */ }
+            }
         }
 
         private void ExecuteNonQuery(string sql)
@@ -296,6 +327,10 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                                 cmd.CommandText = @"
                                     UPDATE vp_profiles SET
                                         vah = @vah, poc = @poc, val = @val,
+                                        vwap = @vwap, vwap_std_dev = @vwap_sd,
+                                        vwap_sd1_upper = @sd1u, vwap_sd1_lower = @sd1l,
+                                        vwap_sd2_upper = @sd2u, vwap_sd2_lower = @sd2l,
+                                        vwap_sd3_upper = @sd3u, vwap_sd3_lower = @sd3l,
                                         total_volume = @total_volume,
                                         value_area_percent = @va_pct,
                                         tick_size = @tick_size,
@@ -305,6 +340,14 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                                 AddParam(cmd, "@vah", profile.Vah);
                                 AddParam(cmd, "@poc", profile.Poc);
                                 AddParam(cmd, "@val", profile.Val);
+                                AddParam(cmd, "@vwap", profile.Vwap);
+                                AddParam(cmd, "@vwap_sd", profile.VwapStdDev);
+                                AddParam(cmd, "@sd1u", profile.VwapSd1Upper);
+                                AddParam(cmd, "@sd1l", profile.VwapSd1Lower);
+                                AddParam(cmd, "@sd2u", profile.VwapSd2Upper);
+                                AddParam(cmd, "@sd2l", profile.VwapSd2Lower);
+                                AddParam(cmd, "@sd3u", profile.VwapSd3Upper);
+                                AddParam(cmd, "@sd3l", profile.VwapSd3Lower);
                                 AddParam(cmd, "@total_volume", profile.TotalVolume);
                                 AddParam(cmd, "@va_pct", profile.ValueAreaPercent);
                                 AddParam(cmd, "@tick_size", profile.TickSize);
@@ -332,12 +375,22 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                                     INSERT INTO vp_profiles (
                                         symbol, exchange, session_template, profile_type,
                                         period_key, period_start_utc, period_end_utc,
-                                        vah, poc, val, total_volume, value_area_percent,
+                                        vah, poc, val,
+                                        vwap, vwap_std_dev,
+                                        vwap_sd1_upper, vwap_sd1_lower,
+                                        vwap_sd2_upper, vwap_sd2_lower,
+                                        vwap_sd3_upper, vwap_sd3_lower,
+                                        total_volume, value_area_percent,
                                         tick_size, calculation_method, created_at_utc
                                     ) VALUES (
                                         @symbol, @exchange, @session, @type,
                                         @key, @start, @end,
-                                        @vah, @poc, @val, @volume, @va_pct,
+                                        @vah, @poc, @val,
+                                        @vwap, @vwap_sd,
+                                        @sd1u, @sd1l,
+                                        @sd2u, @sd2l,
+                                        @sd3u, @sd3l,
+                                        @volume, @va_pct,
                                         @tick_size, @method, @created
                                     );
                                 ";
@@ -351,6 +404,14 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                                 AddParam(cmd, "@vah", profile.Vah);
                                 AddParam(cmd, "@poc", profile.Poc);
                                 AddParam(cmd, "@val", profile.Val);
+                                AddParam(cmd, "@vwap", profile.Vwap);
+                                AddParam(cmd, "@vwap_sd", profile.VwapStdDev);
+                                AddParam(cmd, "@sd1u", profile.VwapSd1Upper);
+                                AddParam(cmd, "@sd1l", profile.VwapSd1Lower);
+                                AddParam(cmd, "@sd2u", profile.VwapSd2Upper);
+                                AddParam(cmd, "@sd2l", profile.VwapSd2Lower);
+                                AddParam(cmd, "@sd3u", profile.VwapSd3Upper);
+                                AddParam(cmd, "@sd3l", profile.VwapSd3Lower);
                                 AddParam(cmd, "@volume", profile.TotalVolume);
                                 AddParam(cmd, "@va_pct", profile.ValueAreaPercent);
                                 AddParam(cmd, "@tick_size", profile.TickSize);
@@ -697,6 +758,24 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             cmd.Parameters.Add(p);
         }
 
+        private static bool HasColumn(DbDataReader reader, string columnName)
+        {
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                if (string.Equals(reader.GetName(i), columnName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        private static double ReadDoubleSafe(DbDataReader reader, string columnName, double defaultValue = 0.0)
+        {
+            if (!HasColumn(reader, columnName)) return defaultValue;
+            object val = reader[columnName];
+            if (val == null || val == DBNull.Value) return defaultValue;
+            try { return Convert.ToDouble(val); } catch { return defaultValue; }
+        }
+
         private static ClosedVolumeProfile ReadProfileFromReader(DbDataReader reader)
         {
             return new ClosedVolumeProfile
@@ -712,6 +791,14 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 Vah = Convert.ToDouble(reader["vah"]),
                 Poc = Convert.ToDouble(reader["poc"]),
                 Val = Convert.ToDouble(reader["val"]),
+                Vwap = ReadDoubleSafe(reader, "vwap", 0.0),
+                VwapStdDev = ReadDoubleSafe(reader, "vwap_std_dev", 0.0),
+                VwapSd1Upper = ReadDoubleSafe(reader, "vwap_sd1_upper", 0.0),
+                VwapSd1Lower = ReadDoubleSafe(reader, "vwap_sd1_lower", 0.0),
+                VwapSd2Upper = ReadDoubleSafe(reader, "vwap_sd2_upper", 0.0),
+                VwapSd2Lower = ReadDoubleSafe(reader, "vwap_sd2_lower", 0.0),
+                VwapSd3Upper = ReadDoubleSafe(reader, "vwap_sd3_upper", 0.0),
+                VwapSd3Lower = ReadDoubleSafe(reader, "vwap_sd3_lower", 0.0),
                 TotalVolume = Convert.ToDouble(reader["total_volume"]),
                 ValueAreaPercent = Convert.ToInt32(reader["value_area_percent"]),
                 TickSize = Convert.ToDouble(reader["tick_size"]),

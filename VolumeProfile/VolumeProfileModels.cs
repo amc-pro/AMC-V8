@@ -126,6 +126,16 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
         public double Vah { get; set; }
         public double Val { get; set; }
 
+        // Métriques VWAP Clôturé & Bandes d'Écart-Type (SD)
+        public double Vwap { get; set; }
+        public double VwapStdDev { get; set; }
+        public double VwapSd1Upper { get; set; }
+        public double VwapSd1Lower { get; set; }
+        public double VwapSd2Upper { get; set; }
+        public double VwapSd2Lower { get; set; }
+        public double VwapSd3Upper { get; set; }
+        public double VwapSd3Lower { get; set; }
+
         public double TotalVolume { get; set; }
         public int ValueAreaPercent { get; set; }
         public double TickSize { get; set; }
@@ -163,6 +173,14 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 Poc = this.Poc,
                 Vah = this.Vah,
                 Val = this.Val,
+                Vwap = this.Vwap,
+                VwapStdDev = this.VwapStdDev,
+                VwapSd1Upper = this.VwapSd1Upper,
+                VwapSd1Lower = this.VwapSd1Lower,
+                VwapSd2Upper = this.VwapSd2Upper,
+                VwapSd2Lower = this.VwapSd2Lower,
+                VwapSd3Upper = this.VwapSd3Upper,
+                VwapSd3Lower = this.VwapSd3Lower,
                 TotalVolume = this.TotalVolume,
                 ValueAreaPercent = this.ValueAreaPercent,
                 TickSize = this.TickSize,
@@ -191,8 +209,8 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
         public override string ToString()
         {
             return string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                "{0} {1} | POC:{2:F2} VAH:{3:F2} VAL:{4:F2} | Nodes:{5} | Valid:{6}",
-                ProfileType, PeriodKey, Poc, Vah, Val, Nodes != null ? Nodes.Count : 0, Valid);
+                "{0} {1} | POC:{2:F2} VAH:{3:F2} VAL:{4:F2} | VWAP:{5:F2} (SD2:{6:F2}-{7:F2}) | Nodes:{8} | Valid:{9}",
+                ProfileType, PeriodKey, Poc, Vah, Val, Vwap, VwapSd2Lower, VwapSd2Upper, Nodes != null ? Nodes.Count : 0, Valid);
         }
     }
 

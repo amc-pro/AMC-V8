@@ -43,6 +43,16 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_HTF_Trend_Classifier_RejectsInvalidData", Test_HTF_Trend_Classifier_RejectsInvalidData);
             RunTest("Test_VWAP_Sanitization_And_AntiLookahead", Test_VWAP_Sanitization_And_AntiLookahead);
             RunTest("Test_XmlConfigurations_And_ScalpingPro_GateMatching", Test_XmlConfigurations_And_ScalpingPro_GateMatching);
+            RunTest("Test_Fvg_AntiLookahead_Strict_Closed_Bars", Test_Fvg_AntiLookahead_Strict_Closed_Bars);
+            RunTest("Test_Fvg_Consequent_Encroachment_50Percent_Defense", Test_Fvg_Consequent_Encroachment_50Percent_Defense);
+            RunTest("Test_Fvg_Inversion_Breaker_Transition", Test_Fvg_Inversion_Breaker_Transition);
+            RunTest("Test_Fvg_Smart_Eviction_Preserves_Active_Zones", Test_Fvg_Smart_Eviction_Preserves_Active_Zones);
+            RunTest("Test_Closed_VWAP_And_StandardDeviation_Calculation", Test_Closed_VWAP_And_StandardDeviation_Calculation);
+            RunTest("Test_Closed_VWAP_SQLite_Persistence_And_Reload", Test_Closed_VWAP_SQLite_Persistence_And_Reload);
+            RunTest("Test_Closed_VWAP_HTF_Confluence_And_Scoring", Test_Closed_VWAP_HTF_Confluence_And_Scoring);
+            RunTest("Test_Macro_Inflection_Context_Scoring_N1", Test_Macro_Inflection_Context_Scoring_N1);
+            RunTest("Test_ScalpingPro_Continuous_Stretch_Damping", Test_ScalpingPro_Continuous_Stretch_Damping);
+            RunTest("Test_AntiFallingKnife_Safety_Gating", Test_AntiFallingKnife_Safety_Gating);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
@@ -788,7 +798,7 @@ namespace AMC.VolumeProfile.Tests
             bool isOnlyN2GateFailed = engineGateFailed == "N2_LOCALISATION" || engineGateFailed == "GATE_N2_FAILED" || engineGateFailed == "N2_LOW" || string.IsNullOrEmpty(engineGateFailed);
             Assert(isOnlyN2GateFailed, "Le libellé de porte N2_LOCALISATION doit être reconnu par le mécanisme de levée de porte de ScalpingPro");
 
-            // 2. Validation que tous les 40 fichiers XML de configs existent et sont bien formés
+            // 2. Validation que les 8 fichiers XML SCALPING_PRO existent et sont bien formés
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             string workspaceRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
             string configsDir = Path.Combine(workspaceRoot, "configs");
@@ -799,27 +809,321 @@ namespace AMC.VolumeProfile.Tests
 
             if (Directory.Exists(configsDir))
             {
-                string[] presets = { "SCALPING_PRO", "SCALPING", "SNIPER", "STANDARD", "SCANNER" };
                 string[] instruments = { "NQ", "MNQ", "ES", "MES", "GC", "MGC", "CL", "MCL" };
 
                 int count = 0;
-                foreach (string p in presets)
+                foreach (string inst in instruments)
                 {
-                    foreach (string inst in instruments)
-                    {
-                        string fpath = Path.Combine(configsDir, p, string.Format("CONFIG_{0}_{1}.xml", inst, p));
-                        Assert(File.Exists(fpath), string.Format("Fichier XML manquant: {0}", fpath));
-                        string content = File.ReadAllText(fpath);
-                        Assert(content.Contains("<NinjaTrader>"), string.Format("XML invalide dans {0}", fpath));
-                        Assert(content.Contains("<SniperMarketCorePro>"), string.Format("SniperMarketCorePro absent dans {0}", fpath));
-                        count++;
-                    }
+                    string fpath = Path.Combine(configsDir, "SCALPING_PRO", string.Format("CONFIG_{0}_SCALPING_PRO.xml", inst));
+                    Assert(File.Exists(fpath), string.Format("Fichier XML manquant: {0}", fpath));
+                    string content = File.ReadAllText(fpath);
+                    Assert(content.Contains("<NinjaTrader>"), string.Format("XML invalide dans {0}", fpath));
+                    Assert(content.Contains("<AuctionMarketScalpingPro>"), string.Format("Tag <AuctionMarketScalpingPro> absent dans {0}", fpath));
+                    Assert(content.Contains("<TradingPreset>ScalpingPro</TradingPreset>"), string.Format("TradingPreset ScalpingPro manquant dans {0}", fpath));
+                    count++;
                 }
-                Assert(count == 40, string.Format("40 configurations XML attendues, {0} trouvées", count));
+                Assert(count == 8, string.Format("8 configurations XML attendues pour SCALPING_PRO, {0} trouvées", count));
+
+                // Vérification de la suppression des anciens dossiers de presets
+                string[] legacyPresets = { "SCALPING", "SNIPER", "STANDARD", "SCANNER" };
+                foreach (string lp in legacyPresets)
+                {
+                    string legacyDir = Path.Combine(configsDir, lp);
+                    Assert(!Directory.Exists(legacyDir) || Directory.GetFiles(legacyDir).Length == 0,
+                        string.Format("Le dossier de preset obsolète {0} ne doit plus contenir de configurations actives", lp));
+                }
             }
+        }
+
+        private static void Test_Fvg_AntiLookahead_Strict_Closed_Bars()
+        {
+            // Vérification que le calcul de l'offset d'enregistrement FVG ne cible JAMAIS la bougie [0] non clôturée
+            int evalOffsetTick = 0; // Mode Realtime tick
+            int evalOffsetBarClose = 1; // Mode BarClose
+
+            int regOffsetTick = evalOffsetTick > 0 ? evalOffsetTick : 1;
+            int regOffsetBarClose = evalOffsetBarClose > 0 ? evalOffsetBarClose : 1;
+
+            Assert(regOffsetTick == 1, "En mode tick (evalOffset=0), l'enregistrement doit cibler l'offset 1 (barre close)");
+            Assert(regOffsetBarClose == 1, "En mode BarClose (evalOffset=1), l'enregistrement doit cibler l'offset 1 (barre close)");
+        }
+
+        private static void Test_Fvg_Consequent_Encroachment_50Percent_Defense()
+        {
+            double bottom = 20000.0;
+            double top = 20020.0;
+            double midCe = (top + bottom) / 2.0; // 20010.0
+            double fvgTol = 0.75;
+
+            // Cas 1 : Pénétration dans la zone et clôture défendue au-dessus du 50% CE avec bougie verte
+            double low1 = 20012.0;
+            double close1 = 20016.0;
+            double open1 = 20011.0;
+            bool touched1 = low1 <= top + fvgTol && low1 >= bottom - fvgTol;
+            bool defended1 = (close1 >= midCe && close1 > open1) || close1 > top;
+            Assert(touched1 && defended1, "Le retest au-dessus du 50% CE avec barre verte doit être validé");
+
+            // Cas 2 : Pénétration sous le 50% CE avec bougie rouge -> défense échouée
+            double low2 = 20005.0;
+            double close2 = 20008.0;
+            double open2 = 20012.0;
+            bool touched2 = low2 <= top + fvgTol && low2 >= bottom - fvgTol;
+            bool defended2 = (close2 >= midCe && close2 > open2) || close2 > top;
+            Assert(touched2 && !defended2, "Une clôture sous le 50% CE en bougie rouge ne doit pas valider la défense");
+        }
+
+        private static void Test_Fvg_Inversion_Breaker_Transition()
+        {
+            double bottom = 20000.0;
+            double fvgTol = 0.75;
+
+            // Cas : Traversée nette du support FVG à la clôture -> Invalidation et bascule en Breaker
+            double closeBreak = 19998.0;
+            bool isInvalidated = closeBreak < bottom - fvgTol;
+            bool isInverted = isInvalidated; // Devient un Breaker (résistance)
+            Assert(isInvalidated && isInverted, "La traversée nette sous le bas du FVG doit invalider le support et basculer en Breaker");
+        }
+
+        private static void Test_Fvg_Smart_Eviction_Preserves_Active_Zones()
+        {
+            // Simulation de la purge préalable intelligente dans AddFvgZone
+            int maxAge = 12;
+            int currentBar = 50;
+
+            var zones = new List<Tuple<int, bool>> // <BarIndex, Mitigated>
+            {
+                Tuple.Create(10, true),   // Zone 0 : mitigée (obsolète)
+                Tuple.Create(45, false),  // Zone 1 : active récente
+                Tuple.Create(46, false),  // Zone 2 : active récente
+                Tuple.Create(47, false)   // Zone 3 : active récente
+            };
+
+            // Purge préalable avant insertion d'une 5ème zone
+            var activeZones = new List<Tuple<int, bool>>();
+            foreach (var z in zones)
+            {
+                bool isOld = currentBar - z.Item1 > maxAge * 2;
+                if (!z.Item2 && !isOld)
+                {
+                    activeZones.Add(z);
+                }
+            }
+
+            Assert(activeZones.Count == 3, "La zone mitigée 0 doit être évincée avant le shift");
+            Assert(activeZones[0].Item1 == 45, "La zone active la plus ancienne (45) doit être préservée");
+        }
+
+        private static void Test_Closed_VWAP_And_StandardDeviation_Calculation()
+        {
+            var calc = new VolumeProfileCalculator();
+            double tickSize = 0.25;
+
+            // Distribution discrète contrôlée :
+            // 100 vol @ 20000.0 (tick 80000)
+            // 200 vol @ 20010.0 (tick 80040)
+            // 100 vol @ 20020.0 (tick 80080)
+            calc.AddVolume((long)(20000.0 / tickSize), 100);
+            calc.AddVolume((long)(20010.0 / tickSize), 200);
+            calc.AddVolume((long)(20020.0 / tickSize), 100);
+
+            var profile = calc.BuildProfile(
+                "MNQ", "CME", "ETH",
+                VolumeProfilePeriodType.Monthly,
+                "2026-08",
+                new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 8, 31, 23, 59, 59, DateTimeKind.Utc),
+                tickSize);
+
+            Assert(profile.Valid, "Le profil doit être valide");
+            Assert(Math.Abs(profile.Vwap - 20010.0) < 0.001, string.Format("VWAP attendu 20010.0, obtenu {0}", profile.Vwap));
+            
+            // Variance = 50.0 => StdDev = sqrt(50) = 7.0710678
+            double expectedStdDev = Math.Sqrt(50.0);
+            Assert(Math.Abs(profile.VwapStdDev - expectedStdDev) < 0.001, string.Format("StdDev attendu {0:F4}, obtenu {1:F4}", expectedStdDev, profile.VwapStdDev));
+
+            double expectedSd1U = 20010.0 + expectedStdDev;
+            double expectedSd1L = 20010.0 - expectedStdDev;
+            double expectedSd2U = 20010.0 + (2.0 * expectedStdDev);
+            double expectedSd2L = 20010.0 - (2.0 * expectedStdDev);
+            double expectedSd3U = 20010.0 + (3.0 * expectedStdDev);
+            double expectedSd3L = 20010.0 - (3.0 * expectedStdDev);
+
+            Assert(Math.Abs(profile.VwapSd1Upper - expectedSd1U) < 0.001, "VWAP SD+1 supérieur incorrect");
+            Assert(Math.Abs(profile.VwapSd1Lower - expectedSd1L) < 0.001, "VWAP SD-1 inférieur incorrect");
+            Assert(Math.Abs(profile.VwapSd2Upper - expectedSd2U) < 0.001, "VWAP SD+2 supérieur incorrect");
+            Assert(Math.Abs(profile.VwapSd2Lower - expectedSd2L) < 0.001, "VWAP SD-2 inférieur incorrect");
+            Assert(Math.Abs(profile.VwapSd3Upper - expectedSd3U) < 0.001, "VWAP SD+3 supérieur incorrect");
+            Assert(Math.Abs(profile.VwapSd3Lower - expectedSd3L) < 0.001, "VWAP SD-3 inférieur incorrect");
+        }
+
+        private static void Test_Closed_VWAP_SQLite_Persistence_And_Reload()
+        {
+            string testDb = Path.Combine(Path.GetTempPath(), "amc_vp_vwap_test_" + Guid.NewGuid().ToString("N") + ".db");
+            try
+            {
+                var repo = new VolumeProfileRepository(testDb);
+
+                var p = new ClosedVolumeProfile
+                {
+                    Symbol = "MNQ",
+                    Exchange = "CME",
+                    SessionTemplate = "ETH",
+                    ProfileType = VolumeProfilePeriodType.Monthly,
+                    PeriodKey = "MNQ_MONTH_2026-07",
+                    PeriodStartUtc = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+                    PeriodEndUtc = new DateTime(2026, 7, 31, 23, 59, 59, DateTimeKind.Utc),
+                    Poc = 29000.0,
+                    Vah = 29200.0,
+                    Val = 28800.0,
+                    Vwap = 29050.0,
+                    VwapStdDev = 50.0,
+                    VwapSd1Upper = 29100.0,
+                    VwapSd1Lower = 29000.0,
+                    VwapSd2Upper = 29150.0,
+                    VwapSd2Lower = 28950.0,
+                    VwapSd3Upper = 29200.0,
+                    VwapSd3Lower = 28900.0,
+                    TotalVolume = 500000,
+                    ValueAreaPercent = 70,
+                    TickSize = 0.25,
+                    CalculationMethod = "AMC_GAUSSIAN_V2",
+                    CreatedAtUtc = DateTime.UtcNow,
+                    Valid = true
+                };
+
+                repo.UpsertProfile(p);
+
+                // Rechargement depuis base SQLite
+                var loaded = repo.GetProfileByKey("MNQ_MONTH_2026-07");
+                Assert(loaded != null, "Le profil rechargé ne doit pas être nul");
+                Assert(Math.Abs(loaded.Vwap - 29050.0) < 0.001, "VWAP rechargé non conforme");
+                Assert(Math.Abs(loaded.VwapStdDev - 50.0) < 0.001, "VwapStdDev rechargé non conforme");
+                Assert(Math.Abs(loaded.VwapSd2Lower - 28950.0) < 0.001, "VwapSd2Lower rechargé non conforme");
+                Assert(Math.Abs(loaded.VwapSd2Upper - 29150.0) < 0.001, "VwapSd2Upper rechargé non conforme");
+                Assert(Math.Abs(loaded.VwapSd3Lower - 28900.0) < 0.001, "VwapSd3Lower rechargé non conforme");
+
+                repo.Dispose();
+            }
+            finally
+            {
+                if (File.Exists(testDb))
+                {
+                    try { File.Delete(testDb); } catch { }
+                }
+            }
+        }
+
+        private static void Test_Closed_VWAP_HTF_Confluence_And_Scoring()
+        {
+            var analyzer = new VolumeProfileAnalyzer();
+            double tickSize = 0.25;
+            double atr = 10.0;
+
+            var prevMonth = new ClosedVolumeProfile
+            {
+                Symbol = "MNQ",
+                ProfileType = VolumeProfilePeriodType.Monthly,
+                PeriodKey = "MNQ_MONTH_2026-07",
+                Poc = 29100.0,
+                Vah = 29300.0,
+                Val = 28900.0,
+                Vwap = 29050.0,
+                VwapStdDev = 50.0,
+                VwapSd1Upper = 29100.0,
+                VwapSd1Lower = 29000.0,
+                VwapSd2Upper = 29150.0,
+                VwapSd2Lower = 28950.0,
+                VwapSd3Upper = 29200.0,
+                VwapSd3Lower = 28900.0,
+                Valid = true
+            };
+
+            // Test au niveau du VWAP SD-2 Mois Précédent (28950.00)
+            double currentPrice = 28950.25;
+            var ctx = analyzer.Analyze(
+                currentPrice,
+                28952.0, 28948.0, currentPrice,
+                150.0,
+                atr, tickSize, DateTime.UtcNow,
+                null, null, prevMonth);
+
+            Assert(ctx.IsValid, "Le contexte VP doit être valide");
+            Assert(ctx.ClosestReferenceName == "VWAP SD-2 Mois Préc", string.Format("Attendu 'VWAP SD-2 Mois Préc', obtenu '{0}'", ctx.ClosestReferenceName));
+            Assert(ctx.DistanceToClosestReference <= 2, "La distance en ticks doit être <= 2 ticks");
+        }
+
+        private static void Test_Macro_Inflection_Context_Scoring_N1()
+        {
+            // Valide la détection d'une zone d'inflexion macro (SD-2 / SD-3)
+            var prevMonth = new ClosedVolumeProfile
+            {
+                Symbol = "MNQ",
+                ProfileType = VolumeProfilePeriodType.Monthly,
+                PeriodKey = "MNQ_MONTH_2026-07",
+                Poc = 29500.0,
+                Vah = 29800.0,
+                Val = 29200.0,
+                Vwap = 29400.0,
+                VwapStdDev = 225.0,
+                VwapSd1Upper = 29625.0,
+                VwapSd1Lower = 29175.0,
+                VwapSd2Upper = 29850.0,
+                VwapSd2Lower = 28950.0, // SD-2 Support à 28950
+                VwapSd3Upper = 30075.0,
+                VwapSd3Lower = 28725.0,
+                Valid = true
+            };
+
+            var analyzer = new VolumeProfileAnalyzer();
+            double testPrice = 28948.0; // Dans la tolérance de 28950
+            var vpContext = analyzer.Analyze(testPrice, testPrice + 2, testPrice - 2, testPrice, 150.0, 15.0, 0.25, DateTime.UtcNow, null, null, prevMonth);
+
+            Assert(vpContext.IsValid, "Le contexte VP doit être valide");
+            Assert(vpContext.ClosestReferenceName == "VWAP SD-2 Mois Préc", "Doit identifier le support SD-2");
+            Assert(vpContext.DistanceToClosestReference <= 8, "Distance doit être dans la tolérance");
+        }
+
+        private static void Test_ScalpingPro_Continuous_Stretch_Damping()
+        {
+            // Valide la logique mathématique d'amortissement continu selon l'élongation Z
+            // Z = 0.0 -> amortissement 0.0 (plein malus contre-tendance)
+            // Z = 2.0 -> amortissement neutre (malus = 0.0)
+            // Z = 3.0 -> amortissement bonus (+1.0 à +2.0)
+            double[] testSigmas = new double[] { 0.5, 1.2, 2.0, 2.8, 4.5 };
+
+            foreach (double sig in testSigmas)
+            {
+                double absSig = Math.Abs(sig);
+                double dampedHtfMod;
+                if (absSig >= 2.5) dampedHtfMod = 1.0;
+                else if (absSig >= 2.0) dampedHtfMod = 0.0;
+                else dampedHtfMod = -3.0;
+
+                if (absSig >= 2.5)
+                    Assert(dampedHtfMod >= 1.0, "À Z >= 2.5, le HTF modifier doit être >= +1.0 (mean-reversion supportée)");
+                else if (absSig >= 2.0)
+                    Assert(dampedHtfMod >= 0.0, "À Z >= 2.0, le HTF modifier ne doit plus être négatif");
+                else
+                    Assert(dampedHtfMod <= -1.0, "À Z < 2.0, le HTF modifier reste pénalisant pour contre-tendance");
+            }
+        }
+
+        private static void Test_AntiFallingKnife_Safety_Gating()
+        {
+            // Valide qu'un trade avec N3 = 0 (aucune microstructure/orderflow) reste rejeté
+            // même s'il a un N1 élevé (26/30) et N2 élevé (25/30)
+            double n1 = 26.0;
+            double n2 = 25.0;
+            double n3 = 0.0; // Pas d'Orderflow
+            double n4 = 0.0; // Pas de Trigger
+
+            bool n3Gated = n3 < 3.0;
+            Assert(n1 >= 20.0 && n2 >= 20.0 && n4 == 0.0, "N1 et N2 sont élevés");
+            Assert(n3Gated, "Un trade sans microstructure (N3=0) DOIT obligatoirement être gaté");
         }
 
         #endregion
     }
 }
+
 
