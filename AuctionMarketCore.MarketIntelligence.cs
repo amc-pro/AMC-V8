@@ -18,7 +18,7 @@ namespace NinjaTrader.NinjaScript.Indicators
     /// Aucun moteur existant n'est modifie : ce fichier ne fait qu'alimenter le
     /// module et peut etre desactive via EnableMarketIntelligence.
     /// </summary>
-    public partial class AuctionMarketScalpingPro
+    public partial class AuctionMarketCore
     {
         #region Market Intelligence — Parametres
 
@@ -356,8 +356,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         /// <summary>Adaptateur NinjaTrader de la source de donnees du module.</summary>
         private sealed class ScalpingProMarketIntelligenceSource : SMI.IMarketIntelligenceSource
         {
-            private readonly AuctionMarketScalpingPro o;
-            public ScalpingProMarketIntelligenceSource(AuctionMarketScalpingPro owner) { o = owner; }
+            private readonly AuctionMarketCore o;
+            public ScalpingProMarketIntelligenceSource(AuctionMarketCore owner) { o = owner; }
 
             public string InstrumentName { get { return o.Instrument != null ? o.Instrument.FullName : "N/A"; } }
             public DateTime MarketTime

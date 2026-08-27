@@ -818,7 +818,7 @@ namespace AMC.VolumeProfile.Tests
                     Assert(File.Exists(fpath), string.Format("Fichier XML manquant: {0}", fpath));
                     string content = File.ReadAllText(fpath);
                     Assert(content.Contains("<NinjaTrader>"), string.Format("XML invalide dans {0}", fpath));
-                    Assert(content.Contains("<AuctionMarketScalpingPro>"), string.Format("Tag <AuctionMarketScalpingPro> absent dans {0}", fpath));
+                    Assert(content.Contains("<AuctionMarketCore>"), string.Format("Tag <AuctionMarketCore> absent dans {0}", fpath));
                     Assert(content.Contains("<TradingPreset>ScalpingPro</TradingPreset>"), string.Format("TradingPreset ScalpingPro manquant dans {0}", fpath));
                     count++;
                 }

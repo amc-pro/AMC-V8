@@ -24,7 +24,7 @@ using NinjaTrader.NinjaScript.Indicators.VolumeProfilePro;
 
 namespace NinjaTrader.NinjaScript.Indicators
 {
-    public partial class AuctionMarketScalpingPro
+    public partial class AuctionMarketCore
     {
 
         // #                                                                               #
@@ -1139,7 +1139,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 {
                     System.Reflection.MethodBase m = st.GetFrame(i).GetMethod();
                     if (m == null || m.DeclaringType == null) continue;
-                    if (m.DeclaringType.FullName != null && m.DeclaringType.FullName.IndexOf("AuctionMarketScalpingPro", StringComparison.Ordinal) >= 0)
+                    if (m.DeclaringType.FullName != null && m.DeclaringType.FullName.IndexOf("AuctionMarketCore", StringComparison.Ordinal) >= 0)
                         return m.Name;
                 }
             }

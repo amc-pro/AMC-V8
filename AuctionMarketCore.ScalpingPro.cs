@@ -46,7 +46,7 @@ namespace NinjaTrader.NinjaScript.Indicators
     /// Preset ScalpingPro : profil destiné au trading réel (5 à 10 setups institutionnels par session).
     /// Pipeline : Contexte -> Market Structure -> Liquidity -> Order Block -> Footprint -> Volume -> Momentum -> Risk -> Alert.
     /// </summary>
-    public partial class AuctionMarketScalpingPro
+    public partial class AuctionMarketCore
     {
         #region SCALPING PRO - Contrats (interfaces, DI)
 
@@ -790,7 +790,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private int currentScalpingProDirection;
         private int currentScalpingProTier;
 
-        /// <summary>true car l'indicateur AuctionMarketScalpingPro exécute nativement le pipeline ScalpingPro.</summary>
+        /// <summary>true car l'indicateur AuctionMarketCore exécute nativement le pipeline ScalpingPro.</summary>
         private bool IsScalpingPro
         {
             get { return true; }
@@ -957,7 +957,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             InitScalpingPro();
 
-            Print("AuctionMarketScalpingPro V8.0 : moteur institutionnel ScalpingPro initialise "
+            Print("AuctionMarketCore V8.0 : moteur institutionnel ScalpingPro initialise "
                 + "(seuil " + MinScoreToAlert + "/100 pondere, gates " + GateN1MinScore + "/" + GateN2MinScore
                 + "/" + GateN3MinScore + "/" + GateN4MinScore + ", buffer " + SelectionBufferBars
                 + ", HTF SoftMode (modulateur de score), News Penalite -" + NewsWindowPenalty + " pts, R:R min " + MinRiskReward.ToString("F1", CultureInfo.InvariantCulture)

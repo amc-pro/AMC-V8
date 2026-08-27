@@ -1,4 +1,4 @@
-# Rapport d'Audit Exhaustif — AuctionMarketScalpingPro (AMC-V8)
+# Rapport d'Audit Exhaustif — AuctionMarketCore (AMC-V8)
 
 **Destinataire** : Direction Technique & Trading Algorithmique  
 **Projet** : `AMC-V8`  
@@ -11,10 +11,10 @@
 
 ## 1. Résumé exécutif
 
-L'audit approfondi, statique, dynamique et quantitatif du projet **AuctionMarketScalpingPro** confirme que la spécialisation du moteur pour le trading réel haute confluence (**ScalpingPro**) est solide, mathématiquement cohérente et protégée par des garde-fous structurels stricts (Anti-Suicide, Anti-Falling Knife, Anti-Empilement, Damping Z-Stretch et Confluence VWAP Closed-Reference).
+L'audit approfondi, statique, dynamique et quantitatif du projet **AuctionMarketCore** confirme que la spécialisation du moteur pour le trading réel haute confluence (**ScalpingPro**) est solide, mathématiquement cohérente et protégée par des garde-fous structurels stricts (Anti-Suicide, Anti-Falling Knife, Anti-Empilement, Damping Z-Stretch et Confluence VWAP Closed-Reference).
 
 ### Principales conclusions :
-1. **Extraction et Renommage (Commit `a70fce2`)** : L'ensemble des classes partielles, namespaces, modèles de scoring et configurations XML a été convenablement extrait et renommé de `SniperMarketCorePro` vers `AuctionMarketScalpingPro`.
+1. **Extraction et Renommage (Commit `a70fce2`)** : L'ensemble des classes partielles, namespaces, modèles de scoring et configurations XML a été convenablement extrait et renommé de `SniperMarketCorePro` vers `AuctionMarketCore`.
 2. **Nettoyage contrôlé des anciens presets (Commit `e66d548`)** : Les 32 configurations XML des anciens profils (`SCALPING`, `SNIPER`, `SCANNER`, `STANDARD`) ainsi que les méthodes mortes associées (`ApplyScannerPreset`, `ApplyScalpingPreset`, branches conditionnelles mortes de l'ancien mode Sniper) ont été intégralement supprimées dans un commit dédié et réversible.
 3. **Anomalie critique de déploiement corrigée (AUDIT-001)** : Le script `Python/sync_nt8_custom.py` omettait la synchronisation du sous-dossier `MarketIntelligence/` vers le dossier `bin/Custom/Indicators` de NinjaTrader 8, ce qui empêchait la compilation dans NT8. Cette omission a été corrigée.
 4. **Anomalie de configuration des Stops sur ES/GC/CL (AUDIT-002)** : Les balises `<MinStopTicks>` et `<MaxStopTicks>` étaient absentes des fichiers XML pour ES, MES, GC, MGC, CL et MCL en raison d'une substitution par expression régulière qui n'insérait pas les balises manquantes. En conséquence, ces instruments héritaient par défaut d'un plafond de 160 ticks (soit 40 points sur l'ES = 2 000 $ de risque potentiel au lieu de 40 ticks = 10 points = 500 $).
@@ -29,7 +29,7 @@ L'audit approfondi, statique, dynamique et quantitatif du projet **AuctionMarket
 - **Commit HEAD initial** : `a70fce2f964aae467b8e408ca21c46c53c6bddef`
   - *Auteur* : `amc-pro <rperline07@gmail.com>`
   - *Date* : `2026-08-27 02:28:52 +0300`
-  - *Message* : `feat(scalping-pro): extract and specialize project as AuctionMarketScalpingPro`
+  - *Message* : `feat(scalping-pro): extract and specialize project as AuctionMarketCore`
 - **Commit parent** : `186815f98989a4db0a1c778b5c635dbda4132f8e`
   - *Auteur* : `amc-pro <rperline07@gmail.com>`
   - *Date* : `2026-08-26 09:39:09 +0300`
@@ -40,7 +40,7 @@ L'audit approfondi, statique, dynamique et quantitatif du projet **AuctionMarket
 ## 3. Résumé de la dernière tâche
 
 La tâche initiale a consisté en :
-1. Renommage des 10 fichiers sources C# partiels de `SniperMarketCorePro.*.cs` en `AuctionMarketScalpingPro.*.cs`.
+1. Renommage des 10 fichiers sources C# partiels de `SniperMarketCorePro.*.cs` en `AuctionMarketCore.*.cs`.
 2. Adaptation des noms de classes, ponts `ScalpingProMarketIntelligenceSource`, constructeurs et tags XML.
 3. Spécialisation de la méthode `ApplyTradingPreset()` pour appeler systématiquement `ApplyScalpingProPreset()`.
 4. Mise à jour de la documentation `README.md` et des scripts de journalisation.
@@ -51,16 +51,16 @@ La tâche initiale a consisté en :
 
 | Fichier d'origine | Nouveau fichier | Statut | Namespace & Classe vérifiés |
 | :--- | :--- | :--- | :--- |
-| `SniperMarketCorePro.cs` | `AuctionMarketScalpingPro.cs` | ✅ Renommé | `NinjaTrader.NinjaScript.Indicators.AuctionMarketScalpingPro` |
-| `SniperMarketCorePro.Engine.cs` | `AuctionMarketScalpingPro.Engine.cs` | ✅ Renommé | `partial class AuctionMarketScalpingPro` |
-| `SniperMarketCorePro.Exports.cs` | `AuctionMarketScalpingPro.Exports.cs` | ✅ Renommé | `partial class AuctionMarketScalpingPro` |
-| `SniperMarketCorePro.Features.cs` | `AuctionMarketScalpingPro.Features.cs` | ✅ Renommé | `partial class AuctionMarketScalpingPro` |
-| `SniperMarketCorePro.MarketIntelligence.cs` | `AuctionMarketScalpingPro.MarketIntelligence.cs` | ✅ Renommé | `partial class AuctionMarketScalpingPro` |
-| `SniperMarketCorePro.Network.cs` | `AuctionMarketScalpingPro.Network.cs` | ✅ Renommé | `partial class AuctionMarketScalpingPro` |
-| `SniperMarketCorePro.Render.cs` | `AuctionMarketScalpingPro.Render.cs` | ✅ Renommé | `partial class AuctionMarketScalpingPro` |
-| `SniperMarketCorePro.ScalpingPro.cs` | `AuctionMarketScalpingPro.ScalpingPro.cs` | ✅ Renommé | `partial class AuctionMarketScalpingPro` |
-| `SniperMarketCorePro.Sniper.cs` | `AuctionMarketScalpingPro.Sniper.cs` | ✅ Renommé | `partial class AuctionMarketScalpingPro` |
-| `SniperMarketCorePro.VolumeProfile.cs` | `AuctionMarketScalpingPro.VolumeProfile.cs` | ✅ Renommé | `partial class AuctionMarketScalpingPro` |
+| `SniperMarketCorePro.cs` | `AuctionMarketCore.cs` | ✅ Renommé | `NinjaTrader.NinjaScript.Indicators.AuctionMarketCore` |
+| `SniperMarketCorePro.Engine.cs` | `AuctionMarketCore.Engine.cs` | ✅ Renommé | `partial class AuctionMarketCore` |
+| `SniperMarketCorePro.Exports.cs` | `AuctionMarketCore.Exports.cs` | ✅ Renommé | `partial class AuctionMarketCore` |
+| `SniperMarketCorePro.Features.cs` | `AuctionMarketCore.Features.cs` | ✅ Renommé | `partial class AuctionMarketCore` |
+| `SniperMarketCorePro.MarketIntelligence.cs` | `AuctionMarketCore.MarketIntelligence.cs` | ✅ Renommé | `partial class AuctionMarketCore` |
+| `SniperMarketCorePro.Network.cs` | `AuctionMarketCore.Network.cs` | ✅ Renommé | `partial class AuctionMarketCore` |
+| `SniperMarketCorePro.Render.cs` | `AuctionMarketCore.Render.cs` | ✅ Renommé | `partial class AuctionMarketCore` |
+| `SniperMarketCorePro.ScalpingPro.cs` | `AuctionMarketCore.ScalpingPro.cs` | ✅ Renommé | `partial class AuctionMarketCore` |
+| `SniperMarketCorePro.Sniper.cs` | `AuctionMarketCore.Sniper.cs` | ✅ Renommé | `partial class AuctionMarketCore` |
+| `SniperMarketCorePro.VolumeProfile.cs` | `AuctionMarketCore.VolumeProfile.cs` | ✅ Renommé | `partial class AuctionMarketCore` |
 
 ---
 
@@ -251,7 +251,7 @@ Localisation : Python/sync_nt8_custom.py:30-45
 Constat : Le script de synchronisation vers NinjaTrader 8 copiait les fichiers racines et VolumeProfile/ mais omettait complètement le sous-dossier MarketIntelligence/.
 Preuve : Inspection du code de Python/sync_nt8_custom.py avant modification.
 Impact : Impossibilité totale de compiler l'indicateur dans NinjaTrader 8 lors du déploiement via ce script (symboles SMI manquants).
-Reproduction : Exécuter sync_nt8_custom.py sur une installation NT8 vierge -> Erreurs CS0246 dans AuctionMarketScalpingPro.MarketIntelligence.cs.
+Reproduction : Exécuter sync_nt8_custom.py sur une installation NT8 vierge -> Erreurs CS0246 dans AuctionMarketCore.MarketIntelligence.cs.
 Correction recommandée : Ajouter la copie récursive du dossier MarketIntelligence/ dans Python/sync_nt8_custom.py.
 Test de non-régression : Vérification de la création du sous-dossier MarketIntelligence/ dans le répertoire cible.
 ```
@@ -273,7 +273,7 @@ Test de non-régression : Vérifier par script la présence de MinStopTicks et M
 ID : AUDIT-003
 Sévérité : MOYENNE
 Statut : CONFIRMÉE
-Localisation : configs/SCALPING_PRO/*.xml & AuctionMarketScalpingPro.Sniper.cs:1801
+Localisation : configs/SCALPING_PRO/*.xml & AuctionMarketCore.Sniper.cs:1801
 Constat : Hétérogénéité des horaires de news dans les XML (NQ/MNQ en heures US ET '0830,1000,1430,1500' vs ES/GC/CL en heure de Paris '1530').
 Preuve : Inspection des valeurs de NewsTimesCsv dans les XML SCALPING_PRO.
 Impact : Si le graphique NinjaTrader est configuré en heure locale US Eastern ou UTC, la fenêtre de news à 15h30 ne correspondra à aucune annonce pour l'ES.
@@ -286,7 +286,7 @@ Test de non-régression : Test unitaire de validation des plages de news.
 ID : AUDIT-004
 Sévérité : MOYENNE
 Statut : CONFIRMÉE & CORRIGÉE (Commit e66d548)
-Localisation : AuctionMarketScalpingPro.Sniper.cs:913 & AuctionMarketScalpingPro.Engine.cs:3307
+Localisation : AuctionMarketCore.Sniper.cs:913 & AuctionMarketCore.Engine.cs:3307
 Constat : Présence de méthodes privées mortes (ApplyScannerPreset, ApplyScalpingPreset) et de branches conditionnelles mortes liées aux anciens presets supprimés.
 Preuve : grep sur ApplyScannerPreset et TradingPreset == SniperMarketPreset.Sniper.
 Impact : Dette technique, confusion de maintenance et risque d'appel accidentel.
@@ -310,7 +310,7 @@ Test de non-régression : Exécution des scripts Python avec chemin dynamique.
 
 ## 12. Risques de régression
 
-1. **Régression de sérialisation NinjaTrader** : Aucune. Le nom du type racine, le namespace, les propriétés publiques et le schéma XML correspondent rigoureusement au tag `<AuctionMarketScalpingPro>`.
+1. **Régression de sérialisation NinjaTrader** : Aucune. Le nom du type racine, le namespace, les propriétés publiques et le schéma XML correspondent rigoureusement au tag `<AuctionMarketCore>`.
 2. **Régression de Stop Loss sur l'ES** : Risque d'exposition financière accrue si un trade ES est exécuté sans avoir préalablement injecté la borne `<MaxStopTicks>40</MaxStopTicks>` dans le XML (risque de stop maximal à 40 points au lieu de 10 points).
 3. **Régression de compilation lors du déploiement** : Éliminée suite à la correction de `Python/sync_nt8_custom.py`.
 

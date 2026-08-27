@@ -56,7 +56,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         ScalpingPro,
     }
 
-    public partial class AuctionMarketScalpingPro : Indicator
+    public partial class AuctionMarketCore : Indicator
     {
         // RingBuffer<T> : buffer circulaire a capacite fixe, O(1) en ajout
         // et suppression du plus ancien. Remplace les List<T>.RemoveAt(0)
@@ -1091,7 +1091,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 log = logger;
                 worker = new Thread(Loop);
                 worker.IsBackground = true;
-                worker.Name = "AuctionMarketScalpingPro.Journal";
+                worker.Name = "AuctionMarketCore.Journal";
                 worker.Start();
             }
 
@@ -1317,8 +1317,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 MarketIntelligenceSetDefaults();
                 VolumeProfileSetDefaults();
-                Description = "AuctionMarketScalpingPro V8.0 : Système institutionnel ScalpingPro — Confluence SMC, Footprint & VWAP Clôturés SQLite.";
-                Name = "AuctionMarketScalpingPro";
+                Description = "AuctionMarketCore V8.0 : Système institutionnel ScalpingPro — Confluence SMC, Footprint & VWAP Clôturés SQLite.";
+                Name = "AuctionMarketCore";
                 Calculate = Calculate.OnEachTick;
                 // calcul et donc les alertes Telegram des que le chart passe en
                 // arriere-plan. Inacceptable pour un moteur d'alerte temps reel.

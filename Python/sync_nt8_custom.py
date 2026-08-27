@@ -1,23 +1,23 @@
 import shutil, os, glob
 
 src_dir = 'c:/AMC-Pro/AMC-V8'
-dst_dir = os.path.expanduser('~/Documents/NinjaTrader 8/bin/Custom/Indicators/AuctionMarketScalpingPro')
+dst_dir = os.path.expanduser('~/Documents/NinjaTrader 8/bin/Custom/Indicators/AuctionMarketCore')
 
 print("=" * 110)
 print(f"SYNCHRONISATION AMC-V8 -> {dst_dir}")
 print("=" * 110)
 
 cs_files = [
-    'AuctionMarketScalpingPro.cs',
-    'AuctionMarketScalpingPro.Engine.cs',
-    'AuctionMarketScalpingPro.Exports.cs',
-    'AuctionMarketScalpingPro.Features.cs',
-    'AuctionMarketScalpingPro.MarketIntelligence.cs',
-    'AuctionMarketScalpingPro.Network.cs',
-    'AuctionMarketScalpingPro.Render.cs',
-    'AuctionMarketScalpingPro.ScalpingPro.cs',
-    'AuctionMarketScalpingPro.Sniper.cs',
-    'AuctionMarketScalpingPro.VolumeProfile.cs',
+    'AuctionMarketCore.cs',
+    'AuctionMarketCore.Engine.cs',
+    'AuctionMarketCore.Exports.cs',
+    'AuctionMarketCore.Features.cs',
+    'AuctionMarketCore.MarketIntelligence.cs',
+    'AuctionMarketCore.Network.cs',
+    'AuctionMarketCore.Render.cs',
+    'AuctionMarketCore.ScalpingPro.cs',
+    'AuctionMarketCore.Sniper.cs',
+    'AuctionMarketCore.VolumeProfile.cs',
 ]
 
 for f in cs_files:

@@ -1,4 +1,4 @@
-# AuctionMarketScalpingPro V8.0 — Configuration Matrix
+# AuctionMarketCore V8.0 — Configuration Matrix
 
 The project is now exclusively dedicated to the **ScalpingPro** preset across 8 supported instruments.
 
