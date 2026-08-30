@@ -54,6 +54,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         Scalping,
         /// <summary>Profil Scalping Pro avec confluence SMC, Footprint et scoring pondéré (5-10 setups/session).</summary>
         ScalpingPro,
+        /// <summary>Profil Swing institutionnel sur barres clôturées, références fermées (VP/VWAP/SD) et horizon macro.</summary>
+        Swing,
     }
 
     public partial class AuctionMarketCore : Indicator
@@ -1308,7 +1310,10 @@ namespace NinjaTrader.NinjaScript.Indicators
         // des reglages manuels en changeant de preset.
         private void ApplyTradingPreset()
         {
-            ApplyScalpingProPreset();
+            if (TradingPreset == SniperMarketPreset.Swing)
+                ApplySwingPreset();
+            else
+                ApplyScalpingProPreset();
         }
 
         protected override void OnStateChange()
@@ -1511,6 +1516,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 JournalShadowMode = true;
 
                 ApplySniperDefaults();
+                ApplySwingDefaults();
             }
             else if (State == State.Configure)
             {
@@ -1669,6 +1675,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 InitSniperEngine();
                 MarketIntelligenceDataLoaded();
                 VolumeProfileDataLoaded();
+                InitSwingEngine();
                 InitTcpBridge();
                 
                 // FIX AUDIT #6: Validation des paramètres utilisateur pour éviter les combinaisons invalides
@@ -1685,6 +1692,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
                 MarketIntelligenceDispose();
                 VolumeProfileTerminated();
+                SwingTerminated();
                 lastAlertTimeBySignal.Clear();
                 dashboardFont = null;
                 levelLabelFont = null;
@@ -1754,6 +1762,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         CalculateRollingVolumeProfile(barIdx - 1, barsType);
                         EvaluateVolumeProfileSignal();
                         SniperOnEvaluatedBar();
+                        SwingOnEvaluatedBar();
 
                         if (State == State.Realtime)
                         {
@@ -1805,6 +1814,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         CalculateRollingVolumeProfile(barIdx - 1, barsType);
                         EvaluateVolumeProfileSignal();
                         SniperOnEvaluatedBar();
+                        SwingOnEvaluatedBar();
 
                         if (State == State.Realtime)
                         {
@@ -1842,6 +1852,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         CalculateRollingVolumeProfile(barIdx, barsType);
                         EvaluateVolumeProfileSignal();
                         SniperOnEvaluatedBar();
+                        SwingOnEvaluatedBar();
 
                         if (State == State.Realtime)
                         {
