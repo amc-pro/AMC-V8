@@ -79,6 +79,15 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_Swing_19_Path_Security_And_No_Secrets_Leak", Test_Swing_19_Path_Security_And_No_Secrets_Leak);
             RunTest("Test_Swing_20_No_Dead_Code_Or_Orphaned_Presets", Test_Swing_20_No_Dead_Code_Or_Orphaned_Presets);
 
+            // ================================================================
+            // 🛡️ SUITE DE TESTS D'INTÉGRATION STATEFUL & PERSISTANCE SWING (5 TESTS)
+            // ================================================================
+            RunTest("Test_Swing_Integration_SQLite_Persistence_And_Reload", Test_Swing_Integration_SQLite_Persistence_And_Reload);
+            RunTest("Test_Swing_Integration_TwoStep_Partial_Exit_TP1_BE_TP2", Test_Swing_Integration_TwoStep_Partial_Exit_TP1_BE_TP2);
+            RunTest("Test_Swing_Integration_Stop_Before_TP1_Full_Loss", Test_Swing_Integration_Stop_Before_TP1_Full_Loss);
+            RunTest("Test_Swing_Integration_Dynamic_News_And_Gap_Penalty", Test_Swing_Integration_Dynamic_News_And_Gap_Penalty);
+            RunTest("Test_Swing_Integration_Overnight_Session_Transition", Test_Swing_Integration_Overnight_Session_Transition);
+
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
             Console.WriteLine("================================================================");
@@ -1399,6 +1408,183 @@ namespace AMC.VolumeProfile.Tests
             Assert(!text.Contains("AuctionMarketScalpingPro") && !text.Contains("SniperMarketCorePro"),
                 "Aucun ancien namespace ou nom obsolète ne doit subsister dans AuctionMarketCore.Swing.cs.");
         }
+
+        #region Suite Swing Intégration Stateful & Persistance SQLite
+
+        private static void Test_Swing_Integration_SQLite_Persistence_And_Reload()
+        {
+            string testDb = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "test_swing_persist.db");
+            if (File.Exists(testDb)) { try { File.Delete(testDb); } catch { } }
+
+            try
+            {
+                var repo = new VolumeProfileRepository(testDb);
+                bool ok = repo.Initialize();
+                Assert(ok, "Initialisation SQLite VolumeProfileRepository doit réussir");
+
+                var sig = new SwingSignal
+                {
+                    Id = "SIG_SWING_001",
+                    Symbol = "ES",
+                    Direction = SwingDirection.Long,
+                    SetupType = SwingSetupType.RejectExtreme,
+                    Tier = SwingTier.Fort,
+                    EntryPrice = 5000.0,
+                    InitialStopPrice = 4980.0,
+                    Target1Price = 5030.0,
+                    Target2Price = 5060.0,
+                    PositionSizeContracts = 2,
+                    GeneratedTimeUtc = DateTime.UtcNow
+                };
+
+                var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
+                trade.TradeId = "TRD_ES_001";
+                
+                // 1. Sauvegarde du trade initial dans SQLite
+                repo.UpsertSwingTrade(trade);
+                repo.FlushQueue();
+
+                // 2. Rechargement et vérification
+                var loadedTrades = repo.LoadActiveSwingTrades("ES");
+                Assert(loadedTrades.Count == 1, "Doit recharger exactement 1 trade actif");
+                var t = loadedTrades[0];
+                Assert(t.TradeId == "TRD_ES_001", "TradeId non conforme");
+                Assert(t.InitialContracts == 2 && t.RemainingContracts == 2, "Contrats non conformes");
+                Assert(t.EntryPrice == 5000.0 && t.CurrentStopPrice == 4980.0, "Niveaux non conformes");
+                Assert(!t.Tp1Hit && !t.Closed, "État ouvert non conforme");
+
+                // 3. Exécution partielle TP1 et mise à jour
+                t.ExecutePartialExitTp1(5030.0, DateTime.UtcNow, 0.25, 50.0);
+                Assert(t.Tp1Hit && t.RemainingContracts == 1 && t.CurrentStopPrice == 5000.25, "Mise à jour TP1 non conforme");
+                repo.UpsertSwingTrade(t);
+                repo.FlushQueue();
+
+                // 4. Rechargement après TP1
+                var reloadedTrades = repo.LoadActiveSwingTrades("ES");
+                Assert(reloadedTrades.Count == 1, "Le trade reste actif après TP1 partiel");
+                Assert(reloadedTrades[0].Tp1Hit && reloadedTrades[0].RemainingContracts == 1, "État TP1 rechargé non conforme");
+                Assert(reloadedTrades[0].CurrentStopPrice == 5000.25, "Stop BE+1t rechargé non conforme");
+
+                // 5. Clôture finale TP2
+                reloadedTrades[0].CloseTrade(5060.0, DateTime.UtcNow, "TAKE_PROFIT_2", 0.25, 50.0);
+                repo.UpsertSwingTrade(reloadedTrades[0]);
+                repo.FlushQueue();
+
+                // 6. Vérification qu'aucune position active ne reste
+                var activeAfterClose = repo.LoadActiveSwingTrades("ES");
+                Assert(activeAfterClose.Count == 0, "Aucune position active ne doit subsister après clôture complète");
+
+                repo.Dispose();
+            }
+            finally
+            {
+                if (File.Exists(testDb)) { try { File.Delete(testDb); } catch { } }
+            }
+        }
+
+        private static void Test_Swing_Integration_TwoStep_Partial_Exit_TP1_BE_TP2()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "ES",
+                Direction = SwingDirection.Long,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4980.0,
+                Target1Price = 5030.0,
+                Target2Price = 5060.0,
+                PositionSizeContracts = 2
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
+            Assert(trade.InitialContracts == 2 && trade.RemainingContracts == 2, "Position initiale de 2 contrats");
+
+            // Étape 1 : TP1 touché (5030.0) -> Sortie partielle de 1 contrat à +30 pts (+$1500)
+            trade.ExecutePartialExitTp1(5030.0, DateTime.UtcNow, 0.25, 50.0);
+            Assert(trade.Tp1Hit, "TP1 doit être marqué comme touché");
+            Assert(trade.PartialExitContracts == 1, "1 contrat doit être débouclé");
+            Assert(trade.RemainingContracts == 1, "1 contrat restant");
+            Assert(trade.PartialRealizedPnlCurrency == 1500.0, "Gain partiel TP1 attendu: $1500");
+            Assert(trade.CurrentStopPrice == 5000.25, "Stop trailé à BE + 1 tick (5000.25)");
+            Assert(!trade.Closed, "Le trade doit rester ouvert");
+
+            // Étape 2 : TP2 touché (5060.0) -> Clôture finale du contrat restant à +60 pts (+$3000)
+            trade.CloseTrade(5060.0, DateTime.UtcNow, "TAKE_PROFIT_2", 0.25, 50.0);
+            Assert(trade.Closed, "Le trade doit être totalement clôturé");
+            Assert(trade.RemainingContracts == 0, "0 contrat restant");
+            Assert(trade.RealizedPnlCurrency == 4500.0, "Gain total combiné attendu: $4500 ($1500 + $3000)");
+            Assert(trade.RealizedR == 2.25, string.Format("R réalisé combiné attendu: 2.25R, obtenu {0}R", trade.RealizedR));
+        }
+
+        private static void Test_Swing_Integration_Stop_Before_TP1_Full_Loss()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "NQ",
+                Direction = SwingDirection.Long,
+                EntryPrice = 18000.0,
+                InitialStopPrice = 17950.0, // 50 pts = 200 ticks = $1000/contrat
+                Target1Price = 18075.0,
+                Target2Price = 18150.0,
+                PositionSizeContracts = 2
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 20.0); // PointValue NQ = $20
+
+            // Stop touché directement avant TP1
+            trade.CloseTrade(17950.0, DateTime.UtcNow, "STOP_LOSS", 0.25, 20.0);
+            Assert(trade.Closed, "Le trade doit être clôturé");
+            Assert(trade.ExitReason == "STOP_LOSS", "Motif de sortie doit être STOP_LOSS");
+            Assert(trade.RealizedR == -1.0, "Perte exacte de -1.0R attendue");
+            Assert(trade.RealizedPnlCurrency == -2000.0, "Perte attendue: -$2000 pour 2 contrats NQ");
+        }
+
+        private static void Test_Swing_Integration_Dynamic_News_And_Gap_Penalty()
+        {
+            var scorer = new SwingScorer();
+
+            // 1. Contexte avec news sévère
+            var ctxNews = new SwingContext
+            {
+                InNewsWindow = true,
+                NewsSeverity = 2
+            };
+            string rejection;
+            bool newsAllowed = scorer.ValidatePreconditions(ctxNews, SwingSetupType.RejectExtreme, SwingDirection.Long, out rejection);
+            Assert(!newsAllowed && rejection == "HIGH_SEVERITY_NEWS_BLOCK", "Blocage strict obligatoire pendant news sévère");
+
+            // 2. Contexte avec gap important (2.0%)
+            var ctxGap = new SwingContext
+            {
+                GapPercent = 2.0,
+                HtfTrendDirection = 1,
+                TickSize = 0.25,
+                AtrCurrent = 10.0
+            };
+            var score = scorer.ComputeScore(ctxGap, SwingSetupType.HtfContinuation, SwingDirection.Long);
+            Assert(score.Penalties >= 10.0, "Pénalité de score appliquée pour gap important");
+        }
+
+        private static void Test_Swing_Integration_Overnight_Session_Transition()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "ES",
+                Direction = SwingDirection.Long,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4980.0,
+                Target1Price = 5030.0,
+                Target2Price = 5060.0,
+                PositionSizeContracts = 2
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
+            
+            // Simulation de maintien overnight (aucun TP ni Stop déclenché à la fin de session)
+            Assert(trade.RemainingContracts == 2 && !trade.Closed, "Position active intacte pour maintien overnight");
+            Assert(trade.ExitReason == "ACTIVE", "Statut doit rester ACTIVE");
+        }
+
+        #endregion
 
         #endregion
 

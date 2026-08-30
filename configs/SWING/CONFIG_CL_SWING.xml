@@ -168,13 +168,15 @@
       <IncludeStatsInAlert>true</IncludeStatsInAlert>
       <JournalLiveOnly>false</JournalLiveOnly>
       <JournalShadowMode>true</JournalShadowMode>
-      <IbPeriodMinutes>60</IbPeriodMinutes>
-      <ExecutionMode>Sniper</ExecutionMode>
-      <EnableSniperEngine>true</EnableSniperEngine>
-      <MinScoreToAlert>50</MinScoreToAlert>
-      <MaxAlertsPerWeek>0</MaxAlertsPerWeek>
-      <MaxSniperAlertsPerSession>0</MaxSniperAlertsPerSession>
-      <SelectionBufferBars>0</SelectionBufferBars>
+      <EnableSwingEngine>true</EnableSwingEngine>
+      <SwingMinScoreToAlert>50</SwingMinScoreToAlert>
+      <SwingTierSilverScore>50</SwingTierSilverScore>
+      <SwingTierGoldScore>70</SwingTierGoldScore>
+      <SwingTierTresFortScore>85</SwingTierTresFortScore>
+      <SwingAllowOvernightHold>true</SwingAllowOvernightHold>
+      <SwingMaxActiveTrades>2</SwingMaxActiveTrades>
+      <EnableNewsFilter>true</EnableNewsFilter>
+      <EnableSwingTelegramAlerts>true</EnableSwingTelegramAlerts>
       <SniperRthOnly>false</SniperRthOnly>
       <NewsBlackoutMinutes>15</NewsBlackoutMinutes>
       <NewsTimesCsv>1630,2030</NewsTimesCsv>

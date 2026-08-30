@@ -9,6 +9,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using NinjaTrader.NinjaScript.Indicators;
 #endregion
 
 namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
@@ -227,9 +228,39 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 CREATE INDEX IF NOT EXISTS idx_vp_zone_state_active ON vp_zone_state (profile_id, active);
             ";
 
+            string ddlSwingTrades = @"
+                CREATE TABLE IF NOT EXISTS swing_trades (
+                    trade_id TEXT PRIMARY KEY,
+                    signal_id TEXT,
+                    symbol TEXT NOT NULL,
+                    direction INTEGER NOT NULL,
+                    setup_type INTEGER NOT NULL,
+                    tier INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    entry_time_utc TEXT NOT NULL,
+                    exit_time_utc TEXT,
+                    entry_price REAL NOT NULL,
+                    exit_price REAL,
+                    initial_stop REAL NOT NULL,
+                    current_stop REAL NOT NULL,
+                    target1_price REAL NOT NULL,
+                    target2_price REAL NOT NULL,
+                    initial_contracts INTEGER NOT NULL,
+                    remaining_contracts INTEGER NOT NULL,
+                    tp1_hit INTEGER NOT NULL,
+                    realized_r REAL NOT NULL,
+                    realized_usd REAL NOT NULL,
+                    exit_reason TEXT,
+                    notes TEXT,
+                    last_update_utc TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_swing_trades_status ON swing_trades (symbol, status);
+            ";
+
             ExecuteNonQuery(ddlProfiles);
             ExecuteNonQuery(ddlNodes);
             ExecuteNonQuery(ddlZoneState);
+            ExecuteNonQuery(ddlSwingTrades);
 
             // Migration automatique douce pour les bases de données existantes
             MigrateSchemaIfNeeded();
@@ -811,6 +842,174 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
 
         #endregion
 
+        #region Persistance Swing Trades SQLite
+
+        /// <summary>
+        /// Sauvegarde ou met à jour l'état complet d'un trade Swing en base SQLite.
+        /// </summary>
+        public void UpsertSwingTrade(TrackedSwingTrade t)
+        {
+            if (t == null || string.IsNullOrEmpty(t.TradeId)) return;
+            if (!isSqliteAvailable) return;
+
+            EnqueueWrite(conn =>
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = @"
+                        INSERT INTO swing_trades (
+                            trade_id, signal_id, symbol, direction, setup_type, tier, status,
+                            entry_time_utc, exit_time_utc, entry_price, exit_price,
+                            initial_stop, current_stop, target1_price, target2_price,
+                            initial_contracts, remaining_contracts, tp1_hit,
+                            realized_r, realized_usd, exit_reason, notes, last_update_utc
+                        ) VALUES (
+                            @id, @sig_id, @symbol, @dir, @setup, @tier, @status,
+                            @entry_time, @exit_time, @entry_price, @exit_price,
+                            @init_stop, @curr_stop, @tp1, @tp2,
+                            @init_c, @rem_c, @tp1_hit,
+                            @real_r, @real_usd, @reason, @notes, @updated
+                        )
+                        ON CONFLICT(trade_id) DO UPDATE SET
+                            status = excluded.status,
+                            exit_time_utc = excluded.exit_time_utc,
+                            exit_price = excluded.exit_price,
+                            current_stop = excluded.current_stop,
+                            remaining_contracts = excluded.remaining_contracts,
+                            tp1_hit = excluded.tp1_hit,
+                            realized_r = excluded.realized_r,
+                            realized_usd = excluded.realized_usd,
+                            exit_reason = excluded.exit_reason,
+                            notes = excluded.notes,
+                            last_update_utc = excluded.last_update_utc;
+                    ";
+                    AddParam(cmd, "@id", t.TradeId);
+                    AddParam(cmd, "@sig_id", t.Signal != null ? t.Signal.Id : string.Empty);
+                    AddParam(cmd, "@symbol", t.Signal != null ? t.Signal.Symbol : "UNKNOWN");
+                    AddParam(cmd, "@dir", t.IsLong ? 1 : -1);
+                    AddParam(cmd, "@setup", t.Signal != null ? (int)t.Signal.SetupType : 0);
+                    AddParam(cmd, "@tier", t.Signal != null ? (int)t.Signal.Tier : 0);
+                    AddParam(cmd, "@status", t.Closed ? "CLOSED" : "OPEN");
+                    AddParam(cmd, "@entry_time", t.EntryTimeUtc.ToString("o"));
+                    AddParam(cmd, "@exit_time", t.Closed ? t.ExitTimeUtc.ToString("o") : null);
+                    AddParam(cmd, "@entry_price", t.EntryPrice);
+                    AddParam(cmd, "@exit_price", t.Closed ? (object)t.ExitPrice : DBNull.Value);
+                    AddParam(cmd, "@init_stop", t.InitialStopPrice);
+                    AddParam(cmd, "@curr_stop", t.CurrentStopPrice);
+                    AddParam(cmd, "@tp1", t.Target1Price);
+                    AddParam(cmd, "@tp2", t.Target2Price);
+                    AddParam(cmd, "@init_c", t.InitialContracts);
+                    AddParam(cmd, "@rem_c", t.RemainingContracts);
+                    AddParam(cmd, "@tp1_hit", t.Tp1Hit ? 1 : 0);
+                    AddParam(cmd, "@real_r", t.RealizedR);
+                    AddParam(cmd, "@real_usd", t.RealizedPnlCurrency);
+                    AddParam(cmd, "@reason", t.ExitReason ?? "ACTIVE");
+                    AddParam(cmd, "@notes", t.ExecutionNotes ?? string.Empty);
+                    AddParam(cmd, "@updated", DateTime.UtcNow.ToString("o"));
+
+                    cmd.ExecuteNonQuery();
+                }
+            });
+        }
+
+        /// <summary>
+        /// Charge toutes les positions Swing actives (status = 'OPEN') depuis SQLite.
+        /// Permet la reprise transparente overnight après redémarrage ou reconnexion.
+        /// </summary>
+        public List<TrackedSwingTrade> LoadActiveSwingTrades(string symbol)
+        {
+            var list = new List<TrackedSwingTrade>();
+            if (!isSqliteAvailable) return list;
+
+            lock (dbLock)
+            {
+                try
+                {
+                    using (var cmd = connection.CreateCommand())
+                    {
+                        cmd.CommandText = @"
+                            SELECT * FROM swing_trades
+                            WHERE symbol = @symbol AND status = 'OPEN';
+                        ";
+                        AddParam(cmd, "@symbol", symbol);
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var t = new TrackedSwingTrade();
+                                t.TradeId = reader["trade_id"].ToString();
+                                t.IsLong = Convert.ToInt32(reader["direction"]) == 1;
+                                t.EntryPrice = Convert.ToDouble(reader["entry_price"], CultureInfo.InvariantCulture);
+                                t.InitialStopPrice = Convert.ToDouble(reader["initial_stop"], CultureInfo.InvariantCulture);
+                                t.CurrentStopPrice = Convert.ToDouble(reader["current_stop"], CultureInfo.InvariantCulture);
+                                t.Target1Price = Convert.ToDouble(reader["target1_price"], CultureInfo.InvariantCulture);
+                                t.Target2Price = Convert.ToDouble(reader["target2_price"], CultureInfo.InvariantCulture);
+                                t.InitialContracts = Convert.ToInt32(reader["initial_contracts"]);
+                                t.RemainingContracts = Convert.ToInt32(reader["remaining_contracts"]);
+                                t.PositionSizeContracts = t.RemainingContracts;
+                                t.Tp1Hit = Convert.ToInt32(reader["tp1_hit"]) == 1;
+                                t.RealizedR = Convert.ToDouble(reader["realized_r"], CultureInfo.InvariantCulture);
+                                t.RealizedPnlCurrency = Convert.ToDouble(reader["realized_usd"], CultureInfo.InvariantCulture);
+                                t.ExitReason = reader["exit_reason"].ToString();
+                                t.ExecutionNotes = reader["notes"].ToString();
+                                t.Closed = false;
+
+                                string entryStr = reader["entry_time_utc"].ToString();
+                                DateTime entryDt;
+                                if (DateTime.TryParse(entryStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out entryDt))
+                                    t.EntryTimeUtc = entryDt;
+                                else
+                                    t.EntryTimeUtc = DateTime.UtcNow;
+
+                                t.Signal = new SwingSignal
+                                {
+                                    Id = reader["signal_id"].ToString(),
+                                    Symbol = reader["symbol"].ToString(),
+                                    Direction = t.IsLong ? SwingDirection.Long : SwingDirection.Short,
+                                    SetupType = (SwingSetupType)Convert.ToInt32(reader["setup_type"]),
+                                    Tier = (SwingTier)Convert.ToInt32(reader["tier"]),
+                                    EntryPrice = t.EntryPrice,
+                                    InitialStopPrice = t.InitialStopPrice,
+                                    Target1Price = t.Target1Price,
+                                    Target2Price = t.Target2Price,
+                                    PositionSizeContracts = t.InitialContracts,
+                                    GeneratedTimeUtc = t.EntryTimeUtc
+                                };
+
+                                list.Add(t);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logAction("LoadActiveSwingTrades SQLite Erreur : " + ex.Message);
+                }
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Vide de manière synchrone les écritures en attente vers SQLite.
+        /// </summary>
+        public void FlushQueue()
+        {
+            if (connection != null && connection.State == ConnectionState.Open)
+            {
+                lock (dbLock)
+                {
+                    Action<DbConnection> action;
+                    while (writeQueue.TryDequeue(out action))
+                    {
+                        try { action(connection); } catch { }
+                    }
+                }
+            }
+        }
+
+        #endregion
+
         #region IDisposable
 
         public void Dispose()
@@ -824,17 +1023,7 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 writeSignal.Set();
 
                 // Vidage final de la file d'attente
-                if (connection != null && connection.State == ConnectionState.Open)
-                {
-                    lock (dbLock)
-                    {
-                        Action<DbConnection> action;
-                        while (writeQueue.TryDequeue(out action))
-                        {
-                            try { action(connection); } catch { }
-                        }
-                    }
-                }
+                FlushQueue();
 
                 if (connection != null)
                 {

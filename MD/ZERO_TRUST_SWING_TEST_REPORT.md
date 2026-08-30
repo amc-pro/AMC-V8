@@ -1,13 +1,13 @@
-# Rapport de Validation Zero-Trust — Suite de Tests Unitaires Swing (AMC-V8)
+# Rapport de Validation Zero-Trust — Suite de Tests Unitaires & Intégration Swing (AMC-V8)
 
 **Date :** 30 Août 2026  
 **Projet :** `amc-pro/AMC-V8` (Moteur `AuctionMarketCore`)  
 **Runner :** `dotnet run --project Tests/VolumeProfileTests.csproj`  
-**Résultat Global :** **55/55 TESTS RÉUSSIS (100 % PASS)** — 0 Échec  
+**Résultat Global :** **60/60 TESTS RÉUSSIS (100 % PASS)** — 0 Échec  
 
 ---
 
-## 1. Matrice Exhaustive des 20 Tests Unitaires Swing
+## 1. Matrice des 20 Tests Unitaires Swing
 
 | # | Nom du Test | Données d'Entrée | Comportement Attendu | Résultat Observé | Statut |
 | :-: | :--- | :--- | :--- | :--- | :-: |
@@ -34,9 +34,22 @@
 
 ---
 
-## 2. Synthèse de Couverture
+## 2. Matrice des 5 Tests d'Intégration Stateful & Persistance SQLite
 
-* **Suite de Régression Volume Profile V7.9 :** 35/35 PASS
-* **Suite Nouvelle Swing Zero-Trust V8.0 :** 20/20 PASS
-* **Total Exécuté :** **55/55 PASS (100%)**
-* **Temps d'Exécution Global :** ~0.95 seconde
+| # | Nom du Test | Données d'Entrée | Comportement Attendu | Résultat Observé | Statut |
+| :-: | :--- | :--- | :--- | :--- | :-: |
+| **21** | `Test_Swing_Integration_SQLite_Persistence_And_Reload` | Position `TRD_ES_001` de 2 contrats avec passage TP1 et TP2 | Sauvegarde atomique SQLite, restauration exacte après réouverture, mise à jour des contrats restants et purge après clôture. | Rechargement 1 trade actif, contrats $2 \rightarrow 1 \rightarrow 0$ | **PASS** |
+| **22** | `Test_Swing_Integration_TwoStep_Partial_Exit_TP1_BE_TP2` | Entrée 5000 (2 contrats), TP1=5030, TP2=5060 | Sortie 50% à TP1 ($+\$1500$), stop trailé à $5000.25$ (BE+1t), sortie finale TP2 ($+\$3000$). Gain total $=\$4500$, $R=2.25$. | TP1 50% soldé, BE+1t actif, $R=2.25$ | **PASS** |
+| **23** | `Test_Swing_Integration_Stop_Before_TP1_Full_Loss` | Entrée NQ 18000 (2 contrats), Stop initial 17950 | Déclenchement du Stop initial avant TP1 : perte totale de $-1.0R$ ($-\$2000$). | $R=-1.0$, Perte $-\$2000$ validée | **PASS** |
+| **24** | `Test_Swing_Integration_Dynamic_News_And_Gap_Penalty` | News sévère (sécurité 2) et gap d'ouverture de 2.0% | Blocage dur de l'entrée pendant news et pénalité de score $\ge 10$ pts sur gap. | `HIGH_SEVERITY_NEWS_BLOCK` & Pénalité validées | **PASS** |
+| **25** | `Test_Swing_Integration_Overnight_Session_Transition` | Position active de 2 contrats à la clôture de session CME | Maintien intact du trade en statut `ACTIVE` pour la session suivante. | Statut `ACTIVE`, 2 contrats préservés | **PASS** |
+
+---
+
+## 3. Synthèse de Couverture Globale
+
+* **Suite Volume Profile V7.9 :** 35/35 PASS
+* **Suite Swing Unitaire V8.0 :** 20/20 PASS
+* **Suite Swing Intégration Stateful & SQLite V8.0 :** 5/5 PASS
+* **Total Exécuté :** **60/60 PASS (100%)**
+* **Temps d'Exécution Global :** ~1.05 seconde

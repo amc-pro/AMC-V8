@@ -46,10 +46,24 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Max Positions Swing Simultanées", Order = 7, GroupName = "Swing 02. Risque")]
         public int SwingMaxActiveTrades { get; set; }
 
-        [Display(Name = "Fichier Journal Swing (Vide = Auto shadow/swing_trades.csv)", Order = 8, GroupName = "Swing 03. Journal")]
+        [Display(Name = "Filtre News Actif", Order = 8, GroupName = "Swing 02. Risque")]
+        public bool EnableNewsFilter { get; set; }
+
+        [Range(1, 120)]
+        [Display(Name = "Fenêtre Blackout News (Minutes)", Order = 9, GroupName = "Swing 02. Risque")]
+        public int NewsBlackoutMinutes { get; set; }
+
+        [Range(0, 50)]
+        [Display(Name = "Pénalité Score News", Order = 10, GroupName = "Swing 02. Risque")]
+        public double NewsWindowPenalty { get; set; }
+
+        [Display(Name = "Blocage Dur News Majeures", Order = 11, GroupName = "Swing 02. Risque")]
+        public bool NewsHardBlock { get; set; }
+
+        [Display(Name = "Fichier Journal Swing (Vide = Auto shadow/swing_trades.csv)", Order = 12, GroupName = "Swing 03. Journal")]
         public string SwingJournalFilePath { get; set; }
 
-        [Display(Name = "Activer Alertes Telegram Swing", Order = 9, GroupName = "Swing 03. Alertes")]
+        [Display(Name = "Activer Alertes Telegram Swing", Order = 13, GroupName = "Swing 03. Alertes")]
         public bool EnableSwingTelegramAlerts { get; set; }
 
         #endregion
@@ -85,6 +99,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             SwingTierTresFortScore = 85.0;
             SwingAllowOvernightHold = true;
             SwingMaxActiveTrades = 2;
+            EnableNewsFilter = true;
+            NewsBlackoutMinutes = 15;
+            NewsWindowPenalty = 20;
+            NewsHardBlock = true;
             SwingJournalFilePath = string.Empty;
             EnableSwingTelegramAlerts = true;
         }
@@ -117,11 +135,6 @@ namespace NinjaTrader.NinjaScript.Indicators
             HtfStrictMode = false;
             HtfSoftMode = true;
 
-            // Moteur News Swing
-            NewsBlackoutMinutes = 15;
-            NewsWindowPenalty = 20;
-            NewsHardBlock = false;
-
             ApplySwingDefaults();
         }
 
@@ -139,17 +152,60 @@ namespace NinjaTrader.NinjaScript.Indicators
             resolvedSwingJournalPath = ResolveSwingJournalPath();
             swingJournalHeaderWritten = false;
             swingLastEvaluatedBar = -1;
+
+            // Reprise d'état persistant SQLite si actif (Survie aux redémarrages / overnight)
+            if (EnableSQLiteVolumeProfileHistory && volumeProfileManager != null && volumeProfileManager.Repository != null)
+            {
+                try
+                {
+                    string sym = Instrument != null && Instrument.MasterInstrument != null ? Instrument.MasterInstrument.Name : "SYM";
+                    var persistedTrades = volumeProfileManager.Repository.LoadActiveSwingTrades(sym);
+                    if (persistedTrades != null && persistedTrades.Count > 0)
+                    {
+                        openSwingTrades.AddRange(persistedTrades);
+                        if (EnableDebugMode)
+                            Print(string.Format("VP_Swing: {0} positions actives rechargées depuis SQLite.", persistedTrades.Count));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    RegisterRuntimeError("InitSwingEngine.LoadActiveSwingTrades", ex);
+                }
+            }
         }
 
         private void SwingTerminated()
         {
-            // Clôture des trades swing en fin de session / déchargement
-            for (int i = openSwingTrades.Count - 1; i >= 0; i--)
+            try
             {
-                TrackedSwingTrade t = openSwingTrades[i];
-                t.CloseTrade(snClose > 0 ? snClose : 0.0, DateTime.UtcNow, "SESSION_TERMINATED", TickSize, ResolvePointValue());
-                LogSwingTrade(t);
+                // Si maintien overnight autorisé, sauvegarder et flusher vers SQLite sans fermer
+                if (SwingAllowOvernightHold && volumeProfileManager != null && volumeProfileManager.Repository != null)
+                {
+                    for (int i = 0; i < openSwingTrades.Count; i++)
+                    {
+                        volumeProfileManager.Repository.UpsertSwingTrade(openSwingTrades[i]);
+                    }
+                    volumeProfileManager.Repository.FlushQueue();
+                }
+                else
+                {
+                    // Clôture des trades swing en fin de session / déchargement si overnight interdit
+                    DateTime nowUtc = DateTime.UtcNow;
+                    for (int i = openSwingTrades.Count - 1; i >= 0; i--)
+                    {
+                        TrackedSwingTrade t = openSwingTrades[i];
+                        t.CloseTrade(snClose > 0 ? snClose : 0.0, nowUtc, "SESSION_TERMINATED", TickSize, ResolvePointValue());
+                        if (volumeProfileManager != null && volumeProfileManager.Repository != null)
+                            volumeProfileManager.Repository.UpsertSwingTrade(t);
+                        LogSwingTrade(t);
+                    }
+                }
             }
+            catch (Exception ex)
+            {
+                RegisterRuntimeError("SwingTerminated", ex);
+            }
+
             openSwingTrades.Clear();
             activeSwingSignals.Clear();
             closedSwingTrades.Clear();
@@ -226,6 +282,12 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private SwingContext BuildSwingContext(bool isBuy)
         {
+            bool inNewsWindow;
+            int newsSeverity;
+            CheckNewsConditions(out inNewsWindow, out newsSeverity);
+
+            double gapPercent = CalculateSessionGapPercent();
+
             var ctx = new SwingContext
             {
                 Symbol = Instrument != null && Instrument.MasterInstrument != null ? Instrument.MasterInstrument.Name : "SYM",
@@ -245,9 +307,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 HtfEma = htfEma != null && htfEma.IsValidDataPoint(0) ? htfEma[0] : 0.0,
                 RegimeHtf = isBuy ? SwingMarketRegime.TrendUp : SwingMarketRegime.TrendDown,
                 IsOvernightHoldAllowed = SwingAllowOvernightHold,
-                InNewsWindow = false,
-                NewsSeverity = 0,
-                GapPercent = 0.0
+                InNewsWindow = inNewsWindow,
+                NewsSeverity = newsSeverity,
+                GapPercent = gapPercent
             };
 
             // Ingestion des données Volume Profile V2 Clôturées
@@ -297,12 +359,60 @@ namespace NinjaTrader.NinjaScript.Indicators
             ctx.HasDeltaDivergence = HasCumDeltaDivergence(isBuy);
             ctx.HasAbsorptionEvidence = HasRecentAbsorption(isBuy);
 
-            // Structure SMC (FVG, BOS)
+            // Structure SMC (FVG, BOS, CHoCH) vivants
             ctx.InFairValueGap = IsInActiveFvg(snClose, isBuy);
             ctx.HasBos = HasRecentBos(isBuy);
             ctx.HasChoch = HasRecentChoch(isBuy);
 
             return ctx;
+        }
+
+        private void CheckNewsConditions(out bool inNewsWindow, out int severity)
+        {
+            inNewsWindow = false;
+            severity = 0;
+            if (!EnableNewsFilter) return;
+
+            DateTime barTime = GetVolumetricTime();
+            if (barTime == DateTime.MinValue) return;
+
+            int hourUtc = barTime.Hour;
+            int minute = barTime.Minute;
+
+            // Fenêtre 13h25 - 13h45 UTC (CPI / NFP / PPI CME)
+            if (hourUtc == 13 && minute >= 25 && minute <= 45)
+            {
+                inNewsWindow = true;
+                severity = 2; // Haute sévérité
+            }
+            // Fenêtre 18h50 - 19h30 UTC (FOMC Statement & Conference)
+            else if ((hourUtc == 18 && minute >= 50) || (hourUtc == 19 && minute <= 30))
+            {
+                inNewsWindow = true;
+                severity = 2; // Haute sévérité
+            }
+        }
+
+        private double CalculateSessionGapPercent()
+        {
+            try
+            {
+                if (sessionStartBarIndex >= 0 && volumetricBarsIndex < BarsArray.Length && CurrentBars[volumetricBarsIndex] >= sessionStartBarIndex)
+                {
+                    int sessionStartOffset = CurrentBars[volumetricBarsIndex] - sessionStartBarIndex;
+                    if (sessionStartOffset >= 0 && sessionStartOffset < Opens[volumetricBarsIndex].Count && (sessionStartOffset + 1) < Closes[volumetricBarsIndex].Count)
+                    {
+                        double sessionOpen = Opens[volumetricBarsIndex][sessionStartOffset];
+                        double priorSessionClose = Closes[volumetricBarsIndex][sessionStartOffset + 1];
+                        if (priorSessionClose > 0)
+                        {
+                            return Math.Abs(sessionOpen - priorSessionClose) / priorSessionClose * 100.0;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return 0.0;
         }
 
         private void EvaluateSwingDirection(SwingContext ctx, SwingDirection dir)
@@ -421,6 +531,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             openSwingTrades.Add(trade);
             activeSwingSignals.Add(sig);
 
+            // Persistance SQLite
+            if (volumeProfileManager != null && volumeProfileManager.Repository != null)
+            {
+                volumeProfileManager.Repository.UpsertSwingTrade(trade);
+            }
+
             // Log d'entrée dans le journal Shadow
             LogSwingTrade(trade);
 
@@ -469,42 +585,50 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 t.BarsElapsed++;
 
-                // Vérification du Stop Loss
-                if (t.IsLong && low <= t.CurrentStopPrice)
+                // 1. Vérification du Stop Loss
+                bool stopTriggered = (t.IsLong && low <= t.CurrentStopPrice) || (!t.IsLong && high >= t.CurrentStopPrice);
+                if (stopTriggered)
                 {
                     t.CloseTrade(t.CurrentStopPrice, nowUtc, "STOP_LOSS", TickSize, ResolvePointValue());
-                    LogSwingTrade(t);
-                    closedSwingTrades.Add(t);
-                    openSwingTrades.RemoveAt(i);
-                    continue;
-                }
-                else if (!t.IsLong && high >= t.CurrentStopPrice)
-                {
-                    t.CloseTrade(t.CurrentStopPrice, nowUtc, "STOP_LOSS", TickSize, ResolvePointValue());
+                    if (volumeProfileManager != null && volumeProfileManager.Repository != null)
+                        volumeProfileManager.Repository.UpsertSwingTrade(t);
                     LogSwingTrade(t);
                     closedSwingTrades.Add(t);
                     openSwingTrades.RemoveAt(i);
                     continue;
                 }
 
-                // Vérification de TP1 (Sortie partielle + passage à Break-Even)
+                // 2. Vérification de TP1 (Sortie partielle + passage à Break-Even)
                 if (!t.Tp1Hit)
                 {
-                    if ((t.IsLong && high >= t.Target1Price) || (!t.IsLong && low <= t.Target1Price))
+                    bool tp1Triggered = (t.IsLong && high >= t.Target1Price) || (!t.IsLong && low <= t.Target1Price);
+                    if (tp1Triggered)
                     {
-                        t.Tp1Hit = true;
-                        // Déplacement du stop à Break-Even (+ 1 tick de sécurité)
-                        t.CurrentStopPrice = t.IsLong ? t.EntryPrice + TickSize : t.EntryPrice - TickSize;
-                        t.ExecutionNotes += " [TP1_HIT -> BE]";
+                        t.ExecutePartialExitTp1(t.Target1Price, nowUtc, TickSize, ResolvePointValue());
+                        t.ExecutionNotes += string.Format(CultureInfo.InvariantCulture, " [TP1_HIT ({0}c) -> BE]", t.PartialExitContracts);
+                        if (volumeProfileManager != null && volumeProfileManager.Repository != null)
+                            volumeProfileManager.Repository.UpsertSwingTrade(t);
+                        LogSwingTrade(t);
+
+                        // Si le trade a été clôturé intégralement à TP1 (ex: 1 seul contrat initial)
+                        if (t.Closed)
+                        {
+                            closedSwingTrades.Add(t);
+                            openSwingTrades.RemoveAt(i);
+                            continue;
+                        }
                     }
                 }
 
-                // Vérification de TP2 (Sortie finale complète)
-                if (t.Tp1Hit)
+                // 3. Vérification de TP2 (Sortie finale des contrats restants)
+                if (t.Tp1Hit && !t.Closed)
                 {
-                    if ((t.IsLong && high >= t.Target2Price) || (!t.IsLong && low <= t.Target2Price))
+                    bool tp2Triggered = (t.IsLong && high >= t.Target2Price) || (!t.IsLong && low <= t.Target2Price);
+                    if (tp2Triggered)
                     {
                         t.CloseTrade(t.Target2Price, nowUtc, "TAKE_PROFIT_2", TickSize, ResolvePointValue());
+                        if (volumeProfileManager != null && volumeProfileManager.Repository != null)
+                            volumeProfileManager.Repository.UpsertSwingTrade(t);
                         LogSwingTrade(t);
                         closedSwingTrades.Add(t);
                         openSwingTrades.RemoveAt(i);
@@ -539,19 +663,19 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (!swingJournalHeaderWritten && !File.Exists(resolvedSwingJournalPath))
                     {
                         File.WriteAllText(resolvedSwingJournalPath,
-                            "TradeId,SignalId,Symbol,Direction,SetupType,Tier,Status,EntryTimeUtc,ExitTimeUtc,EntryPrice,ExitPrice,StopPrice,TP1,TP2,Contracts,RealizedR,RealizedUSD,ExitReason,Notes\n",
+                            "TradeId,SignalId,Symbol,Direction,SetupType,Tier,Status,EntryTimeUtc,ExitTimeUtc,EntryPrice,ExitPrice,StopPrice,TP1,TP2,InitialContracts,RemainingContracts,RealizedR,RealizedUSD,ExitReason,Notes\n",
                             System.Text.Encoding.UTF8);
                         swingJournalHeaderWritten = true;
                     }
 
                     string line = string.Format(CultureInfo.InvariantCulture,
-                        "{0},{1},{2},{3},{4},{5},{6},{7:yyyy-MM-dd HH:mm:ss},{8},{9:F2},{10:F2},{11:F2},{12:F2},{13:F2},{14},{15:F2},{16:F2},{17},\"{18}\"\n",
-                        t.TradeId, t.Signal.Id, t.Signal.Symbol, t.Signal.Direction, t.Signal.SetupType, t.Signal.Tier,
+                        "{0},{1},{2},{3},{4},{5},{6},{7:yyyy-MM-dd HH:mm:ss},{8},{9:F2},{10:F2},{11:F2},{12:F2},{13:F2},{14},{15},{16:F2},{17:F2},{18},\"{19}\"\n",
+                        t.TradeId, t.Signal != null ? t.Signal.Id : "", t.Signal != null ? t.Signal.Symbol : "", t.Signal != null ? t.Signal.Direction.ToString() : "", t.Signal != null ? t.Signal.SetupType.ToString() : "", t.Signal != null ? t.Signal.Tier.ToString() : "",
                         t.Closed ? "CLOSED" : "OPEN",
                         t.EntryTimeUtc,
                         t.Closed ? t.ExitTimeUtc.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) : "ACTIVE",
                         t.EntryPrice, t.Closed ? t.ExitPrice : 0.0, t.CurrentStopPrice, t.Target1Price, t.Target2Price,
-                        t.PositionSizeContracts, t.RealizedR, t.RealizedPnlCurrency, t.ExitReason, t.ExecutionNotes);
+                        t.InitialContracts, t.RemainingContracts, t.RealizedR, t.RealizedPnlCurrency, t.ExitReason, t.ExecutionNotes);
 
                     File.AppendAllText(resolvedSwingJournalPath, line, System.Text.Encoding.UTF8);
                 }
@@ -580,19 +704,30 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private bool IsInActiveFvg(double price, bool isBuy)
         {
-            // Vérification FVG active sur barre clôturée
             return isBuy ? (snLow <= prevBarPocPrice && snClose > prevBarPocPrice)
                          : (snHigh >= prevBarPocPrice && snClose < prevBarPocPrice);
         }
 
         private bool HasRecentBos(bool isBuy)
         {
+            if (miAnalyzer != null && miAnalyzer.LastStructureBreak != null)
+            {
+                bool isBos = !miAnalyzer.LastStructureBreak.IsChangeOfCharacter;
+                bool dirMatch = isBuy ? miAnalyzer.LastStructureBreak.IsBullish : !miAnalyzer.LastStructureBreak.IsBullish;
+                if (isBos && dirMatch) return true;
+            }
             return isBuy ? snClose > snOpen && snHigh > prevBarVahPrice
                          : snClose < snOpen && snLow < prevBarValPrice;
         }
 
         private bool HasRecentChoch(bool isBuy)
         {
+            if (miAnalyzerH4 != null && miAnalyzerH4.LastStructureBreak != null)
+            {
+                bool isChoch = miAnalyzerH4.LastStructureBreak.IsChangeOfCharacter;
+                bool dirMatch = isBuy ? miAnalyzerH4.LastStructureBreak.IsBullish : !miAnalyzerH4.LastStructureBreak.IsBullish;
+                if (isChoch && dirMatch) return true;
+            }
             return isBuy ? snClose > prevBarPocPrice && snOpen < prevBarPocPrice
                          : snClose < prevBarPocPrice && snOpen > prevBarPocPrice;
         }

@@ -515,7 +515,8 @@ namespace NinjaTrader.NinjaScript.Indicators
     }
 
     /// <summary>
-    /// Suivi individuel d'un trade Swing virtuel dans le journal Shadow.
+    /// Suivi individuel d'un trade Swing virtuel dans le journal Shadow et la base SQLite.
+    /// Gère la machine d'états à sorties partielles (TP1 partiel, Stop Break-Even, TP2 clôture finale).
     /// </summary>
     public sealed class TrackedSwingTrade
     {
@@ -527,41 +528,106 @@ namespace NinjaTrader.NinjaScript.Indicators
         public double CurrentStopPrice { get; set; }
         public double Target1Price { get; set; }
         public double Target2Price { get; set; }
-        public int PositionSizeContracts { get; set; }
+        
+        public int InitialContracts { get; set; }
+        public int RemainingContracts { get; set; }
+        public int PositionSizeContracts { get { return RemainingContracts; } set { RemainingContracts = value; } }
+
         public DateTime EntryTimeUtc { get; set; }
         public DateTime ExitTimeUtc { get; set; }
         public double ExitPrice { get; set; }
         public bool Closed { get; set; }
         public bool Tp1Hit { get; set; }
         public string ExitReason { get; set; }
+        
+        public double PartialExitPrice { get; set; }
+        public DateTime PartialExitTimeUtc { get; set; }
+        public int PartialExitContracts { get; set; }
+        public double PartialRealizedPnlCurrency { get; set; }
+        public double PartialRealizedR { get; set; }
+
         public double RealizedR { get; set; }
         public double RealizedPnlCurrency { get; set; }
         public int BarsElapsed { get; set; }
         public string ExecutionNotes { get; set; }
 
+        public TrackedSwingTrade()
+        {
+            TradeId = Guid.NewGuid().ToString("N").Substring(0, 12);
+            Closed = false;
+            Tp1Hit = false;
+            ExitReason = "ACTIVE";
+            EntryTimeUtc = DateTime.UtcNow;
+            ExecutionNotes = string.Empty;
+        }
+
         public TrackedSwingTrade(SwingSignal sig, double tickSize, double pointValue)
         {
             TradeId = Guid.NewGuid().ToString("N").Substring(0, 12);
             Signal = sig;
-            IsLong = sig.Direction == SwingDirection.Long;
-            EntryPrice = sig.EntryPrice;
-            InitialStopPrice = sig.InitialStopPrice;
-            CurrentStopPrice = sig.InitialStopPrice;
-            Target1Price = sig.Target1Price;
-            Target2Price = sig.Target2Price;
-            PositionSizeContracts = sig.PositionSizeContracts;
-            EntryTimeUtc = sig.GeneratedTimeUtc;
+            IsLong = sig != null && sig.Direction == SwingDirection.Long;
+            EntryPrice = sig != null ? sig.EntryPrice : 0.0;
+            InitialStopPrice = sig != null ? sig.InitialStopPrice : 0.0;
+            CurrentStopPrice = sig != null ? sig.InitialStopPrice : 0.0;
+            Target1Price = sig != null ? sig.Target1Price : 0.0;
+            Target2Price = sig != null ? sig.Target2Price : 0.0;
+            InitialContracts = sig != null ? Math.Max(1, sig.PositionSizeContracts) : 1;
+            RemainingContracts = InitialContracts;
+            EntryTimeUtc = sig != null ? sig.GeneratedTimeUtc : DateTime.UtcNow;
             Closed = false;
             Tp1Hit = false;
             ExitReason = "ACTIVE";
             RealizedR = 0.0;
             RealizedPnlCurrency = 0.0;
             BarsElapsed = 0;
-            ExecutionNotes = sig.ExecutionNotes;
+            ExecutionNotes = sig != null ? sig.ExecutionNotes : string.Empty;
         }
 
+        /// <summary>
+        /// Exécute la sortie partielle à TP1 (généralement 50% de la position) et trail le stop à Break-Even (+ 1 tick).
+        /// </summary>
+        public void ExecutePartialExitTp1(double exitPrice, DateTime exitTimeUtc, double tickSize, double pointValue)
+        {
+            if (Tp1Hit || Closed) return;
+
+            Tp1Hit = true;
+            PartialExitPrice = exitPrice;
+            PartialExitTimeUtc = exitTimeUtc;
+
+            // Débouclage de la moitié (arrondi vers le bas si impair, min 1)
+            PartialExitContracts = InitialContracts > 1 ? (InitialContracts / 2) : 1;
+            RemainingContracts = Math.Max(0, InitialContracts - PartialExitContracts);
+
+            double tickVal = pointValue * tickSize;
+            double stopDist = Math.Abs(EntryPrice - InitialStopPrice);
+            double profitDist = IsLong ? (exitPrice - EntryPrice) : (EntryPrice - exitPrice);
+
+            PartialRealizedR = stopDist > 0 ? (profitDist / stopDist) : 1.5;
+            double exitDistTicks = profitDist / tickSize;
+            PartialRealizedPnlCurrency = exitDistTicks * tickVal * PartialExitContracts;
+
+            // Déplacement du Stop à Break-Even (+ 1 tick dans le sens du gain)
+            CurrentStopPrice = EntryPrice + (IsLong ? tickSize : -tickSize);
+
+            // Si tous les contrats ont été soldés à TP1 (ex: 1 seul contrat initial)
+            if (RemainingContracts <= 0)
+            {
+                Closed = true;
+                ExitPrice = exitPrice;
+                ExitTimeUtc = exitTimeUtc;
+                ExitReason = "TAKE_PROFIT_1_FULL";
+                RealizedR = PartialRealizedR;
+                RealizedPnlCurrency = PartialRealizedPnlCurrency;
+            }
+        }
+
+        /// <summary>
+        /// Clôture finale complète des contrats restants (TP2, Break-Even Stop ou Stop Loss initial).
+        /// </summary>
         public void CloseTrade(double exitPrice, DateTime exitTimeUtc, string reason, double tickSize, double pointValue)
         {
+            if (Closed) return;
+
             Closed = true;
             ExitPrice = exitPrice;
             ExitTimeUtc = exitTimeUtc;
@@ -569,25 +635,49 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             double tickVal = pointValue * tickSize;
             double stopDist = Math.Abs(EntryPrice - InitialStopPrice);
+            int closingContracts = RemainingContracts > 0 ? RemainingContracts : InitialContracts;
+
+            double finalPnl = 0.0;
+            double finalR = 0.0;
 
             if (reason == "STOP_LOSS")
             {
-                RealizedR = Tp1Hit ? 0.0 : -1.0;
-                double exitDistTicks = Math.Abs(EntryPrice - exitPrice) / tickSize;
-                RealizedPnlCurrency = Tp1Hit ? 0.0 : -(exitDistTicks * tickVal * PositionSizeContracts);
+                if (Tp1Hit)
+                {
+                    // Sortie au stop après TP1 = Sortie au Break-Even (+1 tick)
+                    double beDist = IsLong ? (exitPrice - EntryPrice) : (EntryPrice - exitPrice);
+                    double beTicks = beDist / tickSize;
+                    finalPnl = beTicks * tickVal * closingContracts;
+                    finalR = stopDist > 0 ? (beDist / stopDist) : 0.0;
+                    ExitReason = "BREAK_EVEN_STOP";
+                }
+                else
+                {
+                    // Perte totale -1R sur la totalité des contrats
+                    finalR = -1.0;
+                    double lossTicks = Math.Abs(EntryPrice - exitPrice) / tickSize;
+                    finalPnl = -(lossTicks * tickVal * closingContracts);
+                }
             }
             else if (reason == "TAKE_PROFIT_2")
             {
-                RealizedR = stopDist > 0 ? (Math.Abs(exitPrice - EntryPrice) / stopDist) : 3.0;
-                double exitDistTicks = Math.Abs(exitPrice - EntryPrice) / tickSize;
-                RealizedPnlCurrency = exitDistTicks * tickVal * PositionSizeContracts;
+                double tp2Dist = IsLong ? (exitPrice - EntryPrice) : (EntryPrice - exitPrice);
+                finalR = stopDist > 0 ? (tp2Dist / stopDist) : 3.0;
+                double tp2Ticks = tp2Dist / tickSize;
+                finalPnl = tp2Ticks * tickVal * closingContracts;
             }
             else
             {
-                RealizedR = stopDist > 0 ? ((IsLong ? exitPrice - EntryPrice : EntryPrice - exitPrice) / stopDist) : 0.0;
-                double exitDistTicks = (IsLong ? exitPrice - EntryPrice : EntryPrice - exitPrice) / tickSize;
-                RealizedPnlCurrency = exitDistTicks * tickVal * PositionSizeContracts;
+                double dist = IsLong ? (exitPrice - EntryPrice) : (EntryPrice - exitPrice);
+                finalR = stopDist > 0 ? (dist / stopDist) : 0.0;
+                double distTicks = dist / tickSize;
+                finalPnl = distTicks * tickVal * closingContracts;
             }
+
+            // PnL & R globaux combinés (Partiel TP1 + Final)
+            RealizedPnlCurrency = PartialRealizedPnlCurrency + finalPnl;
+            RealizedR = Tp1Hit ? ((PartialRealizedR * PartialExitContracts + finalR * closingContracts) / InitialContracts) : finalR;
+            RemainingContracts = 0;
         }
     }
 
