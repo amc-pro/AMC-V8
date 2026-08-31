@@ -162,6 +162,36 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             profile.Poc = pocTick * tickSize;
             profile.Vah = upTick * tickSize;
             profile.Val = dnTick * tickSize;
+
+            // Calcul mathématique déterministe du VWAP et des bandes d'écart-type (SD 1, 2, 3)
+            double sumPv = 0.0;
+            double sumP2v = 0.0;
+            double totalVolD = (double)TotalVolume;
+
+            foreach (var kv in volumeMap)
+            {
+                double price = kv.Key * tickSize;
+                double vol = (double)kv.Value;
+                sumPv += price * vol;
+                sumP2v += price * price * vol;
+            }
+
+            if (totalVolD > 0)
+            {
+                double vwap = sumPv / totalVolD;
+                double variance = (sumP2v / totalVolD) - (vwap * vwap);
+                double stdDev = variance > 0 ? Math.Sqrt(variance) : 0.0;
+
+                profile.Vwap = vwap;
+                profile.VwapStdDev = stdDev;
+                profile.VwapSd1Upper = vwap + 1.0 * stdDev;
+                profile.VwapSd1Lower = vwap - 1.0 * stdDev;
+                profile.VwapSd2Upper = vwap + 2.0 * stdDev;
+                profile.VwapSd2Lower = vwap - 2.0 * stdDev;
+                profile.VwapSd3Upper = vwap + 3.0 * stdDev;
+                profile.VwapSd3Lower = vwap - 3.0 * stdDev;
+            }
+
             profile.Valid = true;
 
             if (periodType == VolumeProfilePeriodType.Weekly || periodType == VolumeProfilePeriodType.Monthly)

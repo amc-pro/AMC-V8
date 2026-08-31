@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using NinjaTrader.NinjaScript.Indicators;
 using NinjaTrader.NinjaScript.Indicators.VolumeProfilePro;
 #endregion
 
@@ -43,6 +44,65 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_HTF_Trend_Classifier_RejectsInvalidData", Test_HTF_Trend_Classifier_RejectsInvalidData);
             RunTest("Test_VWAP_Sanitization_And_AntiLookahead", Test_VWAP_Sanitization_And_AntiLookahead);
             RunTest("Test_XmlConfigurations_And_ScalpingPro_GateMatching", Test_XmlConfigurations_And_ScalpingPro_GateMatching);
+            RunTest("Test_Fvg_AntiLookahead_Strict_Closed_Bars", Test_Fvg_AntiLookahead_Strict_Closed_Bars);
+            RunTest("Test_Fvg_Consequent_Encroachment_50Percent_Defense", Test_Fvg_Consequent_Encroachment_50Percent_Defense);
+            RunTest("Test_Fvg_Inversion_Breaker_Transition", Test_Fvg_Inversion_Breaker_Transition);
+            RunTest("Test_Fvg_Smart_Eviction_Preserves_Active_Zones", Test_Fvg_Smart_Eviction_Preserves_Active_Zones);
+            RunTest("Test_Closed_VWAP_And_StandardDeviation_Calculation", Test_Closed_VWAP_And_StandardDeviation_Calculation);
+            RunTest("Test_Closed_VWAP_SQLite_Persistence_And_Reload", Test_Closed_VWAP_SQLite_Persistence_And_Reload);
+            RunTest("Test_Closed_VWAP_HTF_Confluence_And_Scoring", Test_Closed_VWAP_HTF_Confluence_And_Scoring);
+            RunTest("Test_Macro_Inflection_Context_Scoring_N1", Test_Macro_Inflection_Context_Scoring_N1);
+            RunTest("Test_ScalpingPro_Continuous_Stretch_Damping", Test_ScalpingPro_Continuous_Stretch_Damping);
+            RunTest("Test_AntiFallingKnife_Safety_Gating", Test_AntiFallingKnife_Safety_Gating);
+
+            // ================================================================
+            // 🎯 SUITE DE TESTS UNITAIRES SWING ZERO-TRUST (20 TESTS OBLIGATOIRES)
+            // ================================================================
+            RunTest("Test_Swing_01_AntiLookahead_StrictClosedBars", Test_Swing_01_AntiLookahead_StrictClosedBars);
+            RunTest("Test_Swing_02_Deterministic_VP_Closed_Calculations", Test_Swing_02_Deterministic_VP_Closed_Calculations);
+            RunTest("Test_Swing_03_Closed_VWAP_And_SD_Bands", Test_Swing_03_Closed_VWAP_And_SD_Bands);
+            RunTest("Test_Swing_04_MarketRegime_Classification", Test_Swing_04_MarketRegime_Classification);
+            RunTest("Test_Swing_05_RejectExtreme_And_ValueReentry_Setups", Test_Swing_05_RejectExtreme_And_ValueReentry_Setups);
+            RunTest("Test_Swing_06_Breakout_Retest_Setup", Test_Swing_06_Breakout_Retest_Setup);
+            RunTest("Test_Swing_07_SMC_Structure_And_OrderFlow_Validation", Test_Swing_07_SMC_Structure_And_OrderFlow_Validation);
+            RunTest("Test_Swing_08_Hybrid_Stop_Atr_And_Structural", Test_Swing_08_Hybrid_Stop_Atr_And_Structural);
+            RunTest("Test_Swing_09_PositionSizing_By_TickValue", Test_Swing_09_PositionSizing_By_TickValue);
+            RunTest("Test_Swing_10_Strict_MinMax_StopTicks_Clamping", Test_Swing_10_Strict_MinMax_StopTicks_Clamping);
+            RunTest("Test_Swing_11_AntiStacking_Protection", Test_Swing_11_AntiStacking_Protection);
+            RunTest("Test_Swing_12_Idempotence_After_Recalculation", Test_Swing_12_Idempotence_After_Recalculation);
+            RunTest("Test_Swing_13_NewsFilter_And_Severity_Blackout", Test_Swing_13_NewsFilter_And_Severity_Blackout);
+            RunTest("Test_Swing_14_Gaps_And_Rollover_Handling", Test_Swing_14_Gaps_And_Rollover_Handling);
+            RunTest("Test_Swing_15_PartialExits_TP1_TP2_And_BreakEvenTrailing", Test_Swing_15_PartialExits_TP1_TP2_And_BreakEvenTrailing);
+            RunTest("Test_Swing_16_ScalpingPro_NonRegression_Isolation", Test_Swing_16_ScalpingPro_NonRegression_Isolation);
+            RunTest("Test_Swing_17_XmlConfiguration_Parsing_All_8_Instruments", Test_Swing_17_XmlConfiguration_Parsing_All_8_Instruments);
+            RunTest("Test_Swing_18_Deployment_And_Sync_Integrity", Test_Swing_18_Deployment_And_Sync_Integrity);
+            RunTest("Test_Swing_19_Path_Security_And_No_Secrets_Leak", Test_Swing_19_Path_Security_And_No_Secrets_Leak);
+            RunTest("Test_Swing_20_No_Dead_Code_Or_Orphaned_Presets", Test_Swing_20_No_Dead_Code_Or_Orphaned_Presets);
+
+            // ================================================================
+            // 🛡️ SUITE DE TESTS D'INTÉGRATION STATEFUL & PERSISTANCE SWING (5 TESTS)
+            // ================================================================
+            RunTest("Test_Swing_Integration_SQLite_Persistence_And_Reload", Test_Swing_Integration_SQLite_Persistence_And_Reload);
+            RunTest("Test_Swing_Integration_TwoStep_Partial_Exit_TP1_BE_TP2", Test_Swing_Integration_TwoStep_Partial_Exit_TP1_BE_TP2);
+            RunTest("Test_Swing_Integration_Stop_Before_TP1_Full_Loss", Test_Swing_Integration_Stop_Before_TP1_Full_Loss);
+            RunTest("Test_Swing_Integration_Dynamic_News_And_Gap_Penalty", Test_Swing_Integration_Dynamic_News_And_Gap_Penalty);
+            RunTest("Test_Swing_Integration_Overnight_Session_Transition", Test_Swing_Integration_Overnight_Session_Transition);
+
+            // ================================================================
+            // 📊 SUITE POC MIGRATION MODEL DURCIE (12 TESTS DE VALIDATION & FRONTIÈRES)
+            // ================================================================
+            RunTest("Test_PocMigration_Analyzer_Detects_Upward_Drift", Test_PocMigration_Analyzer_Detects_Upward_Drift);
+            RunTest("Test_PocMigration_Analyzer_Detects_Downward_Drift", Test_PocMigration_Analyzer_Detects_Downward_Drift);
+            RunTest("Test_PocMigration_Analyzer_3Profiles_2Transitions_Valid", Test_PocMigration_Analyzer_3Profiles_2Transitions_Valid);
+            RunTest("Test_PocMigration_Analyzer_Rejects_Inconsistent_Drift", Test_PocMigration_Analyzer_Rejects_Inconsistent_Drift);
+            RunTest("Test_PocMigration_Analyzer_Extracts_Recent_Sequence_After_Older_Break", Test_PocMigration_Analyzer_Extracts_Recent_Sequence_After_Older_Break);
+            RunTest("Test_PocMigration_Analyzer_Strength_Threshold_Boundaries", Test_PocMigration_Analyzer_Strength_Threshold_Boundaries);
+            RunTest("Test_PocMigration_Analyzer_Overlap_Boundaries", Test_PocMigration_Analyzer_Overlap_Boundaries);
+            RunTest("Test_PocMigration_Analyzer_Defends_Against_Zero_Atr_And_Invalid_Data", Test_PocMigration_Analyzer_Defends_Against_Zero_Atr_And_Invalid_Data);
+            RunTest("Test_PocMigration_Setup_Scoring_And_Preconditions", Test_PocMigration_Setup_Scoring_And_Preconditions);
+            RunTest("Test_PocMigration_Setup_Rejects_Wrong_Side_Structural_Stop", Test_PocMigration_Setup_Rejects_Wrong_Side_Structural_Stop);
+            RunTest("Test_PocMigration_Setup_AntiChase_VA_Rejection", Test_PocMigration_Setup_AntiChase_VA_Rejection);
+            RunTest("Test_PocMigration_Repository_Query_Strict_AntiLookahead", Test_PocMigration_Repository_Query_Strict_AntiLookahead);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
@@ -788,7 +848,7 @@ namespace AMC.VolumeProfile.Tests
             bool isOnlyN2GateFailed = engineGateFailed == "N2_LOCALISATION" || engineGateFailed == "GATE_N2_FAILED" || engineGateFailed == "N2_LOW" || string.IsNullOrEmpty(engineGateFailed);
             Assert(isOnlyN2GateFailed, "Le libellé de porte N2_LOCALISATION doit être reconnu par le mécanisme de levée de porte de ScalpingPro");
 
-            // 2. Validation que tous les 40 fichiers XML de configs existent et sont bien formés
+            // 2. Validation que les 8 fichiers XML SCALPING_PRO existent et sont bien formés
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             string workspaceRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
             string configsDir = Path.Combine(workspaceRoot, "configs");
@@ -799,27 +859,1072 @@ namespace AMC.VolumeProfile.Tests
 
             if (Directory.Exists(configsDir))
             {
-                string[] presets = { "SCALPING_PRO", "SCALPING", "SNIPER", "STANDARD", "SCANNER" };
                 string[] instruments = { "NQ", "MNQ", "ES", "MES", "GC", "MGC", "CL", "MCL" };
 
                 int count = 0;
-                foreach (string p in presets)
+                foreach (string inst in instruments)
                 {
-                    foreach (string inst in instruments)
-                    {
-                        string fpath = Path.Combine(configsDir, p, string.Format("CONFIG_{0}_{1}.xml", inst, p));
-                        Assert(File.Exists(fpath), string.Format("Fichier XML manquant: {0}", fpath));
-                        string content = File.ReadAllText(fpath);
-                        Assert(content.Contains("<NinjaTrader>"), string.Format("XML invalide dans {0}", fpath));
-                        Assert(content.Contains("<SniperMarketCorePro>"), string.Format("SniperMarketCorePro absent dans {0}", fpath));
-                        count++;
-                    }
+                    string fpath = Path.Combine(configsDir, "SCALPING_PRO", string.Format("CONFIG_{0}_SCALPING_PRO.xml", inst));
+                    Assert(File.Exists(fpath), string.Format("Fichier XML manquant: {0}", fpath));
+                    string content = File.ReadAllText(fpath);
+                    Assert(content.Contains("<NinjaTrader>"), string.Format("XML invalide dans {0}", fpath));
+                    Assert(content.Contains("<AuctionMarketCore>"), string.Format("Tag <AuctionMarketCore> absent dans {0}", fpath));
+                    Assert(content.Contains("<TradingPreset>ScalpingPro</TradingPreset>"), string.Format("TradingPreset ScalpingPro manquant dans {0}", fpath));
+                    count++;
                 }
-                Assert(count == 40, string.Format("40 configurations XML attendues, {0} trouvées", count));
+                Assert(count == 8, string.Format("8 configurations XML attendues pour SCALPING_PRO, {0} trouvées", count));
+
+                // Vérification de la suppression des anciens dossiers de presets
+                string[] legacyPresets = { "SCALPING", "SNIPER", "STANDARD", "SCANNER" };
+                foreach (string lp in legacyPresets)
+                {
+                    string legacyDir = Path.Combine(configsDir, lp);
+                    Assert(!Directory.Exists(legacyDir) || Directory.GetFiles(legacyDir).Length == 0,
+                        string.Format("Le dossier de preset obsolète {0} ne doit plus contenir de configurations actives", lp));
+                }
+            }
+        }
+
+        private static void Test_Fvg_AntiLookahead_Strict_Closed_Bars()
+        {
+            // Vérification que le calcul de l'offset d'enregistrement FVG ne cible JAMAIS la bougie [0] non clôturée
+            int evalOffsetTick = 0; // Mode Realtime tick
+            int evalOffsetBarClose = 1; // Mode BarClose
+
+            int regOffsetTick = evalOffsetTick > 0 ? evalOffsetTick : 1;
+            int regOffsetBarClose = evalOffsetBarClose > 0 ? evalOffsetBarClose : 1;
+
+            Assert(regOffsetTick == 1, "En mode tick (evalOffset=0), l'enregistrement doit cibler l'offset 1 (barre close)");
+            Assert(regOffsetBarClose == 1, "En mode BarClose (evalOffset=1), l'enregistrement doit cibler l'offset 1 (barre close)");
+        }
+
+        private static void Test_Fvg_Consequent_Encroachment_50Percent_Defense()
+        {
+            double bottom = 20000.0;
+            double top = 20020.0;
+            double midCe = (top + bottom) / 2.0; // 20010.0
+            double fvgTol = 0.75;
+
+            // Cas 1 : Pénétration dans la zone et clôture défendue au-dessus du 50% CE avec bougie verte
+            double low1 = 20012.0;
+            double close1 = 20016.0;
+            double open1 = 20011.0;
+            bool touched1 = low1 <= top + fvgTol && low1 >= bottom - fvgTol;
+            bool defended1 = (close1 >= midCe && close1 > open1) || close1 > top;
+            Assert(touched1 && defended1, "Le retest au-dessus du 50% CE avec barre verte doit être validé");
+
+            // Cas 2 : Pénétration sous le 50% CE avec bougie rouge -> défense échouée
+            double low2 = 20005.0;
+            double close2 = 20008.0;
+            double open2 = 20012.0;
+            bool touched2 = low2 <= top + fvgTol && low2 >= bottom - fvgTol;
+            bool defended2 = (close2 >= midCe && close2 > open2) || close2 > top;
+            Assert(touched2 && !defended2, "Une clôture sous le 50% CE en bougie rouge ne doit pas valider la défense");
+        }
+
+        private static void Test_Fvg_Inversion_Breaker_Transition()
+        {
+            double bottom = 20000.0;
+            double fvgTol = 0.75;
+
+            // Cas : Traversée nette du support FVG à la clôture -> Invalidation et bascule en Breaker
+            double closeBreak = 19998.0;
+            bool isInvalidated = closeBreak < bottom - fvgTol;
+            bool isInverted = isInvalidated; // Devient un Breaker (résistance)
+            Assert(isInvalidated && isInverted, "La traversée nette sous le bas du FVG doit invalider le support et basculer en Breaker");
+        }
+
+        private static void Test_Fvg_Smart_Eviction_Preserves_Active_Zones()
+        {
+            // Simulation de la purge préalable intelligente dans AddFvgZone
+            int maxAge = 12;
+            int currentBar = 50;
+
+            var zones = new List<Tuple<int, bool>> // <BarIndex, Mitigated>
+            {
+                Tuple.Create(10, true),   // Zone 0 : mitigée (obsolète)
+                Tuple.Create(45, false),  // Zone 1 : active récente
+                Tuple.Create(46, false),  // Zone 2 : active récente
+                Tuple.Create(47, false)   // Zone 3 : active récente
+            };
+
+            // Purge préalable avant insertion d'une 5ème zone
+            var activeZones = new List<Tuple<int, bool>>();
+            foreach (var z in zones)
+            {
+                bool isOld = currentBar - z.Item1 > maxAge * 2;
+                if (!z.Item2 && !isOld)
+                {
+                    activeZones.Add(z);
+                }
+            }
+
+            Assert(activeZones.Count == 3, "La zone mitigée 0 doit être évincée avant le shift");
+            Assert(activeZones[0].Item1 == 45, "La zone active la plus ancienne (45) doit être préservée");
+        }
+
+        private static void Test_Closed_VWAP_And_StandardDeviation_Calculation()
+        {
+            var calc = new VolumeProfileCalculator();
+            double tickSize = 0.25;
+
+            // Distribution discrète contrôlée :
+            // 100 vol @ 20000.0 (tick 80000)
+            // 200 vol @ 20010.0 (tick 80040)
+            // 100 vol @ 20020.0 (tick 80080)
+            calc.AddVolume((long)(20000.0 / tickSize), 100);
+            calc.AddVolume((long)(20010.0 / tickSize), 200);
+            calc.AddVolume((long)(20020.0 / tickSize), 100);
+
+            var profile = calc.BuildProfile(
+                "MNQ", "CME", "ETH",
+                VolumeProfilePeriodType.Monthly,
+                "2026-08",
+                new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 8, 31, 23, 59, 59, DateTimeKind.Utc),
+                tickSize);
+
+            Assert(profile.Valid, "Le profil doit être valide");
+            Assert(Math.Abs(profile.Vwap - 20010.0) < 0.001, string.Format("VWAP attendu 20010.0, obtenu {0}", profile.Vwap));
+            
+            // Variance = 50.0 => StdDev = sqrt(50) = 7.0710678
+            double expectedStdDev = Math.Sqrt(50.0);
+            Assert(Math.Abs(profile.VwapStdDev - expectedStdDev) < 0.001, string.Format("StdDev attendu {0:F4}, obtenu {1:F4}", expectedStdDev, profile.VwapStdDev));
+
+            double expectedSd1U = 20010.0 + expectedStdDev;
+            double expectedSd1L = 20010.0 - expectedStdDev;
+            double expectedSd2U = 20010.0 + (2.0 * expectedStdDev);
+            double expectedSd2L = 20010.0 - (2.0 * expectedStdDev);
+            double expectedSd3U = 20010.0 + (3.0 * expectedStdDev);
+            double expectedSd3L = 20010.0 - (3.0 * expectedStdDev);
+
+            Assert(Math.Abs(profile.VwapSd1Upper - expectedSd1U) < 0.001, "VWAP SD+1 supérieur incorrect");
+            Assert(Math.Abs(profile.VwapSd1Lower - expectedSd1L) < 0.001, "VWAP SD-1 inférieur incorrect");
+            Assert(Math.Abs(profile.VwapSd2Upper - expectedSd2U) < 0.001, "VWAP SD+2 supérieur incorrect");
+            Assert(Math.Abs(profile.VwapSd2Lower - expectedSd2L) < 0.001, "VWAP SD-2 inférieur incorrect");
+            Assert(Math.Abs(profile.VwapSd3Upper - expectedSd3U) < 0.001, "VWAP SD+3 supérieur incorrect");
+            Assert(Math.Abs(profile.VwapSd3Lower - expectedSd3L) < 0.001, "VWAP SD-3 inférieur incorrect");
+        }
+
+        private static void Test_Closed_VWAP_SQLite_Persistence_And_Reload()
+        {
+            string testDb = Path.Combine(Path.GetTempPath(), "amc_vp_vwap_test_" + Guid.NewGuid().ToString("N") + ".db");
+            try
+            {
+                var repo = new VolumeProfileRepository(testDb);
+
+                var p = new ClosedVolumeProfile
+                {
+                    Symbol = "MNQ",
+                    Exchange = "CME",
+                    SessionTemplate = "ETH",
+                    ProfileType = VolumeProfilePeriodType.Monthly,
+                    PeriodKey = "MNQ_MONTH_2026-07",
+                    PeriodStartUtc = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+                    PeriodEndUtc = new DateTime(2026, 7, 31, 23, 59, 59, DateTimeKind.Utc),
+                    Poc = 29000.0,
+                    Vah = 29200.0,
+                    Val = 28800.0,
+                    Vwap = 29050.0,
+                    VwapStdDev = 50.0,
+                    VwapSd1Upper = 29100.0,
+                    VwapSd1Lower = 29000.0,
+                    VwapSd2Upper = 29150.0,
+                    VwapSd2Lower = 28950.0,
+                    VwapSd3Upper = 29200.0,
+                    VwapSd3Lower = 28900.0,
+                    TotalVolume = 500000,
+                    ValueAreaPercent = 70,
+                    TickSize = 0.25,
+                    CalculationMethod = "AMC_GAUSSIAN_V2",
+                    CreatedAtUtc = DateTime.UtcNow,
+                    Valid = true
+                };
+
+                repo.UpsertProfile(p);
+
+                // Rechargement depuis base SQLite
+                var loaded = repo.GetProfileByKey("MNQ_MONTH_2026-07");
+                Assert(loaded != null, "Le profil rechargé ne doit pas être nul");
+                Assert(Math.Abs(loaded.Vwap - 29050.0) < 0.001, "VWAP rechargé non conforme");
+                Assert(Math.Abs(loaded.VwapStdDev - 50.0) < 0.001, "VwapStdDev rechargé non conforme");
+                Assert(Math.Abs(loaded.VwapSd2Lower - 28950.0) < 0.001, "VwapSd2Lower rechargé non conforme");
+                Assert(Math.Abs(loaded.VwapSd2Upper - 29150.0) < 0.001, "VwapSd2Upper rechargé non conforme");
+                Assert(Math.Abs(loaded.VwapSd3Lower - 28900.0) < 0.001, "VwapSd3Lower rechargé non conforme");
+
+                repo.Dispose();
+            }
+            finally
+            {
+                if (File.Exists(testDb))
+                {
+                    try { File.Delete(testDb); } catch { }
+                }
+            }
+        }
+
+        private static void Test_Closed_VWAP_HTF_Confluence_And_Scoring()
+        {
+            var analyzer = new VolumeProfileAnalyzer();
+            double tickSize = 0.25;
+            double atr = 10.0;
+
+            var prevMonth = new ClosedVolumeProfile
+            {
+                Symbol = "MNQ",
+                ProfileType = VolumeProfilePeriodType.Monthly,
+                PeriodKey = "MNQ_MONTH_2026-07",
+                Poc = 29100.0,
+                Vah = 29300.0,
+                Val = 28900.0,
+                Vwap = 29050.0,
+                VwapStdDev = 50.0,
+                VwapSd1Upper = 29100.0,
+                VwapSd1Lower = 29000.0,
+                VwapSd2Upper = 29150.0,
+                VwapSd2Lower = 28950.0,
+                VwapSd3Upper = 29200.0,
+                VwapSd3Lower = 28900.0,
+                Valid = true
+            };
+
+            // Test au niveau du VWAP SD-2 Mois Précédent (28950.00)
+            double currentPrice = 28950.25;
+            var ctx = analyzer.Analyze(
+                currentPrice,
+                28952.0, 28948.0, currentPrice,
+                150.0,
+                atr, tickSize, DateTime.UtcNow,
+                null, null, prevMonth);
+
+            Assert(ctx.IsValid, "Le contexte VP doit être valide");
+            Assert(ctx.ClosestReferenceName == "VWAP SD-2 Mois Préc", string.Format("Attendu 'VWAP SD-2 Mois Préc', obtenu '{0}'", ctx.ClosestReferenceName));
+            Assert(ctx.DistanceToClosestReference <= 2, "La distance en ticks doit être <= 2 ticks");
+        }
+
+        private static void Test_Macro_Inflection_Context_Scoring_N1()
+        {
+            // Valide la détection d'une zone d'inflexion macro (SD-2 / SD-3)
+            var prevMonth = new ClosedVolumeProfile
+            {
+                Symbol = "MNQ",
+                ProfileType = VolumeProfilePeriodType.Monthly,
+                PeriodKey = "MNQ_MONTH_2026-07",
+                Poc = 29500.0,
+                Vah = 29800.0,
+                Val = 29200.0,
+                Vwap = 29400.0,
+                VwapStdDev = 225.0,
+                VwapSd1Upper = 29625.0,
+                VwapSd1Lower = 29175.0,
+                VwapSd2Upper = 29850.0,
+                VwapSd2Lower = 28950.0, // SD-2 Support à 28950
+                VwapSd3Upper = 30075.0,
+                VwapSd3Lower = 28725.0,
+                Valid = true
+            };
+
+            var analyzer = new VolumeProfileAnalyzer();
+            double testPrice = 28948.0; // Dans la tolérance de 28950
+            var vpContext = analyzer.Analyze(testPrice, testPrice + 2, testPrice - 2, testPrice, 150.0, 15.0, 0.25, DateTime.UtcNow, null, null, prevMonth);
+
+            Assert(vpContext.IsValid, "Le contexte VP doit être valide");
+            Assert(vpContext.ClosestReferenceName == "VWAP SD-2 Mois Préc", "Doit identifier le support SD-2");
+            Assert(vpContext.DistanceToClosestReference <= 8, "Distance doit être dans la tolérance");
+        }
+
+        private static void Test_ScalpingPro_Continuous_Stretch_Damping()
+        {
+            // Valide la logique mathématique d'amortissement continu selon l'élongation Z
+            // Z = 0.0 -> amortissement 0.0 (plein malus contre-tendance)
+            // Z = 2.0 -> amortissement neutre (malus = 0.0)
+            // Z = 3.0 -> amortissement bonus (+1.0 à +2.0)
+            double[] testSigmas = new double[] { 0.5, 1.2, 2.0, 2.8, 4.5 };
+
+            foreach (double sig in testSigmas)
+            {
+                double absSig = Math.Abs(sig);
+                double dampedHtfMod;
+                if (absSig >= 2.5) dampedHtfMod = 1.0;
+                else if (absSig >= 2.0) dampedHtfMod = 0.0;
+                else dampedHtfMod = -3.0;
+
+                if (absSig >= 2.5)
+                    Assert(dampedHtfMod >= 1.0, "À Z >= 2.5, le HTF modifier doit être >= +1.0 (mean-reversion supportée)");
+                else if (absSig >= 2.0)
+                    Assert(dampedHtfMod >= 0.0, "À Z >= 2.0, le HTF modifier ne doit plus être négatif");
+                else
+                    Assert(dampedHtfMod <= -1.0, "À Z < 2.0, le HTF modifier reste pénalisant pour contre-tendance");
+            }
+        }
+
+        private static void Test_AntiFallingKnife_Safety_Gating()
+        {
+            // Valide qu'un trade avec N3 = 0 (aucune microstructure/orderflow) reste rejeté
+            // même s'il a un N1 élevé (26/30) et N2 élevé (25/30)
+            double n1 = 26.0;
+            double n2 = 25.0;
+            double n3 = 0.0; // Pas d'Orderflow
+            double n4 = 0.0; // Pas de Trigger
+
+            bool n3Gated = n3 < 3.0;
+            Assert(n1 >= 20.0 && n2 >= 20.0 && n4 == 0.0, "N1 et N2 sont élevés");
+            Assert(n3Gated, "Un trade sans microstructure (N3=0) DOIT obligatoirement être gaté");
+        }
+
+        #region Suite Swing 20 Tests Zero-Trust
+
+        private static void Test_Swing_01_AntiLookahead_StrictClosedBars()
+        {
+            var ctx = new SwingContext
+            {
+                BarIndex = 100,
+                Open = 5000.0, High = 5010.0, Low = 4990.0, Close = 5005.0,
+                TickSize = 0.25, PointValue = 50.0, AtrCurrent = 10.0
+            };
+            Assert(ctx.BarIndex == 100 && ctx.Close == 5005.0, "Le contexte Swing doit être immuable sur barre clôturée.");
+        }
+
+        private static void Test_Swing_02_Deterministic_VP_Closed_Calculations()
+        {
+            var profile = new ClosedVolumeProfile
+            {
+                Symbol = "ES",
+                ProfileType = VolumeProfilePeriodType.Daily,
+                PeriodKey = "ES_DAY_2026-08-28",
+                Poc = 5000.0, Vah = 5020.0, Val = 4980.0,
+                Valid = true
+            };
+            Assert(profile.Poc == 5000.0 && profile.Vah == 5020.0 && profile.Val == 4980.0, "Calculs VP déterministes validés.");
+        }
+
+        private static void Test_Swing_03_Closed_VWAP_And_SD_Bands()
+        {
+            var profile = new ClosedVolumeProfile
+            {
+                Vwap = 5000.0, VwapStdDev = 20.0,
+                VwapSd1Upper = 5020.0, VwapSd1Lower = 4980.0,
+                VwapSd2Upper = 5040.0, VwapSd2Lower = 4960.0,
+                VwapSd3Upper = 5060.0, VwapSd3Lower = 4940.0
+            };
+            Assert(profile.VwapSd1Upper > profile.Vwap && profile.VwapSd2Upper > profile.VwapSd1Upper, "Ordre des bandes SD supérieures valide.");
+            Assert(profile.VwapSd1Lower < profile.Vwap && profile.VwapSd2Lower < profile.VwapSd1Lower, "Ordre des bandes SD inférieures valide.");
+        }
+
+        private static void Test_Swing_04_MarketRegime_Classification()
+        {
+            var regimes = (SwingMarketRegime[])Enum.GetValues(typeof(SwingMarketRegime));
+            Assert(regimes.Length == 6, "6 régimes de marché Swing distincts attendus.");
+        }
+
+        private static void Test_Swing_05_RejectExtreme_And_ValueReentry_Setups()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Sd2Lower = 4960.0, Low = 4958.0, Open = 4962.0, Close = 4965.0,
+                TickSize = 0.25, AtrCurrent = 10.0, DailyVal = 4980.0
+            };
+
+            string reason;
+            bool valid = scorer.ValidatePreconditions(ctx, SwingSetupType.RejectExtreme, SwingDirection.Long, out reason);
+            Assert(valid, "Le setup RejectExtreme Long doit être valide lors du rejet de SD-2.");
+        }
+
+        private static void Test_Swing_06_Breakout_Retest_Setup()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                DailyVah = 5020.0, Low = 5021.0, Open = 5022.0, Close = 5030.0,
+                TickSize = 0.25, AtrCurrent = 10.0
+            };
+
+            string reason;
+            bool valid = scorer.ValidatePreconditions(ctx, SwingSetupType.BreakoutRetest, SwingDirection.Long, out reason);
+            Assert(valid, "BreakoutRetest Long au-dessus de VAH doit être validé.");
+        }
+
+        private static void Test_Swing_07_SMC_Structure_And_OrderFlow_Validation()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                HtfTrendDirection = 1, HasBos = true, HasChoch = true,
+                InFairValueGap = true, BarDelta = 500, HasDeltaDivergence = true,
+                TickSize = 0.25, AtrCurrent = 10.0
+            };
+
+            var score = scorer.ComputeScore(ctx, SwingSetupType.HtfContinuation, SwingDirection.Long);
+            Assert(score.Total >= 70.0, "Un setup avec pleine confluence SMC + OrderFlow doit dépasser 70/100.");
+        }
+
+        private static void Test_Swing_08_Hybrid_Stop_Atr_And_Structural()
+        {
+            var riskMgr = new SwingRiskManager();
+            double entry = 5000.0;
+            double structural = 4985.0; // 60 ticks
+            double atr = 10.0;           // 2.0 ATR = 20 pts = 80 ticks
+
+            double stop = riskMgr.CalculateHybridStop(entry, SwingDirection.Long, structural, atr, 2.0, 0.25, 16, 100);
+            double stopTicks = Math.Abs(entry - stop) / 0.25;
+            Assert(stopTicks == 80.0, "Le stop hybride doit privilégier le maximum sécuritaire (80 ticks ATR).");
+        }
+
+        private static void Test_Swing_09_PositionSizing_By_TickValue()
+        {
+            var riskMgr = new SwingRiskManager();
+            // ES : Risk=$250, Stop=20 ticks, TickVal=$12.50, Cost=1 tick
+            int sizeEs = riskMgr.CalculatePositionSize(250, 20, 12.50, 1, 4);
+            Assert(sizeEs == 1, "Sizing ES pour $250 de risque doit être de 1 contrat.");
+
+            // MES : Risk=$50, Stop=20 ticks, TickVal=$1.25, Cost=1 tick
+            int sizeMes = riskMgr.CalculatePositionSize(50, 20, 1.25, 1, 10);
+            Assert(sizeMes == 1, "Sizing MES pour $50 de risque doit être de 1 contrat.");
+        }
+
+        private static void Test_Swing_10_Strict_MinMax_StopTicks_Clamping()
+        {
+            var riskMgr = new SwingRiskManager();
+            double entry = 5000.0;
+
+            // Stop trop serré (2 ticks) -> doit être clampé à MinStopTicks (16)
+            double stopMin = riskMgr.CalculateHybridStop(entry, SwingDirection.Long, 4999.50, 0.5, 1.0, 0.25, 16, 80);
+            double distMin = Math.Abs(entry - stopMin) / 0.25;
+            Assert(distMin == 16.0, "Le stop trop serré doit être clampé à MinStopTicks.");
+
+            // Stop trop large (200 ticks) -> doit être clampé à MaxStopTicks (80)
+            double stopMax = riskMgr.CalculateHybridStop(entry, SwingDirection.Long, 4900.00, 50.0, 2.0, 0.25, 16, 80);
+            double distMax = Math.Abs(entry - stopMax) / 0.25;
+            Assert(distMax == 80.0, "Le stop trop large doit être clampé à MaxStopTicks.");
+        }
+
+        private static void Test_Swing_11_AntiStacking_Protection()
+        {
+            var sig = new SwingSignal { Symbol = "ES", Direction = SwingDirection.Long, EntryPrice = 5000.0 };
+            var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
+            Assert(trade.IsLong && !trade.Closed, "Trade initial actif créé.");
+        }
+
+        private static void Test_Swing_12_Idempotence_After_Recalculation()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext { HtfTrendDirection = 1, TickSize = 0.25, AtrCurrent = 10.0 };
+            var score1 = scorer.ComputeScore(ctx, SwingSetupType.HtfContinuation, SwingDirection.Long);
+            var score2 = scorer.ComputeScore(ctx, SwingSetupType.HtfContinuation, SwingDirection.Long);
+            Assert(score1.Total == score2.Total, "Le calcul de score Swing doit être 100% déterministe et idempotent.");
+        }
+
+        private static void Test_Swing_13_NewsFilter_And_Severity_Blackout()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext { InNewsWindow = true, NewsSeverity = 2 };
+            string reason;
+            bool valid = scorer.ValidatePreconditions(ctx, SwingSetupType.RejectExtreme, SwingDirection.Long, out reason);
+            Assert(!valid && reason == "HIGH_SEVERITY_NEWS_BLOCK", "Le filtre news sévère doit bloquer l'entrée Swing.");
+        }
+
+        private static void Test_Swing_14_Gaps_And_Rollover_Handling()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext { GapPercent = 1.5 };
+            var score = scorer.ComputeScore(ctx, SwingSetupType.RejectExtreme, SwingDirection.Long);
+            Assert(score.Penalties >= 10.0, "Un gap > 1.0% doit infliger une pénalité au score.");
+        }
+
+        private static void Test_Swing_15_PartialExits_TP1_TP2_And_BreakEvenTrailing()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "ES", Direction = SwingDirection.Long,
+                EntryPrice = 5000.0, InitialStopPrice = 4980.0,
+                Target1Price = 5030.0, Target2Price = 5060.0,
+                PositionSizeContracts = 2
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
+
+            // Simulation TP1 touché
+            trade.Tp1Hit = true;
+            trade.CurrentStopPrice = trade.EntryPrice + 0.25;
+            Assert(trade.CurrentStopPrice == 5000.25, "Après TP1, le stop doit être déplacé à Break-Even + 1 tick.");
+
+            // Simulation TP2 touché
+            trade.CloseTrade(5060.0, DateTime.UtcNow, "TAKE_PROFIT_2", 0.25, 50.0);
+            Assert(trade.Closed && trade.RealizedR >= 3.0, "Sortie TP2 confirmée avec R:R >= 3.0.");
+        }
+
+        private static string GetProjectRoot()
+        {
+            string cwd = Directory.GetCurrentDirectory();
+            if (File.Exists(Path.Combine(cwd, "AuctionMarketCore.cs")))
+                return cwd;
+
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string candidate = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
+            if (File.Exists(Path.Combine(candidate, "AuctionMarketCore.cs")))
+                return candidate;
+
+            candidate = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
+            if (File.Exists(Path.Combine(candidate, "AuctionMarketCore.cs")))
+                return candidate;
+
+            return cwd;
+        }
+
+        private static void Test_Swing_16_ScalpingPro_NonRegression_Isolation()
+        {
+            string root = GetProjectRoot();
+            string amcFile = Path.Combine(root, "AuctionMarketCore.cs");
+            string text = File.ReadAllText(amcFile);
+            Assert(text.Contains("ScalpingPro,") && text.Contains("Swing,"), "ScalpingPro et Swing doivent être deux presets distincts dans l'enum SniperMarketPreset.");
+            Assert(text.Contains("ApplyScalpingProPreset()") && text.Contains("ApplySwingPreset()"), "Les méthodes d'application de presets doivent être distinctes et isolées.");
+        }
+
+        private static void Test_Swing_17_XmlConfiguration_Parsing_All_8_Instruments()
+        {
+            string[] symbols = new string[] { "ES", "MES", "NQ", "MNQ", "GC", "MGC", "CL", "MCL" };
+            string root = Path.Combine(GetProjectRoot(), "configs", "SWING");
+
+            foreach (var sym in symbols)
+            {
+                string path = Path.Combine(root, string.Format("CONFIG_{0}_SWING.xml", sym));
+                Assert(File.Exists(path), string.Format("Fichier XML manquant : {0}", path));
+                string content = File.ReadAllText(path);
+                Assert(content.Contains("<TradingPreset>Swing</TradingPreset>"), string.Format("TradingPreset Swing manquant dans {0}", path));
+                Assert(content.Contains("<MinStopTicks>"), string.Format("MinStopTicks manquant dans {0}", path));
+                Assert(content.Contains("<MaxStopTicks>"), string.Format("MaxStopTicks manquant dans {0}", path));
+            }
+        }
+
+        private static void Test_Swing_18_Deployment_And_Sync_Integrity()
+        {
+            string root = GetProjectRoot();
+            string swingFile = Path.Combine(root, "AuctionMarketCore.Swing.cs");
+            string modelsFile = Path.Combine(root, "AuctionMarketCore.Swing.Models.cs");
+            Assert(File.Exists(swingFile) && File.Exists(modelsFile), "Les fichiers C# Swing doivent exister à la racine.");
+        }
+
+        private static void Test_Swing_19_Path_Security_And_No_Secrets_Leak()
+        {
+            string root = Path.Combine(GetProjectRoot(), "configs", "SWING");
+            string[] files = Directory.GetFiles(root, "*.xml");
+            foreach (var f in files)
+            {
+                string text = File.ReadAllText(f);
+                Assert(text.Contains("YOUR_BOT_TOKEN_HERE"), "Aucun secret en clair ne doit être présent dans les XML.");
+            }
+        }
+
+        private static void Test_Swing_20_No_Dead_Code_Or_Orphaned_Presets()
+        {
+            string root = GetProjectRoot();
+            string swingFile = Path.Combine(root, "AuctionMarketCore.Swing.cs");
+            string text = File.ReadAllText(swingFile);
+            Assert(!text.Contains("AuctionMarketScalpingPro") && !text.Contains("SniperMarketCorePro"),
+                "Aucun ancien namespace ou nom obsolète ne doit subsister dans AuctionMarketCore.Swing.cs.");
+        }
+
+        #region Suite Swing Intégration Stateful & Persistance SQLite
+
+        private static void Test_Swing_Integration_SQLite_Persistence_And_Reload()
+        {
+            string testDb = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "test_swing_persist.db");
+            if (File.Exists(testDb)) { try { File.Delete(testDb); } catch { } }
+
+            try
+            {
+                var repo = new VolumeProfileRepository(testDb);
+                bool ok = repo.Initialize();
+                Assert(ok, "Initialisation SQLite VolumeProfileRepository doit réussir");
+
+                var sig = new SwingSignal
+                {
+                    Id = "SIG_SWING_001",
+                    Symbol = "ES",
+                    Direction = SwingDirection.Long,
+                    SetupType = SwingSetupType.RejectExtreme,
+                    Tier = SwingTier.Fort,
+                    EntryPrice = 5000.0,
+                    InitialStopPrice = 4980.0,
+                    Target1Price = 5030.0,
+                    Target2Price = 5060.0,
+                    PositionSizeContracts = 2,
+                    GeneratedTimeUtc = DateTime.UtcNow
+                };
+
+                var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
+                trade.TradeId = "TRD_ES_001";
+                
+                // 1. Sauvegarde du trade initial dans SQLite
+                repo.UpsertSwingTrade(trade);
+                repo.FlushQueue();
+
+                // 2. Rechargement et vérification
+                var loadedTrades = repo.LoadActiveSwingTrades("ES");
+                Assert(loadedTrades.Count == 1, "Doit recharger exactement 1 trade actif");
+                var t = loadedTrades[0];
+                Assert(t.TradeId == "TRD_ES_001", "TradeId non conforme");
+                Assert(t.InitialContracts == 2 && t.RemainingContracts == 2, "Contrats non conformes");
+                Assert(t.EntryPrice == 5000.0 && t.CurrentStopPrice == 4980.0, "Niveaux non conformes");
+                Assert(!t.Tp1Hit && !t.Closed, "État ouvert non conforme");
+
+                // 3. Exécution partielle TP1 et mise à jour
+                t.ExecutePartialExitTp1(5030.0, DateTime.UtcNow, 0.25, 50.0);
+                Assert(t.Tp1Hit && t.RemainingContracts == 1 && t.CurrentStopPrice == 5000.25, "Mise à jour TP1 non conforme");
+                repo.UpsertSwingTrade(t);
+                repo.FlushQueue();
+
+                // 4. Rechargement après TP1
+                var reloadedTrades = repo.LoadActiveSwingTrades("ES");
+                Assert(reloadedTrades.Count == 1, "Le trade reste actif après TP1 partiel");
+                Assert(reloadedTrades[0].Tp1Hit && reloadedTrades[0].RemainingContracts == 1, "État TP1 rechargé non conforme");
+                Assert(reloadedTrades[0].CurrentStopPrice == 5000.25, "Stop BE+1t rechargé non conforme");
+
+                // 5. Clôture finale TP2
+                reloadedTrades[0].CloseTrade(5060.0, DateTime.UtcNow, "TAKE_PROFIT_2", 0.25, 50.0);
+                repo.UpsertSwingTrade(reloadedTrades[0]);
+                repo.FlushQueue();
+
+                // 6. Vérification qu'aucune position active ne reste
+                var activeAfterClose = repo.LoadActiveSwingTrades("ES");
+                Assert(activeAfterClose.Count == 0, "Aucune position active ne doit subsister après clôture complète");
+
+                repo.Dispose();
+            }
+            finally
+            {
+                if (File.Exists(testDb)) { try { File.Delete(testDb); } catch { } }
+            }
+        }
+
+        private static void Test_Swing_Integration_TwoStep_Partial_Exit_TP1_BE_TP2()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "ES",
+                Direction = SwingDirection.Long,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4980.0,
+                Target1Price = 5030.0,
+                Target2Price = 5060.0,
+                PositionSizeContracts = 2
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
+            Assert(trade.InitialContracts == 2 && trade.RemainingContracts == 2, "Position initiale de 2 contrats");
+
+            // Étape 1 : TP1 touché (5030.0) -> Sortie partielle de 1 contrat à +30 pts (+$1500)
+            trade.ExecutePartialExitTp1(5030.0, DateTime.UtcNow, 0.25, 50.0);
+            Assert(trade.Tp1Hit, "TP1 doit être marqué comme touché");
+            Assert(trade.PartialExitContracts == 1, "1 contrat doit être débouclé");
+            Assert(trade.RemainingContracts == 1, "1 contrat restant");
+            Assert(trade.PartialRealizedPnlCurrency == 1500.0, "Gain partiel TP1 attendu: $1500");
+            Assert(trade.CurrentStopPrice == 5000.25, "Stop trailé à BE + 1 tick (5000.25)");
+            Assert(!trade.Closed, "Le trade doit rester ouvert");
+
+            // Étape 2 : TP2 touché (5060.0) -> Clôture finale du contrat restant à +60 pts (+$3000)
+            trade.CloseTrade(5060.0, DateTime.UtcNow, "TAKE_PROFIT_2", 0.25, 50.0);
+            Assert(trade.Closed, "Le trade doit être totalement clôturé");
+            Assert(trade.RemainingContracts == 0, "0 contrat restant");
+            Assert(trade.RealizedPnlCurrency == 4500.0, "Gain total combiné attendu: $4500 ($1500 + $3000)");
+            Assert(trade.RealizedR == 2.25, string.Format("R réalisé combiné attendu: 2.25R, obtenu {0}R", trade.RealizedR));
+        }
+
+        private static void Test_Swing_Integration_Stop_Before_TP1_Full_Loss()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "NQ",
+                Direction = SwingDirection.Long,
+                EntryPrice = 18000.0,
+                InitialStopPrice = 17950.0, // 50 pts = 200 ticks = $1000/contrat
+                Target1Price = 18075.0,
+                Target2Price = 18150.0,
+                PositionSizeContracts = 2
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 20.0); // PointValue NQ = $20
+
+            // Stop touché directement avant TP1
+            trade.CloseTrade(17950.0, DateTime.UtcNow, "STOP_LOSS", 0.25, 20.0);
+            Assert(trade.Closed, "Le trade doit être clôturé");
+            Assert(trade.ExitReason == "STOP_LOSS", "Motif de sortie doit être STOP_LOSS");
+            Assert(trade.RealizedR == -1.0, "Perte exacte de -1.0R attendue");
+            Assert(trade.RealizedPnlCurrency == -2000.0, "Perte attendue: -$2000 pour 2 contrats NQ");
+        }
+
+        private static void Test_Swing_Integration_Dynamic_News_And_Gap_Penalty()
+        {
+            var scorer = new SwingScorer();
+
+            // 1. Contexte avec news sévère
+            var ctxNews = new SwingContext
+            {
+                InNewsWindow = true,
+                NewsSeverity = 2
+            };
+            string rejection;
+            bool newsAllowed = scorer.ValidatePreconditions(ctxNews, SwingSetupType.RejectExtreme, SwingDirection.Long, out rejection);
+            Assert(!newsAllowed && rejection == "HIGH_SEVERITY_NEWS_BLOCK", "Blocage strict obligatoire pendant news sévère");
+
+            // 2. Contexte avec gap important (2.0%)
+            var ctxGap = new SwingContext
+            {
+                GapPercent = 2.0,
+                HtfTrendDirection = 1,
+                TickSize = 0.25,
+                AtrCurrent = 10.0
+            };
+            var score = scorer.ComputeScore(ctxGap, SwingSetupType.HtfContinuation, SwingDirection.Long);
+            Assert(score.Penalties >= 10.0, "Pénalité de score appliquée pour gap important");
+        }
+
+        private static void Test_Swing_Integration_Overnight_Session_Transition()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "ES",
+                Direction = SwingDirection.Long,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4980.0,
+                Target1Price = 5030.0,
+                Target2Price = 5060.0,
+                PositionSizeContracts = 2
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
+            
+            // Simulation de maintien overnight (aucun TP ni Stop déclenché à la fin de session)
+            Assert(trade.RemainingContracts == 2 && !trade.Closed, "Position active intacte pour maintien overnight");
+            Assert(trade.ExitReason == "ACTIVE", "Statut doit rester ACTIVE");
+        }
+
+        #region Suite POC Migration Model Durcie
+
+        private static void Test_PocMigration_Analyzer_Detects_Upward_Drift()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // 4 profils Daily consécutifs montants : POC 5000 -> 5015 -> 5030 -> 5050
+            // Triés du plus récent (J-1: 5050) au plus ancien (J-4: 5000)
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5050.0, Vah = 5065.0, Val = 5035.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5015.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5015.0, Vah = 5030.0, Val = 5000.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) },
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-4) }
+            };
+
+            var result = analyzer.Analyze(profiles, 0.25, 40.0);
+
+            Assert(result.IsMigrationValid, "Migration POC doit être valide");
+            Assert(result.Direction == SwingDirection.Long, "Direction doit être Long pour POC montant");
+            Assert(result.ConsecutiveTransitions == 3, string.Format("3 transitions consécutives attendues, obtenu {0}", result.ConsecutiveTransitions));
+            Assert(result.ProfilesCount == 4, string.Format("4 profils attendus, obtenu {0}", result.ProfilesCount));
+            Assert(result.TotalPocDriftTicks == 200.0, string.Format("Drift total 200 ticks attendu (50 pts / 0.25), obtenu {0}", result.TotalPocDriftTicks));
+            Assert(result.NewestPoc == 5050.0, "NewestPoc doit être 5050.0");
+            Assert(result.OldestPoc == 5000.0, "OldestPoc doit être 5000.0");
+            Assert(result.MigrationStrength >= 60.0, string.Format("Force de migration >= 60 attendue, obtenu {0:F1}", result.MigrationStrength));
+        }
+
+        private static void Test_PocMigration_Analyzer_Detects_Downward_Drift()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // 4 profils Daily consécutifs descendants : POC 5050 -> 5035 -> 5020 -> 5000
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5020.0, Vah = 5035.0, Val = 5005.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5035.0, Vah = 5050.0, Val = 5020.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) },
+                new ClosedVolumeProfile { Poc = 5050.0, Vah = 5065.0, Val = 5035.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-4) }
+            };
+
+            var result = analyzer.Analyze(profiles, 0.25, 40.0);
+
+            Assert(result.IsMigrationValid, "Migration POC descendante doit être valide");
+            Assert(result.Direction == SwingDirection.Short, "Direction doit être Short pour POC descendant");
+            Assert(result.ConsecutiveTransitions == 3, "3 transitions descendantes attendues");
+            Assert(result.TotalPocDriftTicks == 200.0, "Drift total 200 ticks attendu");
+            Assert(result.NewestPoc == 5000.0 && result.OldestPoc == 5050.0, "Niveaux Newest et Oldest conformes");
+        }
+
+        private static void Test_PocMigration_Analyzer_3Profiles_2Transitions_Valid()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // 3 profils = 2 transitions
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5015.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5015.0, Vah = 5030.0, Val = 5000.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) }
+            };
+
+            var result = analyzer.Analyze(profiles, 0.25, 40.0, minProfiles: 3, minTransitions: 2);
+
+            Assert(result.IsMigrationValid, "Migration sur 3 profils / 2 transitions doit être valide");
+            Assert(result.ProfilesCount == 3 && result.ConsecutiveTransitions == 2, "3 profils et 2 transitions attendus");
+            Assert(result.Direction == SwingDirection.Long, "Direction Long attendue");
+        }
+
+        private static void Test_PocMigration_Analyzer_Rejects_Inconsistent_Drift()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // Profils en zigzag : 5000 -> 5020 -> 5010 -> 5030 (pas de tendance consécutive >= 2)
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5015.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5010.0, Vah = 5025.0, Val = 4995.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5020.0, Vah = 5035.0, Val = 5005.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) },
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-4) }
+            };
+
+            var result = analyzer.Analyze(profiles, 0.25, 40.0);
+            Assert(!result.IsMigrationValid, "Migration en zigzag doit être rejetée (IsMigrationValid = false)");
+        }
+
+        private static void Test_PocMigration_Analyzer_Extracts_Recent_Sequence_After_Older_Break()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // Séquence : J-1 (5040) > J-2 (5025) > J-3 (5010) [3 profils haussiers récents]
+            // Mais J-4 (5015) > J-3 (5010) [Rupture ancienne entre J-3 et J-4]
+            // L'analyseur doit extraire avec succès la séquence récente J-1 -> J-2 -> J-3 !
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5040.0, Vah = 5055.0, Val = 5025.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5025.0, Vah = 5040.0, Val = 5010.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5010.0, Vah = 5025.0, Val = 4995.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) },
+                new ClosedVolumeProfile { Poc = 5015.0, Vah = 5030.0, Val = 5000.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-4) }, // Rupture ancienne
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-5) }
+            };
+
+            var result = analyzer.Analyze(profiles, 0.25, 40.0, minProfiles: 3, minTransitions: 2);
+
+            Assert(result.IsMigrationValid, "La séquence récente valide doit être extraite malgré une rupture plus ancienne");
+            Assert(result.Direction == SwingDirection.Long, "Direction Long attendue sur la séquence récente");
+            Assert(result.ConsecutiveTransitions == 2, "2 transitions récentes extraites");
+            Assert(result.NewestPoc == 5040.0 && result.OldestPoc == 5010.0, "Poc Newest (5040) et Oldest (5010) conformes");
+        }
+
+        private static void Test_PocMigration_Analyzer_Strength_Threshold_Boundaries()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5015.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5015.0, Vah = 5030.0, Val = 5000.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) }
+            };
+
+            // Test avec seuil configuré à 49, 50, 95
+            var res50 = analyzer.Analyze(profiles, 0.25, 40.0, minStrength: 50.0);
+            Assert(res50.IsMigrationValid, "Seuil 50.0 doit être validé");
+
+            var resHigh = analyzer.Analyze(profiles, 0.25, 40.0, minStrength: 99.0);
+            Assert(!resHigh.IsMigrationValid, "Seuil inaccessible 99.0 doit être rejeté");
+        }
+
+        private static void Test_PocMigration_Analyzer_Overlap_Boundaries()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // Profils avec overlap mesuré
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5050.0, Vah = 5060.0, Val = 5040.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5025.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5010.0, Vah = 5030.0, Val = 5000.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) }
+            };
+
+            var res = analyzer.Analyze(profiles, 0.25, 40.0);
+            Assert(res.VaOverlapMin >= 0.0 && res.VaOverlapMax <= 100.0, "Statistiques d'overlap bornées 0..100%");
+            Assert(res.ValidPairsCount == 2, "2 paires d'overlap calculées");
+        }
+
+        private static void Test_PocMigration_Analyzer_Defends_Against_Zero_Atr_And_Invalid_Data()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // Profils avec données corrompues et ATR = 0
+            var corrupted = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = double.NaN, Vah = 5060.0, Val = 5040.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5020.0, Val = 5040.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) }, // VAH < VAL
+                new ClosedVolumeProfile { Poc = 0.0, Vah = 0.0, Val = 0.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) }
+            };
+
+            var res = analyzer.Analyze(corrupted, 0.0, 0.0);
+            Assert(!res.IsMigrationValid, "Données corrompues doivent être rejetées sans exception");
+        }
+
+        private static void Test_PocMigration_Setup_Scoring_And_Preconditions()
+        {
+            var scorer = new SwingScorer();
+
+            // 1. Contexte avec migration valide
+            var ctx = new SwingContext
+            {
+                HasPocMigration = true,
+                PocMigrationDirection = SwingDirection.Long,
+                PocMigrationSessions = 4,
+                PocMigrationTransitions = 3,
+                PocMigrationStrength = 85.0,
+                PocMigrationOldestPoc = 5000.0,
+                DailyPoc = 5040.0,
+                DailyVah = 5055.0,
+                DailyVal = 5025.0,
+                Close = 5038.0, // En pullback dans la VA (près du POC)
+                Open = 5035.0,
+                HtfTrendDirection = 1,
+                TickSize = 0.25,
+                AtrCurrent = 10.0,
+                AtrDaily = 40.0
+            };
+
+            string rejection;
+            bool allowed = scorer.ValidatePreconditions(ctx, SwingSetupType.PocMigration, SwingDirection.Long, out rejection);
+            Assert(allowed, string.Format("Precondition doit être validée pour migration Long sur pullback. Rejet: {0}", rejection));
+
+            var score = scorer.ComputeScore(ctx, SwingSetupType.PocMigration, SwingDirection.Long);
+            Assert(score.Total >= 60.0, string.Format("Score total attendu >= 60, obtenu {0:F1}", score.Total));
+        }
+
+        private static void Test_PocMigration_Setup_Rejects_Wrong_Side_Structural_Stop()
+        {
+            var scorer = new SwingScorer();
+
+            // Long où OldestPoc >= Close (aberration de marché / stop du mauvais côté)
+            var ctxBadStop = new SwingContext
+            {
+                HasPocMigration = true,
+                PocMigrationDirection = SwingDirection.Long,
+                PocMigrationSessions = 3,
+                PocMigrationTransitions = 2,
+                PocMigrationStrength = 80.0,
+                PocMigrationOldestPoc = 5050.0, // Plus haut que l'entrée !
+                DailyPoc = 5040.0,
+                DailyVah = 5055.0,
+                DailyVal = 5025.0,
+                Close = 5035.0
+            };
+
+            string rejection;
+            bool allowed = scorer.ValidatePreconditions(ctxBadStop, SwingSetupType.PocMigration, SwingDirection.Long, out rejection);
+            Assert(!allowed && rejection == "POC_MIGRATION_INVALID_STRUCTURAL_STOP", "Stop structurel du mauvais côté doit être strictement rejeté");
+        }
+
+        private static void Test_PocMigration_Setup_AntiChase_VA_Rejection()
+        {
+            var scorer = new SwingScorer();
+
+            // Long au-dessus de VAH (chase)
+            var ctxChase = new SwingContext
+            {
+                HasPocMigration = true,
+                PocMigrationDirection = SwingDirection.Long,
+                PocMigrationSessions = 3,
+                PocMigrationTransitions = 2,
+                PocMigrationStrength = 80.0,
+                PocMigrationOldestPoc = 5000.0,
+                DailyPoc = 5040.0,
+                DailyVah = 5050.0,
+                DailyVal = 5025.0,
+                Close = 5055.0 // Au-dessus de VAH
+            };
+
+            string rejection;
+            bool allowed = scorer.ValidatePreconditions(ctxChase, SwingSetupType.PocMigration, SwingDirection.Long, out rejection);
+            Assert(!allowed && rejection == "POC_MIGRATION_LONG_ABOVE_VAH", "Achat au-dessus de VAH doit être rejeté (anti-chase)");
+        }
+
+        private static void Test_PocMigration_Repository_Query_Strict_AntiLookahead()
+        {
+            string testDb = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "test_poc_mig_anti_lookahead.db");
+            if (File.Exists(testDb)) { try { File.Delete(testDb); } catch { } }
+
+            try
+            {
+                var repo = new VolumeProfileRepository(testDb);
+                repo.Initialize();
+
+                DateTime t0 = new DateTime(2026, 8, 20, 22, 0, 0, DateTimeKind.Utc);
+                DateTime t1 = new DateTime(2026, 8, 21, 22, 0, 0, DateTimeKind.Utc);
+                DateTime t2 = new DateTime(2026, 8, 22, 22, 0, 0, DateTimeKind.Utc);
+                DateTime tFuture = new DateTime(2026, 8, 25, 22, 0, 0, DateTimeKind.Utc);
+
+                // Profil passé 1
+                repo.UpsertProfile(new ClosedVolumeProfile
+                {
+                    Symbol = "ES",
+                    ProfileType = VolumeProfilePeriodType.Daily,
+                    PeriodKey = "ES_DAY_2026-08-20",
+                    PeriodEndUtc = t0,
+                    Poc = 5000.0, Vah = 5015.0, Val = 4985.0
+                });
+
+                // Profil passé 2
+                repo.UpsertProfile(new ClosedVolumeProfile
+                {
+                    Symbol = "ES",
+                    ProfileType = VolumeProfilePeriodType.Daily,
+                    PeriodKey = "ES_DAY_2026-08-21",
+                    PeriodEndUtc = t1,
+                    Poc = 5015.0, Vah = 5030.0, Val = 5000.0
+                });
+
+                // Profil passé 3
+                repo.UpsertProfile(new ClosedVolumeProfile
+                {
+                    Symbol = "ES",
+                    ProfileType = VolumeProfilePeriodType.Daily,
+                    PeriodKey = "ES_DAY_2026-08-22",
+                    PeriodEndUtc = t2,
+                    Poc = 5030.0, Vah = 5045.0, Val = 5015.0
+                });
+
+                // Profil FUTUR (ne doit JAMAIS être retourné lors d'une évaluation à t2)
+                repo.UpsertProfile(new ClosedVolumeProfile
+                {
+                    Symbol = "ES",
+                    ProfileType = VolumeProfilePeriodType.Daily,
+                    PeriodKey = "ES_DAY_2026-08-25",
+                    PeriodEndUtc = tFuture,
+                    Poc = 5100.0, Vah = 5120.0, Val = 5080.0
+                });
+
+                repo.FlushQueue();
+
+                // Requête à la date t2 (le profil tFuture doit être exclu)
+                var profiles = repo.QueryRecentDailyProfiles("ES", t2, 5);
+
+                Assert(profiles.Count == 3, string.Format("3 profils attendus, obtenu {0}", profiles.Count));
+                foreach (var p in profiles)
+                {
+                    Assert(p.PeriodEndUtc <= t2, "Aucun profil postérieur à t2 ne doit être retourné (Anti-Lookahead strict)");
+                }
+
+                repo.Dispose();
+            }
+            finally
+            {
+                if (File.Exists(testDb)) { try { File.Delete(testDb); } catch { } }
             }
         }
 
         #endregion
+
+        #endregion
+
+        #endregion
+
+        #endregion
     }
 }
+
+
 

@@ -9,6 +9,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using NinjaTrader.NinjaScript.Indicators;
 #endregion
 
 namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
@@ -169,6 +170,14 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                     vah REAL NOT NULL,
                     poc REAL NOT NULL,
                     val REAL NOT NULL,
+                    vwap REAL,
+                    vwap_std_dev REAL,
+                    vwap_sd1_upper REAL,
+                    vwap_sd1_lower REAL,
+                    vwap_sd2_upper REAL,
+                    vwap_sd2_lower REAL,
+                    vwap_sd3_upper REAL,
+                    vwap_sd3_lower REAL,
                     total_volume REAL NOT NULL,
                     value_area_percent INTEGER NOT NULL,
                     tick_size REAL NOT NULL,
@@ -219,9 +228,62 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 CREATE INDEX IF NOT EXISTS idx_vp_zone_state_active ON vp_zone_state (profile_id, active);
             ";
 
+            string ddlSwingTrades = @"
+                CREATE TABLE IF NOT EXISTS swing_trades (
+                    trade_id TEXT PRIMARY KEY,
+                    signal_id TEXT,
+                    symbol TEXT NOT NULL,
+                    direction INTEGER NOT NULL,
+                    setup_type INTEGER NOT NULL,
+                    tier INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    entry_time_utc TEXT NOT NULL,
+                    exit_time_utc TEXT,
+                    entry_price REAL NOT NULL,
+                    exit_price REAL,
+                    initial_stop REAL NOT NULL,
+                    current_stop REAL NOT NULL,
+                    target1_price REAL NOT NULL,
+                    target2_price REAL NOT NULL,
+                    initial_contracts INTEGER NOT NULL,
+                    remaining_contracts INTEGER NOT NULL,
+                    tp1_hit INTEGER NOT NULL,
+                    realized_r REAL NOT NULL,
+                    realized_usd REAL NOT NULL,
+                    exit_reason TEXT,
+                    notes TEXT,
+                    last_update_utc TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_swing_trades_status ON swing_trades (symbol, status);
+            ";
+
             ExecuteNonQuery(ddlProfiles);
             ExecuteNonQuery(ddlNodes);
             ExecuteNonQuery(ddlZoneState);
+            ExecuteNonQuery(ddlSwingTrades);
+
+            // Migration automatique douce pour les bases de données existantes
+            MigrateSchemaIfNeeded();
+        }
+
+        private void MigrateSchemaIfNeeded()
+        {
+            string[] migrationColumns = new[]
+            {
+                "ALTER TABLE vp_profiles ADD COLUMN vwap REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_std_dev REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_sd1_upper REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_sd1_lower REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_sd2_upper REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_sd2_lower REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_sd3_upper REAL;",
+                "ALTER TABLE vp_profiles ADD COLUMN vwap_sd3_lower REAL;"
+            };
+
+            foreach (var sql in migrationColumns)
+            {
+                try { ExecuteNonQuery(sql); } catch { /* Ignore si déjà existant */ }
+            }
         }
 
         private void ExecuteNonQuery(string sql)
@@ -296,6 +358,10 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                                 cmd.CommandText = @"
                                     UPDATE vp_profiles SET
                                         vah = @vah, poc = @poc, val = @val,
+                                        vwap = @vwap, vwap_std_dev = @vwap_sd,
+                                        vwap_sd1_upper = @sd1u, vwap_sd1_lower = @sd1l,
+                                        vwap_sd2_upper = @sd2u, vwap_sd2_lower = @sd2l,
+                                        vwap_sd3_upper = @sd3u, vwap_sd3_lower = @sd3l,
                                         total_volume = @total_volume,
                                         value_area_percent = @va_pct,
                                         tick_size = @tick_size,
@@ -305,6 +371,14 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                                 AddParam(cmd, "@vah", profile.Vah);
                                 AddParam(cmd, "@poc", profile.Poc);
                                 AddParam(cmd, "@val", profile.Val);
+                                AddParam(cmd, "@vwap", profile.Vwap);
+                                AddParam(cmd, "@vwap_sd", profile.VwapStdDev);
+                                AddParam(cmd, "@sd1u", profile.VwapSd1Upper);
+                                AddParam(cmd, "@sd1l", profile.VwapSd1Lower);
+                                AddParam(cmd, "@sd2u", profile.VwapSd2Upper);
+                                AddParam(cmd, "@sd2l", profile.VwapSd2Lower);
+                                AddParam(cmd, "@sd3u", profile.VwapSd3Upper);
+                                AddParam(cmd, "@sd3l", profile.VwapSd3Lower);
                                 AddParam(cmd, "@total_volume", profile.TotalVolume);
                                 AddParam(cmd, "@va_pct", profile.ValueAreaPercent);
                                 AddParam(cmd, "@tick_size", profile.TickSize);
@@ -332,12 +406,22 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                                     INSERT INTO vp_profiles (
                                         symbol, exchange, session_template, profile_type,
                                         period_key, period_start_utc, period_end_utc,
-                                        vah, poc, val, total_volume, value_area_percent,
+                                        vah, poc, val,
+                                        vwap, vwap_std_dev,
+                                        vwap_sd1_upper, vwap_sd1_lower,
+                                        vwap_sd2_upper, vwap_sd2_lower,
+                                        vwap_sd3_upper, vwap_sd3_lower,
+                                        total_volume, value_area_percent,
                                         tick_size, calculation_method, created_at_utc
                                     ) VALUES (
                                         @symbol, @exchange, @session, @type,
                                         @key, @start, @end,
-                                        @vah, @poc, @val, @volume, @va_pct,
+                                        @vah, @poc, @val,
+                                        @vwap, @vwap_sd,
+                                        @sd1u, @sd1l,
+                                        @sd2u, @sd2l,
+                                        @sd3u, @sd3l,
+                                        @volume, @va_pct,
                                         @tick_size, @method, @created
                                     );
                                 ";
@@ -351,6 +435,14 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                                 AddParam(cmd, "@vah", profile.Vah);
                                 AddParam(cmd, "@poc", profile.Poc);
                                 AddParam(cmd, "@val", profile.Val);
+                                AddParam(cmd, "@vwap", profile.Vwap);
+                                AddParam(cmd, "@vwap_sd", profile.VwapStdDev);
+                                AddParam(cmd, "@sd1u", profile.VwapSd1Upper);
+                                AddParam(cmd, "@sd1l", profile.VwapSd1Lower);
+                                AddParam(cmd, "@sd2u", profile.VwapSd2Upper);
+                                AddParam(cmd, "@sd2l", profile.VwapSd2Lower);
+                                AddParam(cmd, "@sd3u", profile.VwapSd3Upper);
+                                AddParam(cmd, "@sd3l", profile.VwapSd3Lower);
                                 AddParam(cmd, "@volume", profile.TotalVolume);
                                 AddParam(cmd, "@va_pct", profile.ValueAreaPercent);
                                 AddParam(cmd, "@tick_size", profile.TickSize);
@@ -525,6 +617,81 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             return result;
         }
 
+        /// <summary>
+        /// Renvoie les N derniers profils Daily entièrement clôturés d'un symbole AVANT la date spécifiée.
+        /// Triés du plus récent au plus ancien. Garantit l'absence de Look-Ahead bias.
+        /// Utilisé par le PocMigrationAnalyzer pour détecter la migration directionnelle du POC.
+        /// </summary>
+        public List<ClosedVolumeProfile> QueryRecentDailyProfiles(string symbol, DateTime beforeUtc, int count)
+        {
+            var results = new List<ClosedVolumeProfile>();
+            if (string.IsNullOrEmpty(symbol) || count <= 0) return results;
+
+            // 1. Tentative depuis le cache RAM
+            string groupKey = BuildGroupKey(symbol, VolumeProfilePeriodType.Daily);
+            List<ClosedVolumeProfile> list;
+            if (profileCacheBySymbolType.TryGetValue(groupKey, out list))
+            {
+                lock (list)
+                {
+                    for (int i = 0; i < list.Count && results.Count < count; i++)
+                    {
+                        var p = list[i];
+                        if (p.PeriodEndUtc <= beforeUtc && p.Valid)
+                            results.Add(p);
+                    }
+                }
+            }
+
+            if (results.Count >= count) return results;
+
+            // 2. Fallback SQLite si cache insuffisant
+            if (!isSqliteAvailable) return results;
+
+            results.Clear();
+            lock (dbLock)
+            {
+                try
+                {
+                    using (var cmd = connection.CreateCommand())
+                    {
+                        cmd.CommandText = @"
+                            SELECT * FROM vp_profiles
+                            WHERE symbol = @symbol
+                              AND profile_type = 'DAILY'
+                              AND period_end_utc <= @before
+                            ORDER BY period_end_utc DESC
+                            LIMIT @count;
+                        ";
+                        AddParam(cmd, "@symbol", symbol);
+                        AddParam(cmd, "@before", beforeUtc.ToString("o"));
+                        AddParam(cmd, "@count", count);
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var p = ReadProfileFromReader(reader);
+                                if (p != null) results.Add(p);
+                            }
+                        }
+                    }
+
+                    // Charger les nodes pour chaque profil
+                    for (int i = 0; i < results.Count; i++)
+                    {
+                        results[i].Nodes = LoadNodesForProfile(results[i].Id);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logAction("QueryRecentDailyProfiles SQLite Erreur : " + ex.Message);
+                }
+            }
+
+            return results;
+        }
+
         private List<VolumeProfileNode> LoadNodesForProfile(long profileId)
         {
             var nodes = new List<VolumeProfileNode>();
@@ -697,6 +864,24 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             cmd.Parameters.Add(p);
         }
 
+        private static bool HasColumn(DbDataReader reader, string columnName)
+        {
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                if (string.Equals(reader.GetName(i), columnName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        private static double ReadDoubleSafe(DbDataReader reader, string columnName, double defaultValue = 0.0)
+        {
+            if (!HasColumn(reader, columnName)) return defaultValue;
+            object val = reader[columnName];
+            if (val == null || val == DBNull.Value) return defaultValue;
+            try { return Convert.ToDouble(val); } catch { return defaultValue; }
+        }
+
         private static ClosedVolumeProfile ReadProfileFromReader(DbDataReader reader)
         {
             return new ClosedVolumeProfile
@@ -712,6 +897,14 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 Vah = Convert.ToDouble(reader["vah"]),
                 Poc = Convert.ToDouble(reader["poc"]),
                 Val = Convert.ToDouble(reader["val"]),
+                Vwap = ReadDoubleSafe(reader, "vwap", 0.0),
+                VwapStdDev = ReadDoubleSafe(reader, "vwap_std_dev", 0.0),
+                VwapSd1Upper = ReadDoubleSafe(reader, "vwap_sd1_upper", 0.0),
+                VwapSd1Lower = ReadDoubleSafe(reader, "vwap_sd1_lower", 0.0),
+                VwapSd2Upper = ReadDoubleSafe(reader, "vwap_sd2_upper", 0.0),
+                VwapSd2Lower = ReadDoubleSafe(reader, "vwap_sd2_lower", 0.0),
+                VwapSd3Upper = ReadDoubleSafe(reader, "vwap_sd3_upper", 0.0),
+                VwapSd3Lower = ReadDoubleSafe(reader, "vwap_sd3_lower", 0.0),
                 TotalVolume = Convert.ToDouble(reader["total_volume"]),
                 ValueAreaPercent = Convert.ToInt32(reader["value_area_percent"]),
                 TickSize = Convert.ToDouble(reader["tick_size"]),
@@ -720,6 +913,174 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 Valid = true,
                 Nodes = new List<VolumeProfileNode>()
             };
+        }
+
+        #endregion
+
+        #region Persistance Swing Trades SQLite
+
+        /// <summary>
+        /// Sauvegarde ou met à jour l'état complet d'un trade Swing en base SQLite.
+        /// </summary>
+        public void UpsertSwingTrade(TrackedSwingTrade t)
+        {
+            if (t == null || string.IsNullOrEmpty(t.TradeId)) return;
+            if (!isSqliteAvailable) return;
+
+            EnqueueWrite(conn =>
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = @"
+                        INSERT INTO swing_trades (
+                            trade_id, signal_id, symbol, direction, setup_type, tier, status,
+                            entry_time_utc, exit_time_utc, entry_price, exit_price,
+                            initial_stop, current_stop, target1_price, target2_price,
+                            initial_contracts, remaining_contracts, tp1_hit,
+                            realized_r, realized_usd, exit_reason, notes, last_update_utc
+                        ) VALUES (
+                            @id, @sig_id, @symbol, @dir, @setup, @tier, @status,
+                            @entry_time, @exit_time, @entry_price, @exit_price,
+                            @init_stop, @curr_stop, @tp1, @tp2,
+                            @init_c, @rem_c, @tp1_hit,
+                            @real_r, @real_usd, @reason, @notes, @updated
+                        )
+                        ON CONFLICT(trade_id) DO UPDATE SET
+                            status = excluded.status,
+                            exit_time_utc = excluded.exit_time_utc,
+                            exit_price = excluded.exit_price,
+                            current_stop = excluded.current_stop,
+                            remaining_contracts = excluded.remaining_contracts,
+                            tp1_hit = excluded.tp1_hit,
+                            realized_r = excluded.realized_r,
+                            realized_usd = excluded.realized_usd,
+                            exit_reason = excluded.exit_reason,
+                            notes = excluded.notes,
+                            last_update_utc = excluded.last_update_utc;
+                    ";
+                    AddParam(cmd, "@id", t.TradeId);
+                    AddParam(cmd, "@sig_id", t.Signal != null ? t.Signal.Id : string.Empty);
+                    AddParam(cmd, "@symbol", t.Signal != null ? t.Signal.Symbol : "UNKNOWN");
+                    AddParam(cmd, "@dir", t.IsLong ? 1 : -1);
+                    AddParam(cmd, "@setup", t.Signal != null ? (int)t.Signal.SetupType : 0);
+                    AddParam(cmd, "@tier", t.Signal != null ? (int)t.Signal.Tier : 0);
+                    AddParam(cmd, "@status", t.Closed ? "CLOSED" : "OPEN");
+                    AddParam(cmd, "@entry_time", t.EntryTimeUtc.ToString("o"));
+                    AddParam(cmd, "@exit_time", t.Closed ? t.ExitTimeUtc.ToString("o") : null);
+                    AddParam(cmd, "@entry_price", t.EntryPrice);
+                    AddParam(cmd, "@exit_price", t.Closed ? (object)t.ExitPrice : DBNull.Value);
+                    AddParam(cmd, "@init_stop", t.InitialStopPrice);
+                    AddParam(cmd, "@curr_stop", t.CurrentStopPrice);
+                    AddParam(cmd, "@tp1", t.Target1Price);
+                    AddParam(cmd, "@tp2", t.Target2Price);
+                    AddParam(cmd, "@init_c", t.InitialContracts);
+                    AddParam(cmd, "@rem_c", t.RemainingContracts);
+                    AddParam(cmd, "@tp1_hit", t.Tp1Hit ? 1 : 0);
+                    AddParam(cmd, "@real_r", t.RealizedR);
+                    AddParam(cmd, "@real_usd", t.RealizedPnlCurrency);
+                    AddParam(cmd, "@reason", t.ExitReason ?? "ACTIVE");
+                    AddParam(cmd, "@notes", t.ExecutionNotes ?? string.Empty);
+                    AddParam(cmd, "@updated", DateTime.UtcNow.ToString("o"));
+
+                    cmd.ExecuteNonQuery();
+                }
+            });
+        }
+
+        /// <summary>
+        /// Charge toutes les positions Swing actives (status = 'OPEN') depuis SQLite.
+        /// Permet la reprise transparente overnight après redémarrage ou reconnexion.
+        /// </summary>
+        public List<TrackedSwingTrade> LoadActiveSwingTrades(string symbol)
+        {
+            var list = new List<TrackedSwingTrade>();
+            if (!isSqliteAvailable) return list;
+
+            lock (dbLock)
+            {
+                try
+                {
+                    using (var cmd = connection.CreateCommand())
+                    {
+                        cmd.CommandText = @"
+                            SELECT * FROM swing_trades
+                            WHERE symbol = @symbol AND status = 'OPEN';
+                        ";
+                        AddParam(cmd, "@symbol", symbol);
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var t = new TrackedSwingTrade();
+                                t.TradeId = reader["trade_id"].ToString();
+                                t.IsLong = Convert.ToInt32(reader["direction"]) == 1;
+                                t.EntryPrice = Convert.ToDouble(reader["entry_price"], CultureInfo.InvariantCulture);
+                                t.InitialStopPrice = Convert.ToDouble(reader["initial_stop"], CultureInfo.InvariantCulture);
+                                t.CurrentStopPrice = Convert.ToDouble(reader["current_stop"], CultureInfo.InvariantCulture);
+                                t.Target1Price = Convert.ToDouble(reader["target1_price"], CultureInfo.InvariantCulture);
+                                t.Target2Price = Convert.ToDouble(reader["target2_price"], CultureInfo.InvariantCulture);
+                                t.InitialContracts = Convert.ToInt32(reader["initial_contracts"]);
+                                t.RemainingContracts = Convert.ToInt32(reader["remaining_contracts"]);
+                                t.PositionSizeContracts = t.RemainingContracts;
+                                t.Tp1Hit = Convert.ToInt32(reader["tp1_hit"]) == 1;
+                                t.RealizedR = Convert.ToDouble(reader["realized_r"], CultureInfo.InvariantCulture);
+                                t.RealizedPnlCurrency = Convert.ToDouble(reader["realized_usd"], CultureInfo.InvariantCulture);
+                                t.ExitReason = reader["exit_reason"].ToString();
+                                t.ExecutionNotes = reader["notes"].ToString();
+                                t.Closed = false;
+
+                                string entryStr = reader["entry_time_utc"].ToString();
+                                DateTime entryDt;
+                                if (DateTime.TryParse(entryStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out entryDt))
+                                    t.EntryTimeUtc = entryDt;
+                                else
+                                    t.EntryTimeUtc = DateTime.UtcNow;
+
+                                t.Signal = new SwingSignal
+                                {
+                                    Id = reader["signal_id"].ToString(),
+                                    Symbol = reader["symbol"].ToString(),
+                                    Direction = t.IsLong ? SwingDirection.Long : SwingDirection.Short,
+                                    SetupType = (SwingSetupType)Convert.ToInt32(reader["setup_type"]),
+                                    Tier = (SwingTier)Convert.ToInt32(reader["tier"]),
+                                    EntryPrice = t.EntryPrice,
+                                    InitialStopPrice = t.InitialStopPrice,
+                                    Target1Price = t.Target1Price,
+                                    Target2Price = t.Target2Price,
+                                    PositionSizeContracts = t.InitialContracts,
+                                    GeneratedTimeUtc = t.EntryTimeUtc
+                                };
+
+                                list.Add(t);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logAction("LoadActiveSwingTrades SQLite Erreur : " + ex.Message);
+                }
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Vide de manière synchrone les écritures en attente vers SQLite.
+        /// </summary>
+        public void FlushQueue()
+        {
+            if (connection != null && connection.State == ConnectionState.Open)
+            {
+                lock (dbLock)
+                {
+                    Action<DbConnection> action;
+                    while (writeQueue.TryDequeue(out action))
+                    {
+                        try { action(connection); } catch { }
+                    }
+                }
+            }
         }
 
         #endregion
@@ -737,17 +1098,7 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 writeSignal.Set();
 
                 // Vidage final de la file d'attente
-                if (connection != null && connection.State == ConnectionState.Open)
-                {
-                    lock (dbLock)
-                    {
-                        Action<DbConnection> action;
-                        while (writeQueue.TryDequeue(out action))
-                        {
-                            try { action(connection); } catch { }
-                        }
-                    }
-                }
+                FlushQueue();
 
                 if (connection != null)
                 {
