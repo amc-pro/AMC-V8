@@ -17,6 +17,8 @@ cs_files = [
     'AuctionMarketCore.Render.cs',
     'AuctionMarketCore.ScalpingPro.cs',
     'AuctionMarketCore.Sniper.cs',
+    'AuctionMarketCore.Swing.Models.cs',
+    'AuctionMarketCore.Swing.cs',
     'AuctionMarketCore.VolumeProfile.cs',
 ]
 
