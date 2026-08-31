@@ -1,9 +1,9 @@
 # Rapport de Validation Zero-Trust — Suite de Tests Unitaires & Intégration Swing (AMC-V8)
 
-**Date :** 30 Août 2026  
+**Date :** 31 Août 2026  
 **Projet :** `amc-pro/AMC-V8` (Moteur `AuctionMarketCore`)  
 **Runner :** `dotnet run --project Tests/VolumeProfileTests.csproj`  
-**Résultat Global :** **60/60 TESTS RÉUSSIS (100 % PASS)** — 0 Échec  
+**Résultat Global :** **63/63 TESTS RÉUSSIS (100 % PASS)** — 0 Échec  
 
 ---
 
@@ -46,10 +46,21 @@
 
 ---
 
-## 3. Synthèse de Couverture Globale
+## 3. Matrice des 3 Tests POC Migration Model (6ème Setup)
+
+| # | Nom du Test | Données d'Entrée | Comportement Attendu | Résultat Observé | Statut |
+| :-: | :--- | :--- | :--- | :--- | :-: |
+| **26** | `Test_PocMigration_Analyzer_Detects_Upward_Drift` | 4 profils Daily consécutifs montants ($5000 \rightarrow 5015 \rightarrow 5030 \rightarrow 5050$) | Détection direction Long, 3 transitions consécutives, drift 200 ticks, force $\ge 60/100$, `IsMigrationValid = true`. | Long, 3 sessions, 200t drift, Force $\ge 60$ | **PASS** |
+| **27** | `Test_PocMigration_Analyzer_Rejects_Inconsistent_Drift` | 4 profils en zigzag ($5000 \rightarrow 5020 \rightarrow 5010 \rightarrow 5030$) | Rejet de la migration (`IsMigrationValid = false`) faute de consistance directionnelle $\ge 3$ sessions. | Rejeté avec succès | **PASS** |
+| **28** | `Test_PocMigration_Setup_Scoring_And_Preconditions` | Contexte migration Long sur pullback (prix près du POC dans la VA) | Validation préconditions, score $\ge 60/100$, rejet si achat hors VA (chase) ou direction opposée. | Validé sur pullback, rejeté sur chase | **PASS** |
+
+---
+
+## 4. Synthèse de Couverture Globale
 
 * **Suite Volume Profile V7.9 :** 35/35 PASS
 * **Suite Swing Unitaire V8.0 :** 20/20 PASS
 * **Suite Swing Intégration Stateful & SQLite V8.0 :** 5/5 PASS
-* **Total Exécuté :** **60/60 PASS (100%)**
-* **Temps d'Exécution Global :** ~1.05 seconde
+* **Suite POC Migration Model V8.0 :** 3/3 PASS
+* **Total Exécuté :** **63/63 PASS (100%)**
+* **Temps d'Exécution Global :** ~1.10 seconde

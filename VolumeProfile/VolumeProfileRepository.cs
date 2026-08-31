@@ -617,6 +617,81 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             return result;
         }
 
+        /// <summary>
+        /// Renvoie les N derniers profils Daily entièrement clôturés d'un symbole AVANT la date spécifiée.
+        /// Triés du plus récent au plus ancien. Garantit l'absence de Look-Ahead bias.
+        /// Utilisé par le PocMigrationAnalyzer pour détecter la migration directionnelle du POC.
+        /// </summary>
+        public List<ClosedVolumeProfile> QueryRecentDailyProfiles(string symbol, DateTime beforeUtc, int count)
+        {
+            var results = new List<ClosedVolumeProfile>();
+            if (string.IsNullOrEmpty(symbol) || count <= 0) return results;
+
+            // 1. Tentative depuis le cache RAM
+            string groupKey = BuildGroupKey(symbol, VolumeProfilePeriodType.Daily);
+            List<ClosedVolumeProfile> list;
+            if (profileCacheBySymbolType.TryGetValue(groupKey, out list))
+            {
+                lock (list)
+                {
+                    for (int i = 0; i < list.Count && results.Count < count; i++)
+                    {
+                        var p = list[i];
+                        if (p.PeriodEndUtc <= beforeUtc && p.Valid)
+                            results.Add(p);
+                    }
+                }
+            }
+
+            if (results.Count >= count) return results;
+
+            // 2. Fallback SQLite si cache insuffisant
+            if (!isSqliteAvailable) return results;
+
+            results.Clear();
+            lock (dbLock)
+            {
+                try
+                {
+                    using (var cmd = connection.CreateCommand())
+                    {
+                        cmd.CommandText = @"
+                            SELECT * FROM vp_profiles
+                            WHERE symbol = @symbol
+                              AND profile_type = 'DAILY'
+                              AND period_end_utc <= @before
+                            ORDER BY period_end_utc DESC
+                            LIMIT @count;
+                        ";
+                        AddParam(cmd, "@symbol", symbol);
+                        AddParam(cmd, "@before", beforeUtc.ToString("o"));
+                        AddParam(cmd, "@count", count);
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var p = ReadProfileFromReader(reader);
+                                if (p != null) results.Add(p);
+                            }
+                        }
+                    }
+
+                    // Charger les nodes pour chaque profil
+                    for (int i = 0; i < results.Count; i++)
+                    {
+                        results[i].Nodes = LoadNodesForProfile(results[i].Id);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logAction("QueryRecentDailyProfiles SQLite Erreur : " + ex.Message);
+                }
+            }
+
+            return results;
+        }
+
         private List<VolumeProfileNode> LoadNodesForProfile(long profileId)
         {
             var nodes = new List<VolumeProfileNode>();

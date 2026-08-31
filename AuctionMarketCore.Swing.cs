@@ -66,6 +66,17 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Activer Alertes Telegram Swing", Order = 13, GroupName = "Swing 03. Alertes")]
         public bool EnableSwingTelegramAlerts { get; set; }
 
+        [Display(Name = "Activer POC Migration", Order = 14, GroupName = "Swing 01. Moteur")]
+        public bool EnablePocMigration { get; set; }
+
+        [Range(2, 10)]
+        [Display(Name = "Sessions Min Migration POC", Order = 15, GroupName = "Swing 01. Moteur")]
+        public int PocMigrationMinSessions { get; set; }
+
+        [Range(3, 20)]
+        [Display(Name = "Lookback Sessions Migration", Order = 16, GroupName = "Swing 01. Moteur")]
+        public int PocMigrationLookbackSessions { get; set; }
+
         #endregion
 
         #region État Interne Swing
@@ -79,6 +90,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private ISwingScorer swingScorer;
         private ISwingRiskManager swingRiskManager;
+        private PocMigrationAnalyzer pocMigrationAnalyzer;
         private readonly List<SwingSignal> activeSwingSignals = new List<SwingSignal>();
         private readonly List<TrackedSwingTrade> openSwingTrades = new List<TrackedSwingTrade>();
         private readonly List<TrackedSwingTrade> closedSwingTrades = new List<TrackedSwingTrade>();
@@ -103,6 +115,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             NewsBlackoutMinutes = 15;
             NewsWindowPenalty = 20;
             NewsHardBlock = true;
+            EnablePocMigration = true;
+            PocMigrationMinSessions = 3;
+            PocMigrationLookbackSessions = 5;
             SwingJournalFilePath = string.Empty;
             EnableSwingTelegramAlerts = true;
         }
@@ -145,6 +160,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             if (swingRiskManager == null)
                 swingRiskManager = new SwingRiskManager();
+
+            if (pocMigrationAnalyzer == null)
+                pocMigrationAnalyzer = new PocMigrationAnalyzer();
 
             activeSwingSignals.Clear();
             openSwingTrades.Clear();
@@ -364,6 +382,35 @@ namespace NinjaTrader.NinjaScript.Indicators
             ctx.HasBos = HasRecentBos(isBuy);
             ctx.HasChoch = HasRecentChoch(isBuy);
 
+            // Analyse de la migration directionnelle du POC (Multi-Session)
+            if (EnablePocMigration && volumeProfileManager != null && volumeProfileManager.Repository != null && pocMigrationAnalyzer != null)
+            {
+                try
+                {
+                    string sym = Instrument != null && Instrument.MasterInstrument != null ? Instrument.MasterInstrument.Name : "SYM";
+                    var recentDailies = volumeProfileManager.Repository.QueryRecentDailyProfiles(sym, ctx.TimeUtc, PocMigrationLookbackSessions > 0 ? PocMigrationLookbackSessions : 5);
+                    if (recentDailies != null && recentDailies.Count >= (PocMigrationMinSessions > 0 ? PocMigrationMinSessions : 3))
+                    {
+                        var mig = pocMigrationAnalyzer.Analyze(recentDailies, ctx.TickSize, ctx.AtrDaily);
+                        if (mig != null && mig.IsMigrationValid && mig.ConsecutiveSessions >= (PocMigrationMinSessions > 0 ? PocMigrationMinSessions : 3))
+                        {
+                            ctx.HasPocMigration = true;
+                            ctx.PocMigrationDirection = mig.Direction;
+                            ctx.PocMigrationSessions = mig.ConsecutiveSessions;
+                            ctx.PocMigrationStrength = mig.MigrationStrength;
+                            ctx.PocMigrationDriftTotalTicks = mig.TotalPocDriftTicks;
+                            ctx.PocMigrationVaOverlap = mig.ValueAreaOverlapPercent;
+                            ctx.PocMigrationOldestPoc = mig.OldestPoc;
+                            ctx.PocMigrationAvgDriftPerSession = mig.AveragePocDriftPerSession;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    RegisterRuntimeError("BuildSwingContext.PocMigration", ex);
+                }
+            }
+
             return ctx;
         }
 
@@ -429,7 +476,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 SwingSetupType.ValueReentry,
                 SwingSetupType.BreakoutRetest,
                 SwingSetupType.MacroReversal,
-                SwingSetupType.HtfContinuation
+                SwingSetupType.HtfContinuation,
+                SwingSetupType.PocMigration
             };
 
             foreach (var setup in setupTypes)
@@ -465,6 +513,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                 structuralLevel = Math.Min(structuralLevel, ctx.Sd2Lower - (StopBufferTicks * TickSize));
             else if (setup == SwingSetupType.RejectExtreme && ctx.Sd2Upper > 0 && !isLong)
                 structuralLevel = Math.Max(structuralLevel, ctx.Sd2Upper + (StopBufferTicks * TickSize));
+            else if (setup == SwingSetupType.PocMigration && ctx.PocMigrationOldestPoc > 0)
+            {
+                structuralLevel = isLong ? ctx.PocMigrationOldestPoc - (StopBufferTicks * TickSize)
+                                         : ctx.PocMigrationOldestPoc + (StopBufferTicks * TickSize);
+            }
 
             // Calcul du Stop hybride (ATR + Structurel borné par Min/MaxStopTicks)
             double stop = swingRiskManager.CalculateHybridStop(

@@ -23,7 +23,9 @@ namespace NinjaTrader.NinjaScript.Indicators
         /// <summary>Retournement macro structurel avec divergence delta/CVD et absorption.</summary>
         MacroReversal = 3,
         /// <summary>Continuation de tendance HTF après pullback vers FVG, HVN ou VWAP clôturé.</summary>
-        HtfContinuation = 4
+        HtfContinuation = 4,
+        /// <summary>Migration directionnelle du POC sur N sessions consécutives (Auction Market Theory pure).</summary>
+        PocMigration = 5
     }
 
     /// <summary>
@@ -198,6 +200,16 @@ namespace NinjaTrader.NinjaScript.Indicators
         public double GapPercent { get; set; }
         public bool IsOvernightHoldAllowed { get; set; }
 
+        // POC Migration Multi-Session
+        public bool HasPocMigration { get; set; }
+        public SwingDirection PocMigrationDirection { get; set; }
+        public int PocMigrationSessions { get; set; }
+        public double PocMigrationStrength { get; set; }
+        public double PocMigrationDriftTotalTicks { get; set; }
+        public double PocMigrationVaOverlap { get; set; }
+        public double PocMigrationOldestPoc { get; set; }
+        public double PocMigrationAvgDriftPerSession { get; set; }
+
         public SwingContext()
         {
             Symbol = "UNKNOWN";
@@ -206,6 +218,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             PointValue = 50.0;
             HtfTrendDirection = 0;
             RegimeHtf = SwingMarketRegime.Balance;
+            PocMigrationDirection = SwingDirection.None;
         }
     }
 
@@ -383,6 +396,18 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (!isLong && (ctx.HtfTrendDirection >= 0 || ctx.Close >= ctx.Open))
                     { rejectionReason = "NO_HTF_CONTINUATION_SHORT"; return false; }
                     break;
+
+                case SwingSetupType.PocMigration:
+                    if (!ctx.HasPocMigration || ctx.PocMigrationSessions < 3)
+                    { rejectionReason = "NO_POC_MIGRATION_DETECTED"; return false; }
+                    if (ctx.PocMigrationDirection != dir)
+                    { rejectionReason = "POC_MIGRATION_DIRECTION_MISMATCH"; return false; }
+                    // Entrée sur pullback : prix doit être dans la zone de valeur récente (pas au-delà du POC actuel)
+                    if (isLong && ctx.Close > ctx.DailyVah && ctx.DailyVah > 0)
+                    { rejectionReason = "POC_MIGRATION_LONG_ABOVE_VAH"; return false; }
+                    if (!isLong && ctx.Close < ctx.DailyVal && ctx.DailyVal > 0)
+                    { rejectionReason = "POC_MIGRATION_SHORT_BELOW_VAL"; return false; }
+                    break;
             }
 
             return true;
@@ -412,6 +437,15 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 s.AmtLocationScore = 22.0;
             }
+            else if (setup == SwingSetupType.PocMigration)
+            {
+                // Prix en pullback dans la VA migrée = entrée optimale
+                bool nearPoc = ctx.DailyPoc > 0 && Math.Abs(ctx.Close - ctx.DailyPoc) <= ctx.AtrCurrent * 0.5;
+                bool insideVa = ctx.DailyVal > 0 && ctx.DailyVah > 0 && ctx.Close >= ctx.DailyVal && ctx.Close <= ctx.DailyVah;
+                if (nearPoc) s.AmtLocationScore = 25.0;
+                else if (insideVa) s.AmtLocationScore = 22.0;
+                else s.AmtLocationScore = 15.0;
+            }
             else
             {
                 s.AmtLocationScore = 18.0;
@@ -419,9 +453,17 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             // 3. Volume Profile Score (0..20)
             double vpScore = 0.0;
-            if (ctx.NearWeeklyPoc || ctx.NearDailyPoc) vpScore += 8.0;
-            if (ctx.NearDailyVah || ctx.NearDailyVal) vpScore += 6.0;
-            if (ctx.InsideHvn) vpScore += 6.0;
+            if (setup == SwingSetupType.PocMigration)
+            {
+                // Score basé sur la force de migration du POC
+                vpScore = Math.Min(20.0, ctx.PocMigrationStrength * 0.2);
+            }
+            else
+            {
+                if (ctx.NearWeeklyPoc || ctx.NearDailyPoc) vpScore += 8.0;
+                if (ctx.NearDailyVah || ctx.NearDailyVal) vpScore += 6.0;
+                if (ctx.InsideHvn) vpScore += 6.0;
+            }
             s.VolumeProfileScore = Math.Min(20.0, vpScore > 0 ? vpScore : 12.0);
 
             // 4. Structure SMC Score (0..15)
@@ -678,6 +720,142 @@ namespace NinjaTrader.NinjaScript.Indicators
             RealizedPnlCurrency = PartialRealizedPnlCurrency + finalPnl;
             RealizedR = Tp1Hit ? ((PartialRealizedR * PartialExitContracts + finalR * closingContracts) / InitialContracts) : finalR;
             RemainingContracts = 0;
+        }
+    }
+
+    #endregion
+
+    #region POC Migration Model
+
+    /// <summary>
+    /// Résultat de l'analyse de migration du POC sur N sessions historiques.
+    /// Objet immuable retourné par PocMigrationAnalyzer.
+    /// </summary>
+    public sealed class PocMigrationResult
+    {
+        public SwingDirection Direction { get; set; }
+        public int ConsecutiveSessions { get; set; }
+        public double TotalPocDriftTicks { get; set; }
+        public double AveragePocDriftPerSession { get; set; }
+        public double ValueAreaOverlapPercent { get; set; }
+        public bool IsMigrationValid { get; set; }
+        public double MigrationStrength { get; set; }
+        public double OldestPoc { get; set; }
+
+        public PocMigrationResult()
+        {
+            Direction = SwingDirection.None;
+            IsMigrationValid = false;
+        }
+    }
+
+    /// <summary>
+    /// Analyseur déterministe et pur (sans état) de la migration directionnelle du POC.
+    /// Prend en entrée une liste de profils Daily clôturés (triés du plus récent au plus ancien)
+    /// et retourne un résultat immuable décrivant la migration observée.
+    /// </summary>
+    public sealed class PocMigrationAnalyzer
+    {
+        /// <summary>
+        /// Analyse la migration du POC sur les profils fournis.
+        /// Les profils doivent être triés du plus récent (index 0) au plus ancien.
+        /// </summary>
+        public PocMigrationResult Analyze(List<ClosedVolumeProfile> recentProfiles, double tickSize, double atrDaily)
+        {
+            var result = new PocMigrationResult();
+            if (recentProfiles == null || recentProfiles.Count < 3 || tickSize <= 0)
+                return result;
+
+            // Calculer les drifts entre sessions consécutives
+            int consecutiveUp = 0;
+            int consecutiveDown = 0;
+            double totalDrift = 0.0;
+            double totalVaOverlap = 0.0;
+            int overlapCount = 0;
+            double oldestPoc = 0.0;
+
+            for (int i = 0; i < recentProfiles.Count - 1; i++)
+            {
+                var newer = recentProfiles[i];
+                var older = recentProfiles[i + 1];
+
+                if (newer.Poc <= 0 || older.Poc <= 0) break;
+
+                double drift = newer.Poc - older.Poc;
+                double driftTicks = drift / tickSize;
+
+                if (i == 0)
+                {
+                    // Initialiser la direction à partir de la première paire
+                    if (driftTicks > 0) { consecutiveUp = 1; consecutiveDown = 0; }
+                    else if (driftTicks < 0) { consecutiveDown = 1; consecutiveUp = 0; }
+                    else break; // Pas de drift
+                }
+                else
+                {
+                    // Vérifier la consistance directionnelle
+                    if (driftTicks > 0 && consecutiveUp > 0) consecutiveUp++;
+                    else if (driftTicks < 0 && consecutiveDown > 0) consecutiveDown++;
+                    else break; // Rupture de la migration
+                }
+
+                totalDrift += driftTicks;
+                oldestPoc = older.Poc;
+
+                // Calcul du chevauchement VA entre sessions adjacentes
+                if (newer.Vah > 0 && newer.Val > 0 && older.Vah > 0 && older.Val > 0)
+                {
+                    double overlapLow = Math.Max(newer.Val, older.Val);
+                    double overlapHigh = Math.Min(newer.Vah, older.Vah);
+                    double overlapRange = Math.Max(0, overlapHigh - overlapLow);
+                    double maxRange = Math.Max(newer.Vah - newer.Val, older.Vah - older.Val);
+                    if (maxRange > 0)
+                    {
+                        totalVaOverlap += (overlapRange / maxRange) * 100.0;
+                        overlapCount++;
+                    }
+                }
+            }
+
+            int consecutive = Math.Max(consecutiveUp, consecutiveDown);
+            if (consecutive < 3) return result;
+
+            result.Direction = consecutiveUp > consecutiveDown ? SwingDirection.Long : SwingDirection.Short;
+            result.ConsecutiveSessions = consecutive;
+            result.TotalPocDriftTicks = Math.Abs(totalDrift);
+            result.AveragePocDriftPerSession = consecutive > 0 ? Math.Abs(totalDrift) / consecutive : 0;
+            result.ValueAreaOverlapPercent = overlapCount > 0 ? totalVaOverlap / overlapCount : 0;
+            result.OldestPoc = oldestPoc;
+
+            // Scoring de la force de migration (0..100)
+            double strength = 0.0;
+
+            // Drift consistant (+30 pts)
+            strength += 30.0;
+
+            // Magnitude suffisante (+25 pts) : drift total >= 0.5 ATR daily
+            double atrThreshold = atrDaily > 0 ? atrDaily / tickSize * 0.5 : 20.0;
+            if (result.TotalPocDriftTicks >= atrThreshold * 2) strength += 25.0;
+            else if (result.TotalPocDriftTicks >= atrThreshold) strength += 18.0;
+            else strength += 8.0;
+
+            // VA Overlap entre 30% et 80% = migration graduelle (+20 pts)
+            if (result.ValueAreaOverlapPercent >= 30.0 && result.ValueAreaOverlapPercent <= 80.0) strength += 20.0;
+            else if (result.ValueAreaOverlapPercent > 80.0) strength += 10.0; // Trop de chevauchement = balance
+            else strength += 5.0; // Gap probable
+
+            // Durée bonus (+10 pts si 4+ sessions, +15 si 5+)
+            if (consecutive >= 5) strength += 15.0;
+            else if (consecutive >= 4) strength += 10.0;
+
+            // Bonus drift par session régulier (+10 pts)
+            if (result.AveragePocDriftPerSession >= 4.0) strength += 10.0;
+            else if (result.AveragePocDriftPerSession >= 2.0) strength += 5.0;
+
+            result.MigrationStrength = Math.Min(100.0, strength);
+            result.IsMigrationValid = result.MigrationStrength >= 50.0;
+
+            return result;
         }
     }
 

@@ -177,6 +177,9 @@
       <SwingMaxActiveTrades>2</SwingMaxActiveTrades>
       <EnableNewsFilter>true</EnableNewsFilter>
       <EnableSwingTelegramAlerts>true</EnableSwingTelegramAlerts>
+      <EnablePocMigration>true</EnablePocMigration>
+      <PocMigrationMinSessions>3</PocMigrationMinSessions>
+      <PocMigrationLookbackSessions>5</PocMigrationLookbackSessions>
       <SniperRthOnly>false</SniperRthOnly>
       <NewsBlackoutMinutes>15</NewsBlackoutMinutes>
       <NewsTimesCsv>1530,2100</NewsTimesCsv>

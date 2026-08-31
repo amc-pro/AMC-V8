@@ -88,6 +88,13 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_Swing_Integration_Dynamic_News_And_Gap_Penalty", Test_Swing_Integration_Dynamic_News_And_Gap_Penalty);
             RunTest("Test_Swing_Integration_Overnight_Session_Transition", Test_Swing_Integration_Overnight_Session_Transition);
 
+            // ================================================================
+            // 📊 SUITE POC MIGRATION MODEL (3 TESTS)
+            // ================================================================
+            RunTest("Test_PocMigration_Analyzer_Detects_Upward_Drift", Test_PocMigration_Analyzer_Detects_Upward_Drift);
+            RunTest("Test_PocMigration_Analyzer_Rejects_Inconsistent_Drift", Test_PocMigration_Analyzer_Rejects_Inconsistent_Drift);
+            RunTest("Test_PocMigration_Setup_Scoring_And_Preconditions", Test_PocMigration_Setup_Scoring_And_Preconditions);
+
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
             Console.WriteLine("================================================================");
@@ -1583,6 +1590,92 @@ namespace AMC.VolumeProfile.Tests
             Assert(trade.RemainingContracts == 2 && !trade.Closed, "Position active intacte pour maintien overnight");
             Assert(trade.ExitReason == "ACTIVE", "Statut doit rester ACTIVE");
         }
+
+        #region Suite POC Migration Model
+
+        private static void Test_PocMigration_Analyzer_Detects_Upward_Drift()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // 4 profils Daily consécutifs montants : POC 5000 -> 5015 -> 5030 -> 5050
+            // Triés du plus récent (J-1: 5050) au plus ancien (J-4: 5000)
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5050.0, Vah = 5065.0, Val = 5035.0 }, // J-1 (plus récent)
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5015.0 }, // J-2
+                new ClosedVolumeProfile { Poc = 5015.0, Vah = 5030.0, Val = 5000.0 }, // J-3
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0 }  // J-4 (plus ancien)
+            };
+
+            var result = analyzer.Analyze(profiles, 0.25, 40.0);
+
+            Assert(result.IsMigrationValid, "Migration POC doit être valide");
+            Assert(result.Direction == SwingDirection.Long, "Direction doit être Long pour POC montant");
+            Assert(result.ConsecutiveSessions == 3, string.Format("3 transitions consécutives attendues, obtenu {0}", result.ConsecutiveSessions));
+            Assert(result.TotalPocDriftTicks == 200.0, string.Format("Drift total 200 ticks attendu (50 pts / 0.25), obtenu {0}", result.TotalPocDriftTicks));
+            Assert(result.OldestPoc == 5000.0, "OldestPoc doit être 5000.0");
+            Assert(result.MigrationStrength >= 60.0, string.Format("Force de migration >= 60 attendue, obtenu {0:F1}", result.MigrationStrength));
+        }
+
+        private static void Test_PocMigration_Analyzer_Rejects_Inconsistent_Drift()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // Profils en zigzag : 5000 -> 5020 -> 5010 -> 5030 (pas de tendance consécutive >= 3)
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5015.0 },
+                new ClosedVolumeProfile { Poc = 5010.0, Vah = 5025.0, Val = 4995.0 }, // Baisse ici (rupture)
+                new ClosedVolumeProfile { Poc = 5020.0, Vah = 5035.0, Val = 5005.0 },
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0 }
+            };
+
+            var result = analyzer.Analyze(profiles, 0.25, 40.0);
+            Assert(!result.IsMigrationValid, "Migration en zigzag doit être rejetée (IsMigrationValid = false)");
+        }
+
+        private static void Test_PocMigration_Setup_Scoring_And_Preconditions()
+        {
+            var scorer = new SwingScorer();
+
+            // 1. Contexte avec migration valide
+            var ctx = new SwingContext
+            {
+                HasPocMigration = true,
+                PocMigrationDirection = SwingDirection.Long,
+                PocMigrationSessions = 4,
+                PocMigrationStrength = 85.0,
+                PocMigrationOldestPoc = 5000.0,
+                DailyPoc = 5040.0,
+                DailyVah = 5055.0,
+                DailyVal = 5025.0,
+                Close = 5038.0, // En pullback dans la VA (près du POC)
+                Open = 5035.0,
+                HtfTrendDirection = 1,
+                TickSize = 0.25,
+                AtrCurrent = 10.0,
+                AtrDaily = 40.0
+            };
+
+            string rejection;
+            bool allowed = scorer.ValidatePreconditions(ctx, SwingSetupType.PocMigration, SwingDirection.Long, out rejection);
+            Assert(allowed, string.Format("Precondition doit être validée pour migration Long sur pullback. Rejet: {0}", rejection));
+
+            var score = scorer.ComputeScore(ctx, SwingSetupType.PocMigration, SwingDirection.Long);
+            Assert(score.Total >= 60.0, string.Format("Score total attendu >= 60, obtenu {0:F1}", score.Total));
+
+            // 2. Precondition échoue si prix au-delà de VAH (chase / pas de pullback)
+            ctx.Close = 5060.0; // Au-dessus de DailyVah (5055)
+            bool chaseRejected = scorer.ValidatePreconditions(ctx, SwingSetupType.PocMigration, SwingDirection.Long, out rejection);
+            Assert(!chaseRejected && rejection == "POC_MIGRATION_LONG_ABOVE_VAH", "Achat au-dessus de VAH doit être rejeté (pas un pullback)");
+
+            // 3. Precondition échoue si direction opposée
+            ctx.Close = 5038.0;
+            bool dirMismatch = scorer.ValidatePreconditions(ctx, SwingSetupType.PocMigration, SwingDirection.Short, out rejection);
+            Assert(!dirMismatch && rejection == "POC_MIGRATION_DIRECTION_MISMATCH", "Short sur migration haussière doit être rejeté");
+        }
+
+        #endregion
 
         #endregion
 
