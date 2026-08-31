@@ -29,6 +29,10 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
         public long MinTick { get; private set; }
         public long MaxTick { get; private set; }
         public long TotalVolume { get; private set; }
+        public int BarsAccumulated { get; private set; }
+
+        private double sumTickVol = 0.0;
+        private double sumTick2Vol = 0.0;
 
         public VolumeProfileCalculator()
         {
@@ -41,6 +45,9 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             MinTick = long.MaxValue;
             MaxTick = long.MinValue;
             TotalVolume = 0;
+            sumTickVol = 0.0;
+            sumTick2Vol = 0.0;
+            BarsAccumulated = 0;
         }
 
         public void Reset()
@@ -49,6 +56,14 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             MinTick = long.MaxValue;
             MaxTick = long.MinValue;
             TotalVolume = 0;
+            sumTickVol = 0.0;
+            sumTick2Vol = 0.0;
+            BarsAccumulated = 0;
+        }
+
+        public void IncrementBarsCount(int count = 1)
+        {
+            BarsAccumulated += count;
         }
 
         public void AddVolume(long tick, long volume)
@@ -58,6 +73,10 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             volumeMap.TryGetValue(tick, out current);
             volumeMap[tick] = current + volume;
             TotalVolume += volume;
+
+            double volD = (double)volume;
+            sumTickVol += (double)tick * volD;
+            sumTick2Vol += (double)tick * (double)tick * volD;
 
             if (tick < MinTick) MinTick = tick;
             if (tick > MaxTick) MaxTick = tick;
@@ -77,12 +96,61 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             {
                 AddVolume(kv.Key, kv.Value);
             }
+            BarsAccumulated += other.BarsAccumulated;
         }
 
         public long GetVolumeAtTick(long tick)
         {
             long v;
             return volumeMap.TryGetValue(tick, out v) ? v : 0L;
+        }
+
+        /// <summary>
+        /// Calcul O(1) instantané du VWAP et des bandes d'écart-type SD 1, 2, 3
+        /// sans recalculer la Value Area complète ni les nœuds gaussiens.
+        /// </summary>
+        public bool TryCalculateVwapAndBands(
+            double tickSize,
+            out double vwap,
+            out double stdDev,
+            out double sd1Upper,
+            out double sd1Lower,
+            out double sd2Upper,
+            out double sd2Lower,
+            out double sd3Upper,
+            out double sd3Lower)
+        {
+            vwap = 0.0;
+            stdDev = 0.0;
+            sd1Upper = 0.0;
+            sd1Lower = 0.0;
+            sd2Upper = 0.0;
+            sd2Lower = 0.0;
+            sd3Upper = 0.0;
+            sd3Lower = 0.0;
+
+            if (TotalVolume <= 0 || tickSize <= 0 || volumeMap.Count == 0)
+                return false;
+
+            double totalVolD = (double)TotalVolume;
+            double vwapTick = sumTickVol / totalVolD;
+            double varianceTicks = (sumTick2Vol / totalVolD) - (vwapTick * vwapTick);
+            if (varianceTicks < 0.0 || double.IsNaN(varianceTicks))
+                varianceTicks = 0.0;
+
+            double stdDevTick = Math.Sqrt(varianceTicks);
+
+            vwap = vwapTick * tickSize;
+            stdDev = stdDevTick * tickSize;
+
+            sd1Upper = vwap + (1.0 * stdDev);
+            sd1Lower = vwap - (1.0 * stdDev);
+            sd2Upper = vwap + (2.0 * stdDev);
+            sd2Lower = vwap - (2.0 * stdDev);
+            sd3Upper = vwap + (3.0 * stdDev);
+            sd3Lower = vwap - (3.0 * stdDev);
+
+            return true;
         }
 
         #endregion

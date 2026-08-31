@@ -104,6 +104,20 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_PocMigration_Setup_AntiChase_VA_Rejection", Test_PocMigration_Setup_AntiChase_VA_Rejection);
             RunTest("Test_PocMigration_Repository_Query_Strict_AntiLookahead", Test_PocMigration_Repository_Query_Strict_AntiLookahead);
 
+            // ================================================================
+            // 🌊 SUITE MONTHLY VWAP BAND RETEST ZERO-TRUST (10 TESTS DE VALIDATION)
+            // ================================================================
+            RunTest("Test_MonthlyVwap_O1_Calculation_Matches_Exact_Math", Test_MonthlyVwap_O1_Calculation_Matches_Exact_Math);
+            RunTest("Test_MonthlyVwap_Reset_On_Month_Boundary", Test_MonthlyVwap_Reset_On_Month_Boundary);
+            RunTest("Test_MonthlyVwapBandRetest_Long_Valid_Confirmed_Bar", Test_MonthlyVwapBandRetest_Long_Valid_Confirmed_Bar);
+            RunTest("Test_MonthlyVwapBandRetest_Short_Valid_Confirmed_Bar", Test_MonthlyVwapBandRetest_Short_Valid_Confirmed_Bar);
+            RunTest("Test_MonthlyVwapBandRetest_Rejects_IntrabarTouch_Without_Close_Confirmation", Test_MonthlyVwapBandRetest_Rejects_IntrabarTouch_Without_Close_Confirmation);
+            RunTest("Test_MonthlyVwapBandRetest_Rejects_Flat_Or_Opposing_Vwap_Slope", Test_MonthlyVwapBandRetest_Rejects_Flat_Or_Opposing_Vwap_Slope);
+            RunTest("Test_MonthlyVwapBandRetest_EarlyMonth_Data_Insufficient_Guard", Test_MonthlyVwapBandRetest_EarlyMonth_Data_Insufficient_Guard);
+            RunTest("Test_MonthlyVwapBandRetest_Excessive_Retests_Rejected", Test_MonthlyVwapBandRetest_Excessive_Retests_Rejected);
+            RunTest("Test_MonthlyVwapBandRetest_Snapshot_Immutability", Test_MonthlyVwapBandRetest_Snapshot_Immutability);
+            RunTest("Test_MonthlyVwapBandRetest_Full_Sizing_And_Stop_Clamping", Test_MonthlyVwapBandRetest_Full_Sizing_And_Stop_Clamping);
+
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
             Console.WriteLine("================================================================");
@@ -1914,6 +1928,336 @@ namespace AMC.VolumeProfile.Tests
             {
                 if (File.Exists(testDb)) { try { File.Delete(testDb); } catch { } }
             }
+        }
+
+        #endregion
+
+        #region Monthly VWAP Band Retest Tests
+
+        private static void Test_MonthlyVwap_O1_Calculation_Matches_Exact_Math()
+        {
+            var calc = new VolumeProfileCalculator();
+            double tickSize = 0.25;
+
+            // Ingestion de plusieurs niveaux de prix
+            calc.AddVolumeAtPrice(5000.00, 100, tickSize);
+            calc.AddVolumeAtPrice(5005.00, 250, tickSize);
+            calc.AddVolumeAtPrice(5010.00, 500, tickSize);
+            calc.AddVolumeAtPrice(5015.00, 300, tickSize);
+            calc.AddVolumeAtPrice(5020.00, 150, tickSize);
+
+            // Calcul O(1) instantané
+            double vwapO1, stdDevO1, sd1U, sd1L, sd2U, sd2L, sd3U, sd3L;
+            bool ok = calc.TryCalculateVwapAndBands(tickSize, out vwapO1, out stdDevO1, out sd1U, out sd1L, out sd2U, out sd2L, out sd3U, out sd3L);
+            Assert(ok, "TryCalculateVwapAndBands doit réussir");
+
+            // Calcul via BuildProfile complet
+            var profile = calc.BuildProfile("ES", "CME", "RTH", VolumeProfilePeriodType.Monthly, "ES_M1", DateTime.UtcNow.AddDays(-10), DateTime.UtcNow, tickSize);
+            Assert(profile.Valid, "Profile BuildProfile doit être valide");
+
+            // Vérification de la stricte équivalence mathématique
+            Assert(Math.Abs(vwapO1 - profile.Vwap) < 1e-6, string.Format("VWAP mismatch: O1={0:F4}, Build={1:F4}", vwapO1, profile.Vwap));
+            Assert(Math.Abs(stdDevO1 - profile.VwapStdDev) < 1e-6, string.Format("StdDev mismatch: O1={0:F4}, Build={1:F4}", stdDevO1, profile.VwapStdDev));
+            Assert(Math.Abs(sd1U - profile.VwapSd1Upper) < 1e-6, "SD1 Upper mismatch");
+            Assert(Math.Abs(sd1L - profile.VwapSd1Lower) < 1e-6, "SD1 Lower mismatch");
+            Assert(Math.Abs(sd2U - profile.VwapSd2Upper) < 1e-6, "SD2 Upper mismatch");
+            Assert(Math.Abs(sd2L - profile.VwapSd2Lower) < 1e-6, "SD2 Lower mismatch");
+            Assert(Math.Abs(sd3U - profile.VwapSd3Upper) < 1e-6, "SD3 Upper mismatch");
+            Assert(Math.Abs(sd3L - profile.VwapSd3Lower) < 1e-6, "SD3 Lower mismatch");
+        }
+
+        private static void Test_MonthlyVwap_Reset_On_Month_Boundary()
+        {
+            string testDb = Path.Combine(Path.GetTempPath(), "test_month_reset_" + Guid.NewGuid().ToString("N") + ".db");
+            try
+            {
+                using (var mgr = new VolumeProfileManager("NQ", "CME", "RTH", 0.25, 70, testDb))
+                {
+                    mgr.Initialize();
+
+                    // Mois 1 : Juillet 2026
+                    DateTime m1_t1 = new DateTime(2026, 7, 15, 14, 0, 0, DateTimeKind.Utc);
+                    var vols1 = new List<KeyValuePair<long, long>>
+                    {
+                        new KeyValuePair<long, long>((long)(20000.0 / 0.25), 1000)
+                    };
+                    mgr.IngestVolumetricBar(m1_t1, 20005, 19995, 20000, 20000, 1000, 50, vols1);
+
+                    double vwap1, std1, sd1U, sd1L, sd2U, sd2L, sd3U, sd3L;
+                    int barsCount1;
+                    DateTime startUtc1;
+                    mgr.TryGetCurrentMonthVwapAndBands(out vwap1, out std1, out sd1U, out sd1L, out sd2U, out sd2L, out sd3U, out sd3L, out barsCount1, out startUtc1);
+                    Assert(barsCount1 == 1, "1 barre dans le mois 1");
+                    Assert(Math.Abs(vwap1 - 20000.0) < 1e-4, "VWAP M1 doit valoir 20000");
+
+                    // Mois 2 : Août 2026 (Transition de mois)
+                    DateTime m2_t1 = new DateTime(2026, 8, 3, 14, 0, 0, DateTimeKind.Utc);
+                    var vols2 = new List<KeyValuePair<long, long>>
+                    {
+                        new KeyValuePair<long, long>((long)(21000.0 / 0.25), 500)
+                    };
+                    mgr.IngestVolumetricBar(m2_t1, 21005, 20995, 21000, 21000, 500, 20, vols2);
+
+                    double vwap2, std2;
+                    int barsCount2;
+                    DateTime startUtc2;
+                    mgr.TryGetCurrentMonthVwapAndBands(out vwap2, out std2, out sd1U, out sd1L, out sd2U, out sd2L, out sd3U, out sd3L, out barsCount2, out startUtc2);
+                    
+                    // Le mois courant a été réinitialisé à 1 barre et son VWAP est sur 21000
+                    Assert(barsCount2 == 1, "Le compteur de barres du nouveau mois doit être réinitialisé à 1");
+                    Assert(Math.Abs(vwap2 - 21000.0) < 1e-4, "Le VWAP du nouveau mois doit être 21000.0");
+
+                    // Le mois précédent Juillet est désormais disponible dans PrevMonth
+                    Assert(mgr.PrevMonth != null && mgr.PrevMonth.Valid, "PrevMonth doit contenir Juillet clôturé");
+                    Assert(Math.Abs(mgr.PrevMonth.Vwap - 20000.0) < 1e-4, "PrevMonth VWAP doit être 20000.0");
+                }
+            }
+            finally
+            {
+                if (File.Exists(testDb)) { try { File.Delete(testDb); } catch { } }
+            }
+        }
+
+        private static void Test_MonthlyVwapBandRetest_Long_Valid_Confirmed_Bar()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Symbol = "NQ",
+                TickSize = 0.25,
+                PointValue = 20.0,
+                AtrCurrent = 20.0,
+                HtfTrendDirection = 1,
+                HasCurrentMonthlyVwap = true,
+                CurrentMonthlyBarsCount = 30,
+                CurrentMonthlyVwap = 20000.0,
+                CurrentMonthlySd1Upper = 20100.0,
+                CurrentMonthlySd1Lower = 19900.0,
+                CurrentMonthlyVwapSlope = 1.5,
+                PrevCurrentMonthlySd1Upper = 20098.0,
+                PrevClose = 20105.0, // Acceptation préalable au-dessus de SD1
+                Open = 20102.0,
+                Low = 20098.0, // Retest de SD1 (20100.0) dans la tolérance
+                High = 20115.0,
+                Close = 20112.0, // Clôture au-dessus de SD1 et au-dessus de l'Open
+                RetestCountCurrentLevel = 1
+            };
+
+            string reason;
+            bool valid = scorer.ValidatePreconditions(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long, out reason);
+            Assert(valid, "Le retest Long confirmé doit être validé. Raison rejet: " + reason);
+
+            var score = scorer.ComputeScore(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long);
+            Assert(score.Total >= 70.0, string.Format("Score attendu >= 70, obtenu: {0:F1}", score.Total));
+        }
+
+        private static void Test_MonthlyVwapBandRetest_Short_Valid_Confirmed_Bar()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Symbol = "NQ",
+                TickSize = 0.25,
+                PointValue = 20.0,
+                AtrCurrent = 20.0,
+                HtfTrendDirection = -1,
+                HasCurrentMonthlyVwap = true,
+                CurrentMonthlyBarsCount = 30,
+                CurrentMonthlyVwap = 20000.0,
+                CurrentMonthlySd1Upper = 20100.0,
+                CurrentMonthlySd1Lower = 19900.0,
+                CurrentMonthlyVwapSlope = -1.5,
+                PrevCurrentMonthlySd1Lower = 19902.0,
+                PrevClose = 19895.0, // Acceptation préalable sous SD-1
+                Open = 19898.0,
+                High = 19902.0, // Retest de SD-1 (19900.0) dans la tolérance
+                Low = 19880.0,
+                Close = 19885.0, // Clôture sous SD-1 et sous Open
+                RetestCountCurrentLevel = 1
+            };
+
+            string reason;
+            bool valid = scorer.ValidatePreconditions(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Short, out reason);
+            Assert(valid, "Le retest Short confirmé doit être validé. Raison rejet: " + reason);
+
+            var score = scorer.ComputeScore(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Short);
+            Assert(score.Total >= 70.0, string.Format("Score attendu >= 70, obtenu: {0:F1}", score.Total));
+        }
+
+        private static void Test_MonthlyVwapBandRetest_Rejects_IntrabarTouch_Without_Close_Confirmation()
+        {
+            var scorer = new SwingScorer();
+            
+            // Cas Long avec clôture sous SD1
+            var ctxLong = new SwingContext
+            {
+                Symbol = "NQ",
+                TickSize = 0.25,
+                AtrCurrent = 20.0,
+                HtfTrendDirection = 1,
+                HasCurrentMonthlyVwap = true,
+                CurrentMonthlyBarsCount = 30,
+                CurrentMonthlyVwap = 20000.0,
+                CurrentMonthlySd1Upper = 20100.0,
+                CurrentMonthlySd1Lower = 19900.0,
+                CurrentMonthlyVwapSlope = 1.5,
+                PrevClose = 20105.0,
+                Open = 20102.0,
+                Low = 20090.0,
+                Close = 20095.0 // ÉCHEC : Clôture sous SD1 (20100.0)
+            };
+
+            string reason;
+            bool validLong = scorer.ValidatePreconditions(ctxLong, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long, out reason);
+            Assert(!validLong, "Un retest Long clôturant sous SD1 doit être rejeté");
+            Assert(reason == "CLOSE_BELOW_SD1", "Raison attendue: CLOSE_BELOW_SD1, obtenu: " + reason);
+
+            // Cas Short avec clôture au-dessus de SD1
+            var ctxShort = new SwingContext
+            {
+                Symbol = "NQ",
+                TickSize = 0.25,
+                AtrCurrent = 20.0,
+                HtfTrendDirection = -1,
+                HasCurrentMonthlyVwap = true,
+                CurrentMonthlyBarsCount = 30,
+                CurrentMonthlyVwap = 20000.0,
+                CurrentMonthlySd1Upper = 20100.0,
+                CurrentMonthlySd1Lower = 19900.0,
+                CurrentMonthlyVwapSlope = -1.5,
+                PrevClose = 19895.0,
+                Open = 19898.0,
+                High = 19910.0,
+                Close = 19905.0 // ÉCHEC : Clôture au-dessus de SD-1 (19900.0)
+            };
+
+            bool validShort = scorer.ValidatePreconditions(ctxShort, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Short, out reason);
+            Assert(!validShort, "Un retest Short clôturant au-dessus de SD-1 doit être rejeté");
+            Assert(reason == "CLOSE_ABOVE_SD1", "Raison attendue: CLOSE_ABOVE_SD1, obtenu: " + reason);
+        }
+
+        private static void Test_MonthlyVwapBandRetest_Rejects_Flat_Or_Opposing_Vwap_Slope()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Symbol = "NQ",
+                TickSize = 0.25,
+                AtrCurrent = 20.0,
+                HtfTrendDirection = 1,
+                HasCurrentMonthlyVwap = true,
+                CurrentMonthlyBarsCount = 30,
+                CurrentMonthlyVwap = 20000.0,
+                CurrentMonthlySd1Upper = 20100.0,
+                CurrentMonthlySd1Lower = 19900.0,
+                CurrentMonthlyVwapSlope = 0.2, // Pente trop faible (< 0.5)
+                PrevClose = 20105.0,
+                Open = 20102.0,
+                Low = 20098.0,
+                Close = 20110.0
+            };
+
+            string reason;
+            bool valid = scorer.ValidatePreconditions(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long, out reason);
+            Assert(!valid, "Pente VWAP insuffisante doit être rejetée");
+            Assert(reason == "MONTHLY_VWAP_SLOPE_INSUFFICIENT", "Raison attendue: MONTHLY_VWAP_SLOPE_INSUFFICIENT, obtenu: " + reason);
+        }
+
+        private static void Test_MonthlyVwapBandRetest_EarlyMonth_Data_Insufficient_Guard()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Symbol = "NQ",
+                TickSize = 0.25,
+                AtrCurrent = 20.0,
+                HtfTrendDirection = 1,
+                HasCurrentMonthlyVwap = true,
+                CurrentMonthlyBarsCount = 10, // Début de mois (< 20 barres)
+                CurrentMonthlyVwap = 20000.0,
+                CurrentMonthlySd1Upper = 20100.0,
+                CurrentMonthlySd1Lower = 19900.0,
+                CurrentMonthlyVwapSlope = 1.5,
+                PrevClose = 20105.0,
+                Open = 20102.0,
+                Low = 20098.0,
+                Close = 20110.0
+            };
+
+            string reason;
+            bool valid = scorer.ValidatePreconditions(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long, out reason);
+            Assert(!valid, "Données début de mois insuffisantes doivent être rejetées");
+            Assert(reason == "MONTHLY_VWAP_EARLY_MONTH_UNSTABLE", "Raison attendue: MONTHLY_VWAP_EARLY_MONTH_UNSTABLE, obtenu: " + reason);
+        }
+
+        private static void Test_MonthlyVwapBandRetest_Excessive_Retests_Rejected()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Symbol = "NQ",
+                TickSize = 0.25,
+                AtrCurrent = 20.0,
+                HtfTrendDirection = 1,
+                HasCurrentMonthlyVwap = true,
+                CurrentMonthlyBarsCount = 30,
+                CurrentMonthlyVwap = 20000.0,
+                CurrentMonthlySd1Upper = 20100.0,
+                CurrentMonthlySd1Lower = 19900.0,
+                CurrentMonthlyVwapSlope = 1.5,
+                PrevClose = 20105.0,
+                Open = 20102.0,
+                Low = 20098.0,
+                Close = 20110.0,
+                RetestCountCurrentLevel = 3 // 3ème retest (limite = 2)
+            };
+
+            string reason;
+            bool valid = scorer.ValidatePreconditions(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long, out reason);
+            Assert(!valid, "Nombre excessif de retests doit être rejeté");
+            Assert(reason == "MONTHLY_RETEST_LIMIT_REACHED", "Raison attendue: MONTHLY_RETEST_LIMIT_REACHED, obtenu: " + reason);
+        }
+
+        private static void Test_MonthlyVwapBandRetest_Snapshot_Immutability()
+        {
+            var sig = new SwingSignal
+            {
+                SetupType = SwingSetupType.MonthlyVwapBandRetest,
+                Direction = SwingDirection.Long,
+                EntryPrice = 20110.0,
+                MonthlyVwapAtSetup = 20000.0,
+                MonthlySd1UpperAtSetup = 20100.0,
+                MonthlySd1LowerAtSetup = 19900.0,
+                MonthlyVwapSlopeAtSetup = 1.5,
+                RetestDistanceTicks = 8.0
+            };
+
+            Assert(sig.MonthlyVwapAtSetup == 20000.0, "Le snapshot MonthlyVwapAtSetup doit rester immuable");
+            Assert(sig.MonthlySd1UpperAtSetup == 20100.0, "Le snapshot MonthlySd1UpperAtSetup doit rester immuable");
+            Assert(sig.MonthlyVwapSlopeAtSetup == 1.5, "Le snapshot MonthlyVwapSlopeAtSetup doit rester immuable");
+        }
+
+        private static void Test_MonthlyVwapBandRetest_Full_Sizing_And_Stop_Clamping()
+        {
+            var riskMgr = new SwingRiskManager();
+
+            // Test NQ : PointValue = $20, TickSize = 0.25, TickValue = $5
+            double entryNq = 20110.0;
+            double structuralStopNq = 20095.0; // 60 ticks
+            double stopNq = riskMgr.CalculateHybridStop(entryNq, SwingDirection.Long, structuralStopNq, 20.0, 2.0, 0.25, 20, 120);
+            double stopTicksNq = Math.Abs(entryNq - stopNq) / 0.25;
+
+            int sizeNq = riskMgr.CalculatePositionSize(250.0, stopTicksNq, 5.0, 1.0, 4);
+            Assert(sizeNq >= 1 && sizeNq <= 4, "Sizing NQ valide");
+
+            // Test ES : PointValue = $50, TickSize = 0.25, TickValue = $12.50
+            double entryEs = 5020.0;
+            double structuralStopEs = 5015.0; // 20 ticks
+            double stopEs = riskMgr.CalculateHybridStop(entryEs, SwingDirection.Long, structuralStopEs, 5.0, 2.0, 0.25, 12, 60);
+            double stopTicksEs = Math.Abs(entryEs - stopEs) / 0.25;
+
+            int sizeEs = riskMgr.CalculatePositionSize(250.0, stopTicksEs, 12.50, 1.0, 4);
+            Assert(sizeEs >= 1 && sizeEs <= 4, "Sizing ES valide");
         }
 
         #endregion

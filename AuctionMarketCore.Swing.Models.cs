@@ -25,7 +25,9 @@ namespace NinjaTrader.NinjaScript.Indicators
         /// <summary>Continuation de tendance HTF après pullback vers FVG, HVN ou VWAP clôturé.</summary>
         HtfContinuation = 4,
         /// <summary>Migration directionnelle du POC sur N sessions consécutives (Auction Market Theory pure).</summary>
-        PocMigration = 5
+        PocMigration = 5,
+        /// <summary>Retest confirmé de la bande SD±1 du VWAP Monthly en cours de formation (dynamique).</summary>
+        MonthlyVwapBandRetest = 6
     }
 
     /// <summary>
@@ -180,6 +182,29 @@ namespace NinjaTrader.NinjaScript.Indicators
         public double Sd3Lower { get; set; }
         public double CurrentVwapSigmaDistance { get; set; }
 
+        // VWAP Monthly Courant & Bandes Dynamiques (En cours de mois)
+        public bool HasCurrentMonthlyVwap { get; set; }
+        public double CurrentMonthlyVwap { get; set; }
+        public double CurrentMonthlyVwapStdDev { get; set; }
+        public double CurrentMonthlySd1Upper { get; set; }
+        public double CurrentMonthlySd1Lower { get; set; }
+        public double CurrentMonthlySd2Upper { get; set; }
+        public double CurrentMonthlySd2Lower { get; set; }
+        public double CurrentMonthlySd3Upper { get; set; }
+        public double CurrentMonthlySd3Lower { get; set; }
+        public double CurrentMonthlyVwapSlope { get; set; }
+        public int CurrentMonthlyBarsCount { get; set; }
+        public DateTime CurrentMonthlyStartUtc { get; set; }
+
+        // Barres précédentes pour détection de retest / acceptation
+        public double PrevClose { get; set; }
+        public double PrevHigh { get; set; }
+        public double PrevLow { get; set; }
+        public double PrevOpen { get; set; }
+        public double PrevCurrentMonthlySd1Upper { get; set; }
+        public double PrevCurrentMonthlySd1Lower { get; set; }
+        public int RetestCountCurrentLevel { get; set; }
+
         // Structure SMC
         public bool HasBos { get; set; }
         public bool HasChoch { get; set; }
@@ -224,6 +249,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             HtfTrendDirection = 0;
             RegimeHtf = SwingMarketRegime.Balance;
             PocMigrationDirection = SwingDirection.None;
+            HasCurrentMonthlyVwap = false;
+            CurrentMonthlyBarsCount = 0;
+            CurrentMonthlyStartUtc = DateTime.MinValue;
+            RetestCountCurrentLevel = 0;
         }
     }
 
@@ -257,6 +286,13 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         public int PositionSizeContracts { get; set; }
         public double EstimatedRiskCurrency { get; set; }
+
+        // Snapshot immuable au signal (Current Monthly VWAP Retest)
+        public double MonthlyVwapAtSetup { get; set; }
+        public double MonthlySd1UpperAtSetup { get; set; }
+        public double MonthlySd1LowerAtSetup { get; set; }
+        public double MonthlyVwapSlopeAtSetup { get; set; }
+        public double RetestDistanceTicks { get; set; }
 
         // Suivi & Invalidations
         public string InvalidationReason { get; set; }
@@ -424,6 +460,84 @@ namespace NinjaTrader.NinjaScript.Indicators
                         { rejectionReason = "POC_MIGRATION_INVALID_STRUCTURAL_STOP"; return false; }
                     }
                     break;
+
+                case SwingSetupType.MonthlyVwapBandRetest:
+                    if (!ctx.HasCurrentMonthlyVwap || ctx.CurrentMonthlyVwap <= 0 || ctx.CurrentMonthlySd1Upper <= 0 || ctx.CurrentMonthlySd1Lower <= 0)
+                    { rejectionReason = "NO_CURRENT_MONTHLY_VWAP_DATA"; return false; }
+
+                    if (ctx.CurrentMonthlyBarsCount < 20)
+                    { rejectionReason = "MONTHLY_VWAP_EARLY_MONTH_UNSTABLE"; return false; }
+
+                    if (ctx.RetestCountCurrentLevel > 2)
+                    { rejectionReason = "MONTHLY_RETEST_LIMIT_REACHED"; return false; }
+
+                    // Tolérance adaptative ATR (min(8 ticks, ATR * 0.30))
+                    double tolTicks = Math.Min(8.0, (ctx.AtrCurrent / Math.Max(0.01, ctx.TickSize)) * 0.30);
+                    double tolPrice = tolTicks * ctx.TickSize;
+
+                    if (isLong)
+                    {
+                        // Long : Tendance HTF haussière requise
+                        if (ctx.HtfTrendDirection <= 0)
+                        { rejectionReason = "HTF_TREND_NOT_BULLISH"; return false; }
+
+                        // Prix au-dessus du VWAP Monthly
+                        if (ctx.Close <= ctx.CurrentMonthlyVwap)
+                        { rejectionReason = "PRICE_BELOW_MONTHLY_VWAP"; return false; }
+
+                        // Pente du VWAP haussière (>= +0.5 ticks/barre)
+                        if (ctx.CurrentMonthlyVwapSlope < 0.5)
+                        { rejectionReason = "MONTHLY_VWAP_SLOPE_INSUFFICIENT"; return false; }
+
+                        // Acceptation préalable au-dessus de SD+1
+                        double prevSd1 = ctx.PrevCurrentMonthlySd1Upper > 0 ? ctx.PrevCurrentMonthlySd1Upper : ctx.CurrentMonthlySd1Upper;
+                        if (ctx.PrevClose <= prevSd1 && ctx.Open <= ctx.CurrentMonthlySd1Upper)
+                        { rejectionReason = "NO_PRIOR_ACCEPTANCE_ABOVE_SD1"; return false; }
+
+                        // Retest de SD+1 : Low touche ou pénètre dans la tolérance
+                        if (ctx.Low > ctx.CurrentMonthlySd1Upper + tolPrice)
+                        { rejectionReason = "NO_SD1_RETEST_TOUCH"; return false; }
+
+                        // Clôture confirmée au-dessus de SD+1
+                        if (ctx.Close <= ctx.CurrentMonthlySd1Upper)
+                        { rejectionReason = "CLOSE_BELOW_SD1"; return false; }
+
+                        // Bougie de confirmation haussière
+                        if (ctx.Close <= ctx.Open)
+                        { rejectionReason = "BEARISH_CONFIRMATION_CANDLE"; return false; }
+                    }
+                    else
+                    {
+                        // Short : Tendance HTF baissière requise
+                        if (ctx.HtfTrendDirection >= 0)
+                        { rejectionReason = "HTF_TREND_NOT_BEARISH"; return false; }
+
+                        // Prix sous le VWAP Monthly
+                        if (ctx.Close >= ctx.CurrentMonthlyVwap)
+                        { rejectionReason = "PRICE_ABOVE_MONTHLY_VWAP"; return false; }
+
+                        // Pente du VWAP baissière (<= -0.5 ticks/barre)
+                        if (ctx.CurrentMonthlyVwapSlope > -0.5)
+                        { rejectionReason = "MONTHLY_VWAP_SLOPE_INSUFFICIENT"; return false; }
+
+                        // Acceptation préalable sous SD-1
+                        double prevSd1 = ctx.PrevCurrentMonthlySd1Lower > 0 ? ctx.PrevCurrentMonthlySd1Lower : ctx.CurrentMonthlySd1Lower;
+                        if (ctx.PrevClose >= prevSd1 && ctx.Open >= ctx.CurrentMonthlySd1Lower)
+                        { rejectionReason = "NO_PRIOR_ACCEPTANCE_BELOW_SD1"; return false; }
+
+                        // Retest de SD-1 : High touche ou pénètre dans la tolérance
+                        if (ctx.High < ctx.CurrentMonthlySd1Lower - tolPrice)
+                        { rejectionReason = "NO_SD1_RETEST_TOUCH"; return false; }
+
+                        // Clôture confirmée sous SD-1
+                        if (ctx.Close >= ctx.CurrentMonthlySd1Lower)
+                        { rejectionReason = "CLOSE_ABOVE_SD1"; return false; }
+
+                        // Bougie de confirmation baissière
+                        if (ctx.Close >= ctx.Open)
+                        { rejectionReason = "BULLISH_CONFIRMATION_CANDLE"; return false; }
+                    }
+                    break;
             }
 
             return true;
@@ -462,6 +576,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 else if (insideVa) s.AmtLocationScore = 22.0;
                 else s.AmtLocationScore = 15.0;
             }
+            else if (setup == SwingSetupType.MonthlyVwapBandRetest)
+            {
+                // Retest de SD1 : précis = 25 pts, pénétration légère = 22 pts
+                double bandLevel = isLong ? ctx.CurrentMonthlySd1Upper : ctx.CurrentMonthlySd1Lower;
+                double testDist = Math.Abs((isLong ? ctx.Low : ctx.High) - bandLevel);
+                if (testDist <= ctx.TickSize * 2) s.AmtLocationScore = 25.0;
+                else if (testDist <= ctx.TickSize * 6) s.AmtLocationScore = 22.0;
+                else s.AmtLocationScore = 18.0;
+            }
             else
             {
                 s.AmtLocationScore = 18.0;
@@ -473,6 +596,14 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 // Score basé sur la force de migration du POC
                 vpScore = Math.Min(20.0, ctx.PocMigrationStrength * 0.2);
+            }
+            else if (setup == SwingSetupType.MonthlyVwapBandRetest)
+            {
+                // Score basé sur la magnitude de la pente du VWAP (0..20 pts)
+                double absSlope = Math.Abs(ctx.CurrentMonthlyVwapSlope);
+                if (absSlope >= 2.0) vpScore = 20.0;
+                else if (absSlope >= 1.0) vpScore = 16.0;
+                else vpScore = 12.0;
             }
             else
             {

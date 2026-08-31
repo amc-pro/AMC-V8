@@ -77,6 +77,33 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Lookback Sessions Migration", Order = 16, GroupName = "Swing 01. Moteur")]
         public int PocMigrationLookbackSessions { get; set; }
 
+        [Display(Name = "Activer Monthly VWAP Retest", Order = 17, GroupName = "Swing 01. Moteur")]
+        public bool EnableMonthlyVwapRetest { get; set; }
+
+        [Range(1, 30)]
+        [Display(Name = "Tolérance Retest Monthly (Ticks)", Order = 18, GroupName = "Swing 01. Moteur")]
+        public int MonthlyBandRetestToleranceTicks { get; set; }
+
+        [Range(0.05, 1.0)]
+        [Display(Name = "Fraction ATR Max Tolérance", Order = 19, GroupName = "Swing 01. Moteur")]
+        public double MonthlyBandMaxRetestAtrFraction { get; set; }
+
+        [Range(5, 100)]
+        [Display(Name = "Barres Min Mois Courant", Order = 20, GroupName = "Swing 01. Moteur")]
+        public int MonthlyBandMinBarsLookback { get; set; }
+
+        [Range(1, 20)]
+        [Display(Name = "Lookback Pente VWAP (Barres)", Order = 21, GroupName = "Swing 01. Moteur")]
+        public int MonthlyBandSlopeLookbackBars { get; set; }
+
+        [Range(0.0, 10.0)]
+        [Display(Name = "Pente Min VWAP Monthly (Ticks/b)", Order = 22, GroupName = "Swing 01. Moteur")]
+        public double MonthlyBandMinVwapSlope { get; set; }
+
+        [Range(1, 5)]
+        [Display(Name = "Max Retests Autorisés", Order = 23, GroupName = "Swing 01. Moteur")]
+        public int MonthlyBandMaxRetestsAllowed { get; set; }
+
         #endregion
 
         #region État Interne Swing
@@ -88,12 +115,15 @@ namespace NinjaTrader.NinjaScript.Indicators
             get { return TradingPreset == SniperMarketPreset.Swing; }
         }
 
+        private VolumeProfileManager volumeProfileManager => vpManager;
         private ISwingScorer swingScorer;
         private ISwingRiskManager swingRiskManager;
         private PocMigrationAnalyzer pocMigrationAnalyzer;
         private readonly List<SwingSignal> activeSwingSignals = new List<SwingSignal>();
         private readonly List<TrackedSwingTrade> openSwingTrades = new List<TrackedSwingTrade>();
         private readonly List<TrackedSwingTrade> closedSwingTrades = new List<TrackedSwingTrade>();
+        private readonly List<double> monthlyVwapHistory = new List<double>();
+        private int monthlyBandRetestCount = 0;
         private string resolvedSwingJournalPath;
         private bool swingJournalHeaderWritten;
         private int swingLastEvaluatedBar = -1;
@@ -118,6 +148,13 @@ namespace NinjaTrader.NinjaScript.Indicators
             EnablePocMigration = true;
             PocMigrationMinSessions = 3;
             PocMigrationLookbackSessions = 5;
+            EnableMonthlyVwapRetest = true;
+            MonthlyBandRetestToleranceTicks = 8;
+            MonthlyBandMaxRetestAtrFraction = 0.30;
+            MonthlyBandMinBarsLookback = 20;
+            MonthlyBandSlopeLookbackBars = 5;
+            MonthlyBandMinVwapSlope = 0.5;
+            MonthlyBandMaxRetestsAllowed = 2;
             SwingJournalFilePath = string.Empty;
             EnableSwingTelegramAlerts = true;
         }
@@ -167,6 +204,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             activeSwingSignals.Clear();
             openSwingTrades.Clear();
             closedSwingTrades.Clear();
+            monthlyVwapHistory.Clear();
+            monthlyBandRetestCount = 0;
             resolvedSwingJournalPath = ResolveSwingJournalPath();
             swingJournalHeaderWritten = false;
             swingLastEvaluatedBar = -1;
@@ -382,6 +421,87 @@ namespace NinjaTrader.NinjaScript.Indicators
             ctx.HasBos = HasRecentBos(isBuy);
             ctx.HasChoch = HasRecentChoch(isBuy);
 
+            // Current Monthly VWAP & Bandes Dynamiques (En cours de mois)
+            if (vpManager != null)
+            {
+                double curVwap, curStdDev, sd1U, sd1L, sd2U, sd2L, sd3U, sd3L;
+                int monthBars;
+                DateTime monthStart;
+                if (vpManager.TryGetCurrentMonthVwapAndBands(
+                    out curVwap, out curStdDev, out sd1U, out sd1L, out sd2U, out sd2L, out sd3U, out sd3L,
+                    out monthBars, out monthStart))
+                {
+                    ctx.HasCurrentMonthlyVwap = true;
+                    ctx.CurrentMonthlyVwap = curVwap;
+                    ctx.CurrentMonthlyVwapStdDev = curStdDev;
+                    ctx.CurrentMonthlySd1Upper = sd1U;
+                    ctx.CurrentMonthlySd1Lower = sd1L;
+                    ctx.CurrentMonthlySd2Upper = sd2U;
+                    ctx.CurrentMonthlySd2Lower = sd2L;
+                    ctx.CurrentMonthlySd3Upper = sd3U;
+                    ctx.CurrentMonthlySd3Lower = sd3L;
+                    ctx.CurrentMonthlyBarsCount = monthBars;
+                    ctx.CurrentMonthlyStartUtc = monthStart;
+
+                    // Maintien de l'historique VWAP pour le calcul de pente
+                    if (monthlyVwapHistory.Count == 0 || Math.Abs(monthlyVwapHistory[monthlyVwapHistory.Count - 1] - curVwap) > 1e-6)
+                    {
+                        monthlyVwapHistory.Add(curVwap);
+                        if (monthlyVwapHistory.Count > 50)
+                            monthlyVwapHistory.RemoveAt(0);
+                    }
+
+                    int slopeLookback = MonthlyBandSlopeLookbackBars > 0 ? MonthlyBandSlopeLookbackBars : 5;
+                    if (monthlyVwapHistory.Count > slopeLookback)
+                    {
+                        double oldVwap = monthlyVwapHistory[monthlyVwapHistory.Count - 1 - slopeLookback];
+                        double vwapDiffTicks = (curVwap - oldVwap) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25);
+                        ctx.CurrentMonthlyVwapSlope = vwapDiffTicks / slopeLookback;
+                    }
+                    else if (monthlyVwapHistory.Count > 1)
+                    {
+                        int span = monthlyVwapHistory.Count - 1;
+                        double oldVwap = monthlyVwapHistory[0];
+                        double vwapDiffTicks = (curVwap - oldVwap) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25);
+                        ctx.CurrentMonthlyVwapSlope = vwapDiffTicks / span;
+                    }
+                    else
+                    {
+                        ctx.CurrentMonthlyVwapSlope = 0.0;
+                    }
+                }
+            }
+
+            // Récupération des données de la barre précédente
+            try
+            {
+                if (volumetricBarsIndex < BarsArray.Length && CurrentBars[volumetricBarsIndex] >= 1)
+                {
+                    ctx.PrevClose = Closes[volumetricBarsIndex][1];
+                    ctx.PrevOpen = Opens[volumetricBarsIndex][1];
+                    ctx.PrevHigh = Highs[volumetricBarsIndex][1];
+                    ctx.PrevLow = Lows[volumetricBarsIndex][1];
+                }
+                else
+                {
+                    ctx.PrevClose = snOpen;
+                    ctx.PrevOpen = snOpen;
+                    ctx.PrevHigh = snHigh;
+                    ctx.PrevLow = snLow;
+                }
+            }
+            catch
+            {
+                ctx.PrevClose = snOpen;
+                ctx.PrevOpen = snOpen;
+                ctx.PrevHigh = snHigh;
+                ctx.PrevLow = snLow;
+            }
+
+            ctx.PrevCurrentMonthlySd1Upper = ctx.CurrentMonthlySd1Upper;
+            ctx.PrevCurrentMonthlySd1Lower = ctx.CurrentMonthlySd1Lower;
+            ctx.RetestCountCurrentLevel = monthlyBandRetestCount;
+
             // Analyse de la migration directionnelle du POC (Multi-Session)
             if (EnablePocMigration && volumeProfileManager != null && volumeProfileManager.Repository != null && pocMigrationAnalyzer != null)
             {
@@ -477,15 +597,20 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (HasOpenTradeInDirection(dir)) return;
             if (openSwingTrades.Count >= SwingMaxActiveTrades) return;
 
-            var setupTypes = new[]
+            var setupList = new List<SwingSetupType>
             {
                 SwingSetupType.RejectExtreme,
                 SwingSetupType.ValueReentry,
                 SwingSetupType.BreakoutRetest,
                 SwingSetupType.MacroReversal,
-                SwingSetupType.HtfContinuation,
-                SwingSetupType.PocMigration
+                SwingSetupType.HtfContinuation
             };
+            if (EnablePocMigration)
+                setupList.Add(SwingSetupType.PocMigration);
+            if (EnableMonthlyVwapRetest)
+                setupList.Add(SwingSetupType.MonthlyVwapBandRetest);
+
+            var setupTypes = setupList.ToArray();
 
             foreach (var setup in setupTypes)
             {
@@ -524,6 +649,21 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 structuralLevel = isLong ? ctx.PocMigrationOldestPoc - (StopBufferTicks * TickSize)
                                          : ctx.PocMigrationOldestPoc + (StopBufferTicks * TickSize);
+            }
+            else if (setup == SwingSetupType.MonthlyVwapBandRetest)
+            {
+                if (isLong)
+                {
+                    double bandRef = ctx.CurrentMonthlySd1Upper;
+                    double lowRef = Math.Min(ctx.Low, bandRef);
+                    structuralLevel = lowRef - (StopBufferTicks * TickSize);
+                }
+                else
+                {
+                    double bandRef = ctx.CurrentMonthlySd1Lower;
+                    double highRef = Math.Max(ctx.High, bandRef);
+                    structuralLevel = highRef + (StopBufferTicks * TickSize);
+                }
             }
 
             // Calcul du Stop hybride (ATR + Structurel borné par Min/MaxStopTicks)
@@ -577,7 +717,13 @@ namespace NinjaTrader.NinjaScript.Indicators
                 RiskRewardRatio2 = rr2,
                 PositionSizeContracts = contracts,
                 EstimatedRiskCurrency = (stopDistTicks + ExecutionCostTicks) * tickVal * contracts,
-                ExecutionNotes = string.Format(CultureInfo.InvariantCulture, "{0} | {1} | Score={2:F1}", setup, tier, score.Total)
+                ExecutionNotes = string.Format(CultureInfo.InvariantCulture, "{0} | {1} | Score={2:F1}", setup, tier, score.Total),
+                MonthlyVwapAtSetup = ctx.CurrentMonthlyVwap,
+                MonthlySd1UpperAtSetup = ctx.CurrentMonthlySd1Upper,
+                MonthlySd1LowerAtSetup = ctx.CurrentMonthlySd1Lower,
+                MonthlyVwapSlopeAtSetup = ctx.CurrentMonthlyVwapSlope,
+                RetestDistanceTicks = isLong ? Math.Abs(ctx.Low - ctx.CurrentMonthlySd1Upper) / TickSize
+                                             : Math.Abs(ctx.High - ctx.CurrentMonthlySd1Lower) / TickSize
             };
 
             return signal;
@@ -590,6 +736,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             var trade = new TrackedSwingTrade(sig, TickSize, ResolvePointValue());
             openSwingTrades.Add(trade);
             activeSwingSignals.Add(sig);
+
+            if (sig.SetupType == SwingSetupType.MonthlyVwapBandRetest)
+                monthlyBandRetestCount++;
 
             // Persistance SQLite
             if (volumeProfileManager != null && volumeProfileManager.Repository != null)

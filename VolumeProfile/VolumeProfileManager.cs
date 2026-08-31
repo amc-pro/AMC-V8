@@ -152,6 +152,9 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                     weekAccumulator.AddVolume(kv.Key, kv.Value);
                     monthAccumulator.AddVolume(kv.Key, kv.Value);
                 }
+                dayAccumulator.IncrementBarsCount(1);
+                weekAccumulator.IncrementBarsCount(1);
+                monthAccumulator.IncrementBarsCount(1);
             }
             else
             {
@@ -239,6 +242,45 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
         #endregion
 
         #region Analyse & Contexte Candidat
+
+        /// <summary>
+        /// Extrait en O(1) le VWAP et les bandes d'écart-type SD 1, 2, 3 du mois en cours de formation.
+        /// Garantit une évaluation stricte sur barres clôturées ingérées.
+        /// </summary>
+        public bool TryGetCurrentMonthVwapAndBands(
+            out double vwap,
+            out double stdDev,
+            out double sd1Upper,
+            out double sd1Lower,
+            out double sd2Upper,
+            out double sd2Lower,
+            out double sd3Upper,
+            out double sd3Lower,
+            out int barsCount,
+            out DateTime monthStartUtc)
+        {
+            vwap = 0.0;
+            stdDev = 0.0;
+            sd1Upper = 0.0;
+            sd1Lower = 0.0;
+            sd2Upper = 0.0;
+            sd2Lower = 0.0;
+            sd3Upper = 0.0;
+            sd3Lower = 0.0;
+            barsCount = monthAccumulator.BarsAccumulated;
+            monthStartUtc = currentMonthStartUtc;
+
+            return monthAccumulator.TryCalculateVwapAndBands(
+                TickSize,
+                out vwap,
+                out stdDev,
+                out sd1Upper,
+                out sd1Lower,
+                out sd2Upper,
+                out sd2Lower,
+                out sd3Upper,
+                out sd3Lower);
+        }
 
         /// <summary>
         /// Génère le VolumeProfileContext pour la barre courante basé exclusivement sur les références clôturées.
