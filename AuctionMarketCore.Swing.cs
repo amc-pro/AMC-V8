@@ -135,7 +135,11 @@ namespace NinjaTrader.NinjaScript.Indicators
             get { return TradingPreset == SniperMarketPreset.Swing; }
         }
 
-        private VolumeProfileManager volumeProfileManager => vpManager;
+        private VolumeProfileManager volumeProfileManager
+        {
+            get { return vpManager; }
+        }
+
         private ISwingScorer swingScorer;
         private ISwingRiskManager swingRiskManager;
         private PocMigrationAnalyzer pocMigrationAnalyzer;
@@ -144,8 +148,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         private readonly List<TrackedSwingTrade> closedSwingTrades = new List<TrackedSwingTrade>();
         private readonly List<double> monthlyVwapHistory = new List<double>();
         private readonly List<KeyValuePair<DateTime, double>> monthlyVwapTimeHistory = new List<KeyValuePair<DateTime, double>>();
-        private MonthlyBandEpochState currentUpperBandEpoch = new MonthlyBandEpochState { BandType = "MONTHLY_SD1_UPPER" };
-        private MonthlyBandEpochState currentLowerBandEpoch = new MonthlyBandEpochState { BandType = "MONTHLY_SD1_LOWER" };
+        private MonthlyBandEpochState currentUpperBandEpoch;
+        private MonthlyBandEpochState currentLowerBandEpoch;
         private int consecutiveAboveSd1Bars = 0;
         private int consecutiveBelowSd1Bars = 0;
         private int monthlyBandRetestCount = 0;
@@ -545,8 +549,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                     // Gestion du cycle de vie des Epochs de bandes dynamiques
                     int epochResetTicks = MonthlyBandEpochResetTicks > 0 ? MonthlyBandEpochResetTicks : 20;
-                    double upperDriftTicks = currentUpperBandEpoch.ReferencePrice > 0 ? Math.Abs(sd1U - currentUpperBandEpoch.ReferencePrice) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25) : 0.0;
-                    if (currentUpperBandEpoch.ReferencePrice <= 0 || upperDriftTicks > epochResetTicks)
+                    double upperDriftTicks = (currentUpperBandEpoch != null && currentUpperBandEpoch.ReferencePrice > 0) ? Math.Abs(sd1U - currentUpperBandEpoch.ReferencePrice) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25) : 0.0;
+                    if (currentUpperBandEpoch == null || currentUpperBandEpoch.ReferencePrice <= 0 || upperDriftTicks > epochResetTicks)
                     {
                         currentUpperBandEpoch = new MonthlyBandEpochState
                         {
@@ -565,8 +569,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                         currentUpperBandEpoch.AcceptanceBarsCount = consecutiveAboveSd1Bars;
                     }
 
-                    double lowerDriftTicks = currentLowerBandEpoch.ReferencePrice > 0 ? Math.Abs(sd1L - currentLowerBandEpoch.ReferencePrice) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25) : 0.0;
-                    if (currentLowerBandEpoch.ReferencePrice <= 0 || lowerDriftTicks > epochResetTicks)
+                    double lowerDriftTicks = (currentLowerBandEpoch != null && currentLowerBandEpoch.ReferencePrice > 0) ? Math.Abs(sd1L - currentLowerBandEpoch.ReferencePrice) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25) : 0.0;
+                    if (currentLowerBandEpoch == null || currentLowerBandEpoch.ReferencePrice <= 0 || lowerDriftTicks > epochResetTicks)
                     {
                         currentLowerBandEpoch = new MonthlyBandEpochState
                         {
