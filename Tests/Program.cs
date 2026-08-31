@@ -89,11 +89,20 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_Swing_Integration_Overnight_Session_Transition", Test_Swing_Integration_Overnight_Session_Transition);
 
             // ================================================================
-            // 📊 SUITE POC MIGRATION MODEL (3 TESTS)
+            // 📊 SUITE POC MIGRATION MODEL DURCIE (12 TESTS DE VALIDATION & FRONTIÈRES)
             // ================================================================
             RunTest("Test_PocMigration_Analyzer_Detects_Upward_Drift", Test_PocMigration_Analyzer_Detects_Upward_Drift);
+            RunTest("Test_PocMigration_Analyzer_Detects_Downward_Drift", Test_PocMigration_Analyzer_Detects_Downward_Drift);
+            RunTest("Test_PocMigration_Analyzer_3Profiles_2Transitions_Valid", Test_PocMigration_Analyzer_3Profiles_2Transitions_Valid);
             RunTest("Test_PocMigration_Analyzer_Rejects_Inconsistent_Drift", Test_PocMigration_Analyzer_Rejects_Inconsistent_Drift);
+            RunTest("Test_PocMigration_Analyzer_Extracts_Recent_Sequence_After_Older_Break", Test_PocMigration_Analyzer_Extracts_Recent_Sequence_After_Older_Break);
+            RunTest("Test_PocMigration_Analyzer_Strength_Threshold_Boundaries", Test_PocMigration_Analyzer_Strength_Threshold_Boundaries);
+            RunTest("Test_PocMigration_Analyzer_Overlap_Boundaries", Test_PocMigration_Analyzer_Overlap_Boundaries);
+            RunTest("Test_PocMigration_Analyzer_Defends_Against_Zero_Atr_And_Invalid_Data", Test_PocMigration_Analyzer_Defends_Against_Zero_Atr_And_Invalid_Data);
             RunTest("Test_PocMigration_Setup_Scoring_And_Preconditions", Test_PocMigration_Setup_Scoring_And_Preconditions);
+            RunTest("Test_PocMigration_Setup_Rejects_Wrong_Side_Structural_Stop", Test_PocMigration_Setup_Rejects_Wrong_Side_Structural_Stop);
+            RunTest("Test_PocMigration_Setup_AntiChase_VA_Rejection", Test_PocMigration_Setup_AntiChase_VA_Rejection);
+            RunTest("Test_PocMigration_Repository_Query_Strict_AntiLookahead", Test_PocMigration_Repository_Query_Strict_AntiLookahead);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
@@ -1591,7 +1600,7 @@ namespace AMC.VolumeProfile.Tests
             Assert(trade.ExitReason == "ACTIVE", "Statut doit rester ACTIVE");
         }
 
-        #region Suite POC Migration Model
+        #region Suite POC Migration Model Durcie
 
         private static void Test_PocMigration_Analyzer_Detects_Upward_Drift()
         {
@@ -1601,37 +1610,156 @@ namespace AMC.VolumeProfile.Tests
             // Triés du plus récent (J-1: 5050) au plus ancien (J-4: 5000)
             var profiles = new List<ClosedVolumeProfile>
             {
-                new ClosedVolumeProfile { Poc = 5050.0, Vah = 5065.0, Val = 5035.0 }, // J-1 (plus récent)
-                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5015.0 }, // J-2
-                new ClosedVolumeProfile { Poc = 5015.0, Vah = 5030.0, Val = 5000.0 }, // J-3
-                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0 }  // J-4 (plus ancien)
+                new ClosedVolumeProfile { Poc = 5050.0, Vah = 5065.0, Val = 5035.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5015.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5015.0, Vah = 5030.0, Val = 5000.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) },
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-4) }
             };
 
             var result = analyzer.Analyze(profiles, 0.25, 40.0);
 
             Assert(result.IsMigrationValid, "Migration POC doit être valide");
             Assert(result.Direction == SwingDirection.Long, "Direction doit être Long pour POC montant");
-            Assert(result.ConsecutiveSessions == 3, string.Format("3 transitions consécutives attendues, obtenu {0}", result.ConsecutiveSessions));
+            Assert(result.ConsecutiveTransitions == 3, string.Format("3 transitions consécutives attendues, obtenu {0}", result.ConsecutiveTransitions));
+            Assert(result.ProfilesCount == 4, string.Format("4 profils attendus, obtenu {0}", result.ProfilesCount));
             Assert(result.TotalPocDriftTicks == 200.0, string.Format("Drift total 200 ticks attendu (50 pts / 0.25), obtenu {0}", result.TotalPocDriftTicks));
+            Assert(result.NewestPoc == 5050.0, "NewestPoc doit être 5050.0");
             Assert(result.OldestPoc == 5000.0, "OldestPoc doit être 5000.0");
             Assert(result.MigrationStrength >= 60.0, string.Format("Force de migration >= 60 attendue, obtenu {0:F1}", result.MigrationStrength));
+        }
+
+        private static void Test_PocMigration_Analyzer_Detects_Downward_Drift()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // 4 profils Daily consécutifs descendants : POC 5050 -> 5035 -> 5020 -> 5000
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5020.0, Vah = 5035.0, Val = 5005.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5035.0, Vah = 5050.0, Val = 5020.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) },
+                new ClosedVolumeProfile { Poc = 5050.0, Vah = 5065.0, Val = 5035.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-4) }
+            };
+
+            var result = analyzer.Analyze(profiles, 0.25, 40.0);
+
+            Assert(result.IsMigrationValid, "Migration POC descendante doit être valide");
+            Assert(result.Direction == SwingDirection.Short, "Direction doit être Short pour POC descendant");
+            Assert(result.ConsecutiveTransitions == 3, "3 transitions descendantes attendues");
+            Assert(result.TotalPocDriftTicks == 200.0, "Drift total 200 ticks attendu");
+            Assert(result.NewestPoc == 5000.0 && result.OldestPoc == 5050.0, "Niveaux Newest et Oldest conformes");
+        }
+
+        private static void Test_PocMigration_Analyzer_3Profiles_2Transitions_Valid()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // 3 profils = 2 transitions
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5015.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5015.0, Vah = 5030.0, Val = 5000.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) }
+            };
+
+            var result = analyzer.Analyze(profiles, 0.25, 40.0, minProfiles: 3, minTransitions: 2);
+
+            Assert(result.IsMigrationValid, "Migration sur 3 profils / 2 transitions doit être valide");
+            Assert(result.ProfilesCount == 3 && result.ConsecutiveTransitions == 2, "3 profils et 2 transitions attendus");
+            Assert(result.Direction == SwingDirection.Long, "Direction Long attendue");
         }
 
         private static void Test_PocMigration_Analyzer_Rejects_Inconsistent_Drift()
         {
             var analyzer = new PocMigrationAnalyzer();
 
-            // Profils en zigzag : 5000 -> 5020 -> 5010 -> 5030 (pas de tendance consécutive >= 3)
+            // Profils en zigzag : 5000 -> 5020 -> 5010 -> 5030 (pas de tendance consécutive >= 2)
             var profiles = new List<ClosedVolumeProfile>
             {
-                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5015.0 },
-                new ClosedVolumeProfile { Poc = 5010.0, Vah = 5025.0, Val = 4995.0 }, // Baisse ici (rupture)
-                new ClosedVolumeProfile { Poc = 5020.0, Vah = 5035.0, Val = 5005.0 },
-                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0 }
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5015.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5010.0, Vah = 5025.0, Val = 4995.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5020.0, Vah = 5035.0, Val = 5005.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) },
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-4) }
             };
 
             var result = analyzer.Analyze(profiles, 0.25, 40.0);
             Assert(!result.IsMigrationValid, "Migration en zigzag doit être rejetée (IsMigrationValid = false)");
+        }
+
+        private static void Test_PocMigration_Analyzer_Extracts_Recent_Sequence_After_Older_Break()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // Séquence : J-1 (5040) > J-2 (5025) > J-3 (5010) [3 profils haussiers récents]
+            // Mais J-4 (5015) > J-3 (5010) [Rupture ancienne entre J-3 et J-4]
+            // L'analyseur doit extraire avec succès la séquence récente J-1 -> J-2 -> J-3 !
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5040.0, Vah = 5055.0, Val = 5025.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5025.0, Vah = 5040.0, Val = 5010.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5010.0, Vah = 5025.0, Val = 4995.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) },
+                new ClosedVolumeProfile { Poc = 5015.0, Vah = 5030.0, Val = 5000.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-4) }, // Rupture ancienne
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-5) }
+            };
+
+            var result = analyzer.Analyze(profiles, 0.25, 40.0, minProfiles: 3, minTransitions: 2);
+
+            Assert(result.IsMigrationValid, "La séquence récente valide doit être extraite malgré une rupture plus ancienne");
+            Assert(result.Direction == SwingDirection.Long, "Direction Long attendue sur la séquence récente");
+            Assert(result.ConsecutiveTransitions == 2, "2 transitions récentes extraites");
+            Assert(result.NewestPoc == 5040.0 && result.OldestPoc == 5010.0, "Poc Newest (5040) et Oldest (5010) conformes");
+        }
+
+        private static void Test_PocMigration_Analyzer_Strength_Threshold_Boundaries()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5015.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5015.0, Vah = 5030.0, Val = 5000.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5000.0, Vah = 5015.0, Val = 4985.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) }
+            };
+
+            // Test avec seuil configuré à 49, 50, 95
+            var res50 = analyzer.Analyze(profiles, 0.25, 40.0, minStrength: 50.0);
+            Assert(res50.IsMigrationValid, "Seuil 50.0 doit être validé");
+
+            var resHigh = analyzer.Analyze(profiles, 0.25, 40.0, minStrength: 99.0);
+            Assert(!resHigh.IsMigrationValid, "Seuil inaccessible 99.0 doit être rejeté");
+        }
+
+        private static void Test_PocMigration_Analyzer_Overlap_Boundaries()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // Profils avec overlap mesuré
+            var profiles = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = 5050.0, Vah = 5060.0, Val = 5040.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5045.0, Val = 5025.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) },
+                new ClosedVolumeProfile { Poc = 5010.0, Vah = 5030.0, Val = 5000.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) }
+            };
+
+            var res = analyzer.Analyze(profiles, 0.25, 40.0);
+            Assert(res.VaOverlapMin >= 0.0 && res.VaOverlapMax <= 100.0, "Statistiques d'overlap bornées 0..100%");
+            Assert(res.ValidPairsCount == 2, "2 paires d'overlap calculées");
+        }
+
+        private static void Test_PocMigration_Analyzer_Defends_Against_Zero_Atr_And_Invalid_Data()
+        {
+            var analyzer = new PocMigrationAnalyzer();
+
+            // Profils avec données corrompues et ATR = 0
+            var corrupted = new List<ClosedVolumeProfile>
+            {
+                new ClosedVolumeProfile { Poc = double.NaN, Vah = 5060.0, Val = 5040.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-1) },
+                new ClosedVolumeProfile { Poc = 5030.0, Vah = 5020.0, Val = 5040.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-2) }, // VAH < VAL
+                new ClosedVolumeProfile { Poc = 0.0, Vah = 0.0, Val = 0.0, PeriodEndUtc = DateTime.UtcNow.AddDays(-3) }
+            };
+
+            var res = analyzer.Analyze(corrupted, 0.0, 0.0);
+            Assert(!res.IsMigrationValid, "Données corrompues doivent être rejetées sans exception");
         }
 
         private static void Test_PocMigration_Setup_Scoring_And_Preconditions()
@@ -1644,6 +1772,7 @@ namespace AMC.VolumeProfile.Tests
                 HasPocMigration = true,
                 PocMigrationDirection = SwingDirection.Long,
                 PocMigrationSessions = 4,
+                PocMigrationTransitions = 3,
                 PocMigrationStrength = 85.0,
                 PocMigrationOldestPoc = 5000.0,
                 DailyPoc = 5040.0,
@@ -1663,16 +1792,128 @@ namespace AMC.VolumeProfile.Tests
 
             var score = scorer.ComputeScore(ctx, SwingSetupType.PocMigration, SwingDirection.Long);
             Assert(score.Total >= 60.0, string.Format("Score total attendu >= 60, obtenu {0:F1}", score.Total));
+        }
 
-            // 2. Precondition échoue si prix au-delà de VAH (chase / pas de pullback)
-            ctx.Close = 5060.0; // Au-dessus de DailyVah (5055)
-            bool chaseRejected = scorer.ValidatePreconditions(ctx, SwingSetupType.PocMigration, SwingDirection.Long, out rejection);
-            Assert(!chaseRejected && rejection == "POC_MIGRATION_LONG_ABOVE_VAH", "Achat au-dessus de VAH doit être rejeté (pas un pullback)");
+        private static void Test_PocMigration_Setup_Rejects_Wrong_Side_Structural_Stop()
+        {
+            var scorer = new SwingScorer();
 
-            // 3. Precondition échoue si direction opposée
-            ctx.Close = 5038.0;
-            bool dirMismatch = scorer.ValidatePreconditions(ctx, SwingSetupType.PocMigration, SwingDirection.Short, out rejection);
-            Assert(!dirMismatch && rejection == "POC_MIGRATION_DIRECTION_MISMATCH", "Short sur migration haussière doit être rejeté");
+            // Long où OldestPoc >= Close (aberration de marché / stop du mauvais côté)
+            var ctxBadStop = new SwingContext
+            {
+                HasPocMigration = true,
+                PocMigrationDirection = SwingDirection.Long,
+                PocMigrationSessions = 3,
+                PocMigrationTransitions = 2,
+                PocMigrationStrength = 80.0,
+                PocMigrationOldestPoc = 5050.0, // Plus haut que l'entrée !
+                DailyPoc = 5040.0,
+                DailyVah = 5055.0,
+                DailyVal = 5025.0,
+                Close = 5035.0
+            };
+
+            string rejection;
+            bool allowed = scorer.ValidatePreconditions(ctxBadStop, SwingSetupType.PocMigration, SwingDirection.Long, out rejection);
+            Assert(!allowed && rejection == "POC_MIGRATION_INVALID_STRUCTURAL_STOP", "Stop structurel du mauvais côté doit être strictement rejeté");
+        }
+
+        private static void Test_PocMigration_Setup_AntiChase_VA_Rejection()
+        {
+            var scorer = new SwingScorer();
+
+            // Long au-dessus de VAH (chase)
+            var ctxChase = new SwingContext
+            {
+                HasPocMigration = true,
+                PocMigrationDirection = SwingDirection.Long,
+                PocMigrationSessions = 3,
+                PocMigrationTransitions = 2,
+                PocMigrationStrength = 80.0,
+                PocMigrationOldestPoc = 5000.0,
+                DailyPoc = 5040.0,
+                DailyVah = 5050.0,
+                DailyVal = 5025.0,
+                Close = 5055.0 // Au-dessus de VAH
+            };
+
+            string rejection;
+            bool allowed = scorer.ValidatePreconditions(ctxChase, SwingSetupType.PocMigration, SwingDirection.Long, out rejection);
+            Assert(!allowed && rejection == "POC_MIGRATION_LONG_ABOVE_VAH", "Achat au-dessus de VAH doit être rejeté (anti-chase)");
+        }
+
+        private static void Test_PocMigration_Repository_Query_Strict_AntiLookahead()
+        {
+            string testDb = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "test_poc_mig_anti_lookahead.db");
+            if (File.Exists(testDb)) { try { File.Delete(testDb); } catch { } }
+
+            try
+            {
+                var repo = new VolumeProfileRepository(testDb);
+                repo.Initialize();
+
+                DateTime t0 = new DateTime(2026, 8, 20, 22, 0, 0, DateTimeKind.Utc);
+                DateTime t1 = new DateTime(2026, 8, 21, 22, 0, 0, DateTimeKind.Utc);
+                DateTime t2 = new DateTime(2026, 8, 22, 22, 0, 0, DateTimeKind.Utc);
+                DateTime tFuture = new DateTime(2026, 8, 25, 22, 0, 0, DateTimeKind.Utc);
+
+                // Profil passé 1
+                repo.UpsertProfile(new ClosedVolumeProfile
+                {
+                    Symbol = "ES",
+                    ProfileType = VolumeProfilePeriodType.Daily,
+                    PeriodKey = "ES_DAY_2026-08-20",
+                    PeriodEndUtc = t0,
+                    Poc = 5000.0, Vah = 5015.0, Val = 4985.0
+                });
+
+                // Profil passé 2
+                repo.UpsertProfile(new ClosedVolumeProfile
+                {
+                    Symbol = "ES",
+                    ProfileType = VolumeProfilePeriodType.Daily,
+                    PeriodKey = "ES_DAY_2026-08-21",
+                    PeriodEndUtc = t1,
+                    Poc = 5015.0, Vah = 5030.0, Val = 5000.0
+                });
+
+                // Profil passé 3
+                repo.UpsertProfile(new ClosedVolumeProfile
+                {
+                    Symbol = "ES",
+                    ProfileType = VolumeProfilePeriodType.Daily,
+                    PeriodKey = "ES_DAY_2026-08-22",
+                    PeriodEndUtc = t2,
+                    Poc = 5030.0, Vah = 5045.0, Val = 5015.0
+                });
+
+                // Profil FUTUR (ne doit JAMAIS être retourné lors d'une évaluation à t2)
+                repo.UpsertProfile(new ClosedVolumeProfile
+                {
+                    Symbol = "ES",
+                    ProfileType = VolumeProfilePeriodType.Daily,
+                    PeriodKey = "ES_DAY_2026-08-25",
+                    PeriodEndUtc = tFuture,
+                    Poc = 5100.0, Vah = 5120.0, Val = 5080.0
+                });
+
+                repo.FlushQueue();
+
+                // Requête à la date t2 (le profil tFuture doit être exclu)
+                var profiles = repo.QueryRecentDailyProfiles("ES", t2, 5);
+
+                Assert(profiles.Count == 3, string.Format("3 profils attendus, obtenu {0}", profiles.Count));
+                foreach (var p in profiles)
+                {
+                    Assert(p.PeriodEndUtc <= t2, "Aucun profil postérieur à t2 ne doit être retourné (Anti-Lookahead strict)");
+                }
+
+                repo.Dispose();
+            }
+            finally
+            {
+                if (File.Exists(testDb)) { try { File.Delete(testDb); } catch { } }
+            }
         }
 
         #endregion
@@ -1684,5 +1925,6 @@ namespace AMC.VolumeProfile.Tests
         #endregion
     }
 }
+
 
 

@@ -3,7 +3,7 @@
 **Date :** 31 Août 2026  
 **Projet :** `amc-pro/AMC-V8` (Moteur `AuctionMarketCore`)  
 **Runner :** `dotnet run --project Tests/VolumeProfileTests.csproj`  
-**Résultat Global :** **63/63 TESTS RÉUSSIS (100 % PASS)** — 0 Échec  
+**Résultat Global :** **72/72 TESTS RÉUSSIS (100 % PASS)** — 0 Échec  
 
 ---
 
@@ -46,13 +46,22 @@
 
 ---
 
-## 3. Matrice des 3 Tests POC Migration Model (6ème Setup)
+## 3. Matrice des 12 Tests POC Migration Model (Setup 6 Durci & Frontières)
 
 | # | Nom du Test | Données d'Entrée | Comportement Attendu | Résultat Observé | Statut |
 | :-: | :--- | :--- | :--- | :--- | :-: |
-| **26** | `Test_PocMigration_Analyzer_Detects_Upward_Drift` | 4 profils Daily consécutifs montants ($5000 \rightarrow 5015 \rightarrow 5030 \rightarrow 5050$) | Détection direction Long, 3 transitions consécutives, drift 200 ticks, force $\ge 60/100$, `IsMigrationValid = true`. | Long, 3 sessions, 200t drift, Force $\ge 60$ | **PASS** |
-| **27** | `Test_PocMigration_Analyzer_Rejects_Inconsistent_Drift` | 4 profils en zigzag ($5000 \rightarrow 5020 \rightarrow 5010 \rightarrow 5030$) | Rejet de la migration (`IsMigrationValid = false`) faute de consistance directionnelle $\ge 3$ sessions. | Rejeté avec succès | **PASS** |
-| **28** | `Test_PocMigration_Setup_Scoring_And_Preconditions` | Contexte migration Long sur pullback (prix près du POC dans la VA) | Validation préconditions, score $\ge 60/100$, rejet si achat hors VA (chase) ou direction opposée. | Validé sur pullback, rejeté sur chase | **PASS** |
+| **26** | `Test_PocMigration_Analyzer_Detects_Upward_Drift` | 4 profils Daily consécutifs montants ($5000 \rightarrow 5015 \rightarrow 5030 \rightarrow 5050$) | Détection Long, 4 profils, 3 transitions, drift 200t, force $\ge 60/100$, `IsMigrationValid = true`. | Long, 3 transitions, 200t drift, Force $\ge 60$ | **PASS** |
+| **27** | `Test_PocMigration_Analyzer_Detects_Downward_Drift` | 4 profils Daily consécutifs descendants ($5050 \rightarrow 5035 \rightarrow 5020 \rightarrow 5000$) | Détection Short, 3 transitions descendantes, Oldest=5050, Newest=5000. | Short, 3 transitions, niveaux vérifiés | **PASS** |
+| **28** | `Test_PocMigration_Analyzer_3Profiles_2Transitions_Valid` | 3 profils consécutifs montants ($5000 \rightarrow 5015 \rightarrow 5030$) | Validation sur seuil minimal (3 profils / 2 transitions). | Validé avec 3 profils et 2 transitions | **PASS** |
+| **29** | `Test_PocMigration_Analyzer_Rejects_Inconsistent_Drift` | 4 profils en zigzag ($5000 \rightarrow 5020 \rightarrow 5010 \rightarrow 5030$) | Rejet de la migration (`IsMigrationValid = false`) faute de consistance directionnelle. | Rejeté avec succès | **PASS** |
+| **30** | `Test_PocMigration_Analyzer_Extracts_Recent_Sequence_After_Older_Break` | Séquence avec rupture ancienne ($5000 \rightarrow 5015 \searrow 5010 \nearrow 5025 \nearrow 5040$) | Extraction autonome de la séquence récente valide $5010 \rightarrow 5025 \rightarrow 5040$ sans rejeter toute la fenêtre. | Séquence récente extraite, Long validé | **PASS** |
+| **31** | `Test_PocMigration_Analyzer_Strength_Threshold_Boundaries` | Profils évalués avec seuils de force $\text{minStrength} = 50.0$ vs $99.0$ | Seuil réaliste validé, seuil inaccessible rejeté. | Frontières de force vérifiées | **PASS** |
+| **32** | `Test_PocMigration_Analyzer_Overlap_Boundaries` | Profils avec mesure d'overlap VA par paire | Overlap moyen, minimum et maximum bornés $0..100\%$, 2 paires validées. | Overlap min/max calculé | **PASS** |
+| **33** | `Test_PocMigration_Analyzer_Defends_Against_Zero_Atr_And_Invalid_Data` | Profils corrompus ($\text{NaN}$, $\text{VAH} < \text{VAL}$, $\text{Poc} \le 0$) et $\text{ATR} = 0$ | Rejet gracieux sans exception `NaN` ou division par zéro. | Aucune exception levée | **PASS** |
+| **34** | `Test_PocMigration_Setup_Scoring_And_Preconditions` | Contexte migration Long sur pullback (prix près du POC dans la VA) | Validation préconditions, score $\ge 60/100$. | Validé avec score $\ge 60$ | **PASS** |
+| **35** | `Test_PocMigration_Setup_Rejects_Wrong_Side_Structural_Stop` | Long avec `OldestPoc >= Close` (marché passé sous le niveau de départ) | Rejet strict `POC_MIGRATION_INVALID_STRUCTURAL_STOP` pour interdire tout stop du mauvais côté. | Rejeté avec motif exact | **PASS** |
+| **36** | `Test_PocMigration_Setup_AntiChase_VA_Rejection` | Long avec `Close > DailyVah` (achat hors Value Area en extension) | Rejet strict `POC_MIGRATION_LONG_ABOVE_VAH` pour forcer l'entrée sur pullback. | Rejeté avec motif anti-chase | **PASS** |
+| **37** | `Test_PocMigration_Repository_Query_Strict_AntiLookahead` | Base SQLite avec 3 profils passés et 1 profil futur ($T+3\text{j}$) | La requête à la date $T$ exclut formellement le profil futur. | 3 profils passés retournés, 0 futur | **PASS** |
 
 ---
 
@@ -61,6 +70,6 @@
 * **Suite Volume Profile V7.9 :** 35/35 PASS
 * **Suite Swing Unitaire V8.0 :** 20/20 PASS
 * **Suite Swing Intégration Stateful & SQLite V8.0 :** 5/5 PASS
-* **Suite POC Migration Model V8.0 :** 3/3 PASS
-* **Total Exécuté :** **63/63 PASS (100%)**
-* **Temps d'Exécution Global :** ~1.10 seconde
+* **Suite POC Migration Model Durcie V8.0 :** 12/12 PASS
+* **Total Exécuté :** **72/72 PASS (100%)**
+* **Temps d'Exécution Global :** ~1.15 seconde

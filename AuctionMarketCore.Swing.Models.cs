@@ -204,11 +204,16 @@ namespace NinjaTrader.NinjaScript.Indicators
         public bool HasPocMigration { get; set; }
         public SwingDirection PocMigrationDirection { get; set; }
         public int PocMigrationSessions { get; set; }
+        public int PocMigrationTransitions { get; set; }
         public double PocMigrationStrength { get; set; }
         public double PocMigrationDriftTotalTicks { get; set; }
         public double PocMigrationVaOverlap { get; set; }
+        public double PocMigrationVaOverlapMin { get; set; }
+        public double PocMigrationVaOverlapMax { get; set; }
         public double PocMigrationOldestPoc { get; set; }
+        public double PocMigrationNewestPoc { get; set; }
         public double PocMigrationAvgDriftPerSession { get; set; }
+        public double PocMigrationNormalizedDrift { get; set; }
 
         public SwingContext()
         {
@@ -398,15 +403,26 @@ namespace NinjaTrader.NinjaScript.Indicators
                     break;
 
                 case SwingSetupType.PocMigration:
-                    if (!ctx.HasPocMigration || ctx.PocMigrationSessions < 3)
+                    if (!ctx.HasPocMigration || ctx.PocMigrationSessions < 3 || ctx.PocMigrationTransitions < 2)
                     { rejectionReason = "NO_POC_MIGRATION_DETECTED"; return false; }
                     if (ctx.PocMigrationDirection != dir)
                     { rejectionReason = "POC_MIGRATION_DIRECTION_MISMATCH"; return false; }
-                    // Entrée sur pullback : prix doit être dans la zone de valeur récente (pas au-delà du POC actuel)
-                    if (isLong && ctx.Close > ctx.DailyVah && ctx.DailyVah > 0)
-                    { rejectionReason = "POC_MIGRATION_LONG_ABOVE_VAH"; return false; }
-                    if (!isLong && ctx.Close < ctx.DailyVal && ctx.DailyVal > 0)
-                    { rejectionReason = "POC_MIGRATION_SHORT_BELOW_VAL"; return false; }
+                    
+                    // Entrée sur pullback obligatoire (anti-chase) & Stop structurel OldestPoc
+                    if (isLong)
+                    {
+                        if (ctx.DailyVah > 0 && ctx.Close > ctx.DailyVah)
+                        { rejectionReason = "POC_MIGRATION_LONG_ABOVE_VAH"; return false; }
+                        if (ctx.PocMigrationOldestPoc >= ctx.Close && ctx.PocMigrationOldestPoc > 0)
+                        { rejectionReason = "POC_MIGRATION_INVALID_STRUCTURAL_STOP"; return false; }
+                    }
+                    else
+                    {
+                        if (ctx.DailyVal > 0 && ctx.Close < ctx.DailyVal)
+                        { rejectionReason = "POC_MIGRATION_SHORT_BELOW_VAL"; return false; }
+                        if (ctx.PocMigrationOldestPoc <= ctx.Close && ctx.PocMigrationOldestPoc > 0)
+                        { rejectionReason = "POC_MIGRATION_INVALID_STRUCTURAL_STOP"; return false; }
+                    }
                     break;
             }
 
@@ -728,133 +744,257 @@ namespace NinjaTrader.NinjaScript.Indicators
     #region POC Migration Model
 
     /// <summary>
-    /// Résultat de l'analyse de migration du POC sur N sessions historiques.
+    /// Résultat complet et auditable de l'analyse de migration du POC sur N sessions historiques.
     /// Objet immuable retourné par PocMigrationAnalyzer.
     /// </summary>
     public sealed class PocMigrationResult
     {
         public SwingDirection Direction { get; set; }
-        public int ConsecutiveSessions { get; set; }
+        public int ProfilesCount { get; set; }
+        public int ConsecutiveTransitions { get; set; }
         public double TotalPocDriftTicks { get; set; }
         public double AveragePocDriftPerSession { get; set; }
+        public double NormalizedDriftAtr { get; set; }
         public double ValueAreaOverlapPercent { get; set; }
+        public double VaOverlapAverage { get; set; }
+        public double VaOverlapMin { get; set; }
+        public double VaOverlapMax { get; set; }
+        public int ValidPairsCount { get; set; }
         public bool IsMigrationValid { get; set; }
         public double MigrationStrength { get; set; }
+        public double NewestPoc { get; set; }
         public double OldestPoc { get; set; }
+        public DateTime NewestProfileTimeUtc { get; set; }
+        public DateTime OldestProfileTimeUtc { get; set; }
+        public string InvalidationReason { get; set; }
 
         public PocMigrationResult()
         {
             Direction = SwingDirection.None;
             IsMigrationValid = false;
+            InvalidationReason = "INIT";
         }
     }
 
     /// <summary>
     /// Analyseur déterministe et pur (sans état) de la migration directionnelle du POC.
-    /// Prend en entrée une liste de profils Daily clôturés (triés du plus récent au plus ancien)
-    /// et retourne un résultat immuable décrivant la migration observée.
+    /// Recherche la séquence directionnelle valide la plus récente dans la fenêtre de lookback.
     /// </summary>
     public sealed class PocMigrationAnalyzer
     {
-        /// <summary>
-        /// Analyse la migration du POC sur les profils fournis.
-        /// Les profils doivent être triés du plus récent (index 0) au plus ancien.
-        /// </summary>
-        public PocMigrationResult Analyze(List<ClosedVolumeProfile> recentProfiles, double tickSize, double atrDaily)
+        public PocMigrationResult Analyze(
+            List<ClosedVolumeProfile> recentProfiles,
+            double tickSize,
+            double atrDaily,
+            int minProfiles = 3,
+            int minTransitions = 2,
+            double minStrength = 50.0)
         {
             var result = new PocMigrationResult();
-            if (recentProfiles == null || recentProfiles.Count < 3 || tickSize <= 0)
-                return result;
 
-            // Calculer les drifts entre sessions consécutives
-            int consecutiveUp = 0;
-            int consecutiveDown = 0;
-            double totalDrift = 0.0;
-            double totalVaOverlap = 0.0;
-            int overlapCount = 0;
-            double oldestPoc = 0.0;
-
-            for (int i = 0; i < recentProfiles.Count - 1; i++)
+            // 1. Validation défensive des entrées
+            if (recentProfiles == null || recentProfiles.Count == 0)
             {
-                var newer = recentProfiles[i];
-                var older = recentProfiles[i + 1];
+                result.InvalidationReason = "PROFILES_NULL_OR_EMPTY";
+                return result;
+            }
 
-                if (newer.Poc <= 0 || older.Poc <= 0) break;
+            if (minProfiles < 3) minProfiles = 3;
+            if (minTransitions < 2) minTransitions = 2;
+            if (minTransitions > minProfiles - 1) minTransitions = minProfiles - 1;
 
-                double drift = newer.Poc - older.Poc;
-                double driftTicks = drift / tickSize;
+            if (tickSize <= 0.0 || double.IsNaN(tickSize) || double.IsInfinity(tickSize))
+                tickSize = 0.25;
 
-                if (i == 0)
+            if (atrDaily <= 0.0 || double.IsNaN(atrDaily) || double.IsInfinity(atrDaily))
+                atrDaily = tickSize * 40.0;
+
+            // 2. Normalisation et tri des profils (du plus récent au plus ancien)
+            var validProfiles = new List<ClosedVolumeProfile>();
+            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < recentProfiles.Count; i++)
+            {
+                var p = recentProfiles[i];
+                if (p == null || p.Poc <= 0 || p.Vah <= p.Val || p.Val <= 0 || double.IsNaN(p.Poc) || double.IsInfinity(p.Poc))
+                    continue;
+
+                string key = !string.IsNullOrEmpty(p.PeriodKey) ? p.PeriodKey : (p.PeriodEndUtc != DateTime.MinValue ? p.PeriodEndUtc.ToString("o") : i.ToString());
+                if (seenKeys.Add(key))
                 {
-                    // Initialiser la direction à partir de la première paire
-                    if (driftTicks > 0) { consecutiveUp = 1; consecutiveDown = 0; }
-                    else if (driftTicks < 0) { consecutiveDown = 1; consecutiveUp = 0; }
-                    else break; // Pas de drift
+                    validProfiles.Add(p);
                 }
-                else
+            }
+
+            // Tri par date si renseignée, sinon conserve l'ordre de la collection fournie
+            bool hasEndDates = false;
+            for (int i = 0; i < validProfiles.Count; i++)
+            {
+                if (validProfiles[i].PeriodEndUtc != DateTime.MinValue)
                 {
-                    // Vérifier la consistance directionnelle
-                    if (driftTicks > 0 && consecutiveUp > 0) consecutiveUp++;
-                    else if (driftTicks < 0 && consecutiveDown > 0) consecutiveDown++;
-                    else break; // Rupture de la migration
+                    hasEndDates = true;
+                    break;
                 }
+            }
+            if (hasEndDates)
+            {
+                validProfiles.Sort((a, b) => b.PeriodEndUtc.CompareTo(a.PeriodEndUtc));
+            }
 
-                totalDrift += driftTicks;
-                oldestPoc = older.Poc;
+            if (validProfiles.Count < minProfiles)
+            {
+                result.InvalidationReason = string.Format(CultureInfo.InvariantCulture, "INSUFFICIENT_PROFILES_{0}_LT_{1}", validProfiles.Count, minProfiles);
+                return result;
+            }
 
-                // Calcul du chevauchement VA entre sessions adjacentes
-                if (newer.Vah > 0 && newer.Val > 0 && older.Vah > 0 && older.Val > 0)
+            // 3. Recherche de la dernière séquence directionnelle valide la plus récente
+            PocMigrationResult bestCandidate = null;
+
+            for (int startIndex = 0; startIndex <= validProfiles.Count - minProfiles; startIndex++)
+            {
+                int consecutiveUp = 0;
+                int consecutiveDown = 0;
+                double seqDriftTicks = 0.0;
+                var pairOverlaps = new List<double>();
+                double seqNewestPoc = validProfiles[startIndex].Poc;
+                double seqOldestPoc = validProfiles[startIndex].Poc;
+                DateTime seqNewestTime = validProfiles[startIndex].PeriodEndUtc;
+                DateTime seqOldestTime = validProfiles[startIndex].PeriodEndUtc;
+
+                for (int i = startIndex; i < validProfiles.Count - 1; i++)
                 {
+                    var newer = validProfiles[i];
+                    var older = validProfiles[i + 1];
+
+                    double drift = newer.Poc - older.Poc;
+                    double driftTicks = drift / tickSize;
+
+                    // Si drift nul (< 1 tick), rupture de tendance
+                    if (Math.Abs(driftTicks) < 1.0)
+                        break;
+
+                    if (i == startIndex)
+                    {
+                        if (driftTicks > 0) consecutiveUp = 1;
+                        else consecutiveDown = 1;
+                    }
+                    else
+                    {
+                        if (driftTicks > 0 && consecutiveUp > 0) consecutiveUp++;
+                        else if (driftTicks < 0 && consecutiveDown > 0) consecutiveDown++;
+                        else break; // Rupture directionnelle
+                    }
+
+                    seqDriftTicks += driftTicks;
+                    seqOldestPoc = older.Poc;
+                    seqOldestTime = older.PeriodEndUtc;
+
+                    // Calcul de l'overlap de la paire
                     double overlapLow = Math.Max(newer.Val, older.Val);
                     double overlapHigh = Math.Min(newer.Vah, older.Vah);
-                    double overlapRange = Math.Max(0, overlapHigh - overlapLow);
+                    double overlapRange = Math.Max(0.0, overlapHigh - overlapLow);
                     double maxRange = Math.Max(newer.Vah - newer.Val, older.Vah - older.Val);
-                    if (maxRange > 0)
+                    double overlapPct = maxRange > 0.0 ? (overlapRange / maxRange) * 100.0 : 0.0;
+                    pairOverlaps.Add(overlapPct);
+                }
+
+                int transitions = Math.Max(consecutiveUp, consecutiveDown);
+                if (transitions >= minTransitions)
+                {
+                    var candidate = new PocMigrationResult
                     {
-                        totalVaOverlap += (overlapRange / maxRange) * 100.0;
-                        overlapCount++;
+                        Direction = consecutiveUp > consecutiveDown ? SwingDirection.Long : SwingDirection.Short,
+                        ProfilesCount = transitions + 1,
+                        ConsecutiveTransitions = transitions,
+                        TotalPocDriftTicks = Math.Abs(seqDriftTicks),
+                        AveragePocDriftPerSession = Math.Abs(seqDriftTicks) / transitions,
+                        NewestPoc = seqNewestPoc,
+                        OldestPoc = seqOldestPoc,
+                        NewestProfileTimeUtc = seqNewestTime,
+                        OldestProfileTimeUtc = seqOldestTime,
+                        ValidPairsCount = pairOverlaps.Count
+                    };
+
+                    // Calcul des statistiques d'overlap
+                    double totalOverlap = 0.0;
+                    double minOverlap = 100.0;
+                    double maxOverlap = 0.0;
+
+                    for (int o = 0; o < pairOverlaps.Count; o++)
+                    {
+                        double ov = pairOverlaps[o];
+                        totalOverlap += ov;
+                        if (ov < minOverlap) minOverlap = ov;
+                        if (ov > maxOverlap) maxOverlap = ov;
+                    }
+
+                    candidate.VaOverlapAverage = pairOverlaps.Count > 0 ? totalOverlap / pairOverlaps.Count : 0.0;
+                    candidate.VaOverlapMin = pairOverlaps.Count > 0 ? minOverlap : 0.0;
+                    candidate.VaOverlapMax = pairOverlaps.Count > 0 ? maxOverlap : 0.0;
+                    candidate.ValueAreaOverlapPercent = candidate.VaOverlapAverage;
+
+                    // Drift normalisé par rapport à l'ATR Daily
+                    double atrDailyTicks = atrDaily / tickSize;
+                    candidate.NormalizedDriftAtr = atrDailyTicks > 0.0 ? candidate.TotalPocDriftTicks / atrDailyTicks : 1.0;
+
+                    // 4. Calcul de MigrationStrength (0..100)
+                    double strength = 0.0;
+
+                    // a) Consistance de direction de base (30 pts)
+                    strength += 30.0;
+
+                    // b) Magnitude normalisée vs ATR (0..25 pts)
+                    if (candidate.NormalizedDriftAtr >= 1.0) strength += 25.0;
+                    else if (candidate.NormalizedDriftAtr >= 0.5) strength += 18.0;
+                    else strength += Math.Max(0.0, candidate.NormalizedDriftAtr * 36.0);
+
+                    // c) Qualité d'overlap Value Area (0..20 pts)
+                    if (candidate.VaOverlapAverage >= 30.0 && candidate.VaOverlapAverage <= 80.0)
+                    {
+                        strength += 20.0;
+                        if (candidate.VaOverlapMin < 30.0) strength -= 5.0;
+                        if (candidate.VaOverlapMax > 80.0) strength -= 5.0;
+                    }
+                    else if (candidate.VaOverlapAverage > 80.0)
+                    {
+                        strength += 10.0;
+                    }
+                    else
+                    {
+                        strength += 5.0;
+                    }
+
+                    // d) Durée / Nombre de transitions (0..15 pts)
+                    if (transitions >= 4) strength += 15.0;
+                    else if (transitions == 3) strength += 10.0;
+                    else strength += 5.0;
+
+                    // e) Régularité du drift par session (0..10 pts)
+                    if (candidate.AveragePocDriftPerSession >= 4.0) strength += 10.0;
+                    else if (candidate.AveragePocDriftPerSession >= 2.0) strength += 6.0;
+                    else strength += 2.0;
+
+                    candidate.MigrationStrength = Math.Max(0.0, Math.Min(100.0, strength));
+                    candidate.IsMigrationValid = candidate.MigrationStrength >= minStrength;
+
+                    if (candidate.IsMigrationValid)
+                    {
+                        candidate.InvalidationReason = "VALID";
+                        bestCandidate = candidate;
+                        break;
+                    }
+                    else if (bestCandidate == null)
+                    {
+                        candidate.InvalidationReason = string.Format(CultureInfo.InvariantCulture, "STRENGTH_BELOW_THRESHOLD_{0:F1}_LT_{1:F1}", candidate.MigrationStrength, minStrength);
+                        bestCandidate = candidate;
                     }
                 }
             }
 
-            int consecutive = Math.Max(consecutiveUp, consecutiveDown);
-            if (consecutive < 3) return result;
+            if (bestCandidate != null)
+                return bestCandidate;
 
-            result.Direction = consecutiveUp > consecutiveDown ? SwingDirection.Long : SwingDirection.Short;
-            result.ConsecutiveSessions = consecutive;
-            result.TotalPocDriftTicks = Math.Abs(totalDrift);
-            result.AveragePocDriftPerSession = consecutive > 0 ? Math.Abs(totalDrift) / consecutive : 0;
-            result.ValueAreaOverlapPercent = overlapCount > 0 ? totalVaOverlap / overlapCount : 0;
-            result.OldestPoc = oldestPoc;
-
-            // Scoring de la force de migration (0..100)
-            double strength = 0.0;
-
-            // Drift consistant (+30 pts)
-            strength += 30.0;
-
-            // Magnitude suffisante (+25 pts) : drift total >= 0.5 ATR daily
-            double atrThreshold = atrDaily > 0 ? atrDaily / tickSize * 0.5 : 20.0;
-            if (result.TotalPocDriftTicks >= atrThreshold * 2) strength += 25.0;
-            else if (result.TotalPocDriftTicks >= atrThreshold) strength += 18.0;
-            else strength += 8.0;
-
-            // VA Overlap entre 30% et 80% = migration graduelle (+20 pts)
-            if (result.ValueAreaOverlapPercent >= 30.0 && result.ValueAreaOverlapPercent <= 80.0) strength += 20.0;
-            else if (result.ValueAreaOverlapPercent > 80.0) strength += 10.0; // Trop de chevauchement = balance
-            else strength += 5.0; // Gap probable
-
-            // Durée bonus (+10 pts si 4+ sessions, +15 si 5+)
-            if (consecutive >= 5) strength += 15.0;
-            else if (consecutive >= 4) strength += 10.0;
-
-            // Bonus drift par session régulier (+10 pts)
-            if (result.AveragePocDriftPerSession >= 4.0) strength += 10.0;
-            else if (result.AveragePocDriftPerSession >= 2.0) strength += 5.0;
-
-            result.MigrationStrength = Math.Min(100.0, strength);
-            result.IsMigrationValid = result.MigrationStrength >= 50.0;
-
+            result.InvalidationReason = "NO_VALID_DIRECTIONAL_SEQUENCE";
             return result;
         }
     }

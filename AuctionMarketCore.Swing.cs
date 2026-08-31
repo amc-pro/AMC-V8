@@ -388,20 +388,27 @@ namespace NinjaTrader.NinjaScript.Indicators
                 try
                 {
                     string sym = Instrument != null && Instrument.MasterInstrument != null ? Instrument.MasterInstrument.Name : "SYM";
-                    var recentDailies = volumeProfileManager.Repository.QueryRecentDailyProfiles(sym, ctx.TimeUtc, PocMigrationLookbackSessions > 0 ? PocMigrationLookbackSessions : 5);
-                    if (recentDailies != null && recentDailies.Count >= (PocMigrationMinSessions > 0 ? PocMigrationMinSessions : 3))
+                    int lookback = PocMigrationLookbackSessions > 0 ? PocMigrationLookbackSessions : 5;
+                    int minProfiles = PocMigrationMinSessions > 0 ? PocMigrationMinSessions : 3;
+                    var recentDailies = volumeProfileManager.Repository.QueryRecentDailyProfiles(sym, ctx.TimeUtc, lookback);
+                    if (recentDailies != null && recentDailies.Count >= minProfiles)
                     {
-                        var mig = pocMigrationAnalyzer.Analyze(recentDailies, ctx.TickSize, ctx.AtrDaily);
-                        if (mig != null && mig.IsMigrationValid && mig.ConsecutiveSessions >= (PocMigrationMinSessions > 0 ? PocMigrationMinSessions : 3))
+                        var mig = pocMigrationAnalyzer.Analyze(recentDailies, ctx.TickSize, ctx.AtrDaily, minProfiles, minProfiles - 1, 50.0);
+                        if (mig != null && mig.IsMigrationValid)
                         {
                             ctx.HasPocMigration = true;
                             ctx.PocMigrationDirection = mig.Direction;
-                            ctx.PocMigrationSessions = mig.ConsecutiveSessions;
+                            ctx.PocMigrationSessions = mig.ProfilesCount;
+                            ctx.PocMigrationTransitions = mig.ConsecutiveTransitions;
                             ctx.PocMigrationStrength = mig.MigrationStrength;
                             ctx.PocMigrationDriftTotalTicks = mig.TotalPocDriftTicks;
-                            ctx.PocMigrationVaOverlap = mig.ValueAreaOverlapPercent;
+                            ctx.PocMigrationVaOverlap = mig.VaOverlapAverage;
+                            ctx.PocMigrationVaOverlapMin = mig.VaOverlapMin;
+                            ctx.PocMigrationVaOverlapMax = mig.VaOverlapMax;
                             ctx.PocMigrationOldestPoc = mig.OldestPoc;
+                            ctx.PocMigrationNewestPoc = mig.NewestPoc;
                             ctx.PocMigrationAvgDriftPerSession = mig.AveragePocDriftPerSession;
+                            ctx.PocMigrationNormalizedDrift = mig.NormalizedDriftAtr;
                         }
                     }
                 }
