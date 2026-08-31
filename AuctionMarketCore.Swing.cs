@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.IO;
+using System.Xml.Serialization;
 using NinjaTrader.Cbi;
 using NinjaTrader.Data;
 using NinjaTrader.Gui;
@@ -12,6 +13,7 @@ using NinjaTrader.NinjaScript;
 using NinjaTrader.NinjaScript.BarsTypes;
 using NinjaTrader.NinjaScript.Indicators;
 using NinjaTrader.NinjaScript.Indicators.VolumeProfilePro;
+using SMI = NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence;
 #endregion
 
 namespace NinjaTrader.NinjaScript.Indicators
@@ -48,17 +50,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         [Display(Name = "Filtre News Actif", Order = 8, GroupName = "Swing 02. Risque")]
         public bool EnableNewsFilter { get; set; }
-
-        [Range(1, 120)]
-        [Display(Name = "Fenêtre Blackout News (Minutes)", Order = 9, GroupName = "Swing 02. Risque")]
-        public int NewsBlackoutMinutes { get; set; }
-
-        [Range(0, 50)]
-        [Display(Name = "Pénalité Score News", Order = 10, GroupName = "Swing 02. Risque")]
-        public double NewsWindowPenalty { get; set; }
-
-        [Display(Name = "Blocage Dur News Majeures", Order = 11, GroupName = "Swing 02. Risque")]
-        public bool NewsHardBlock { get; set; }
 
         [Display(Name = "Fichier Journal Swing (Vide = Auto shadow/swing_trades.csv)", Order = 12, GroupName = "Swing 03. Journal")]
         public string SwingJournalFilePath { get; set; }
@@ -413,47 +404,53 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Ingestion des données Volume Profile V2 Clôturées
             if (currentVpContext != null)
             {
-                if (currentVpContext.ActiveDailyProfile != null && currentVpContext.ActiveDailyProfile.Valid)
+                int vpTol = VolumeProfileLevelToleranceTicks > 0 ? VolumeProfileLevelToleranceTicks : 3;
+                double vpPrice = snClose;
+
+                if (currentVpContext.PrevDay != null && currentVpContext.PrevDay.Valid)
                 {
-                    ctx.DailyPoc = currentVpContext.ActiveDailyProfile.Poc;
-                    ctx.DailyVah = currentVpContext.ActiveDailyProfile.Vah;
-                    ctx.DailyVal = currentVpContext.ActiveDailyProfile.Val;
-                    ctx.ClosedVwap = currentVpContext.ActiveDailyProfile.Vwap;
-                    ctx.Sd1Upper = currentVpContext.ActiveDailyProfile.VwapSd1Upper;
-                    ctx.Sd1Lower = currentVpContext.ActiveDailyProfile.VwapSd1Lower;
-                    ctx.Sd2Upper = currentVpContext.ActiveDailyProfile.VwapSd2Upper;
-                    ctx.Sd2Lower = currentVpContext.ActiveDailyProfile.VwapSd2Lower;
-                    ctx.Sd3Upper = currentVpContext.ActiveDailyProfile.VwapSd3Upper;
-                    ctx.Sd3Lower = currentVpContext.ActiveDailyProfile.VwapSd3Lower;
+                    var day = currentVpContext.PrevDay;
+                    ctx.DailyPoc = day.Poc;
+                    ctx.DailyVah = day.Vah;
+                    ctx.DailyVal = day.Val;
+                    ctx.ClosedVwap = day.Vwap;
+                    ctx.Sd1Upper = day.VwapSd1Upper;
+                    ctx.Sd1Lower = day.VwapSd1Lower;
+                    ctx.Sd2Upper = day.VwapSd2Upper;
+                    ctx.Sd2Lower = day.VwapSd2Lower;
+                    ctx.Sd3Upper = day.VwapSd3Upper;
+                    ctx.Sd3Lower = day.VwapSd3Lower;
+                    ctx.NearDailyPoc = IsNearVpLevel(vpPrice, day.Poc, TickSize, vpTol);
+                    ctx.NearDailyVah = IsNearVpLevel(vpPrice, day.Vah, TickSize, vpTol);
+                    ctx.NearDailyVal = IsNearVpLevel(vpPrice, day.Val, TickSize, vpTol);
                 }
 
-                if (currentVpContext.ActiveWeeklyProfile != null && currentVpContext.ActiveWeeklyProfile.Valid)
+                if (currentVpContext.PrevWeek != null && currentVpContext.PrevWeek.Valid)
                 {
-                    ctx.WeeklyPoc = currentVpContext.ActiveWeeklyProfile.Poc;
-                    ctx.WeeklyVah = currentVpContext.ActiveWeeklyProfile.Vah;
-                    ctx.WeeklyVal = currentVpContext.ActiveWeeklyProfile.Val;
+                    var week = currentVpContext.PrevWeek;
+                    ctx.WeeklyPoc = week.Poc;
+                    ctx.WeeklyVah = week.Vah;
+                    ctx.WeeklyVal = week.Val;
+                    ctx.NearWeeklyPoc = IsNearVpLevel(vpPrice, week.Poc, TickSize, vpTol);
+                    ctx.NearWeeklyVah = IsNearVpLevel(vpPrice, week.Vah, TickSize, vpTol);
+                    ctx.NearWeeklyVal = IsNearVpLevel(vpPrice, week.Val, TickSize, vpTol);
                 }
 
-                if (currentVpContext.ActiveMonthlyProfile != null && currentVpContext.ActiveMonthlyProfile.Valid)
+                if (currentVpContext.PrevMonth != null && currentVpContext.PrevMonth.Valid)
                 {
-                    ctx.MonthlyPoc = currentVpContext.ActiveMonthlyProfile.Poc;
-                    ctx.MonthlyVah = currentVpContext.ActiveMonthlyProfile.Vah;
-                    ctx.MonthlyVal = currentVpContext.ActiveMonthlyProfile.Val;
+                    var month = currentVpContext.PrevMonth;
+                    ctx.MonthlyPoc = month.Poc;
+                    ctx.MonthlyVah = month.Vah;
+                    ctx.MonthlyVal = month.Val;
                 }
 
-                ctx.NearDailyPoc = currentVpContext.NearDailyPoc;
-                ctx.NearDailyVah = currentVpContext.NearDailyVah;
-                ctx.NearDailyVal = currentVpContext.NearDailyVal;
-                ctx.NearWeeklyPoc = currentVpContext.NearWeeklyPoc;
-                ctx.NearWeeklyVah = currentVpContext.NearWeeklyVah;
-                ctx.NearWeeklyVal = currentVpContext.NearWeeklyVal;
-                ctx.InsideHvn = currentVpContext.InsideHvn;
-                ctx.InsideLvn = currentVpContext.InsideLvn;
+                ctx.InsideHvn = (currentVpContext.Location & VolumeProfileLocationType.InsideHvn) != 0;
+                ctx.InsideLvn = (currentVpContext.Location & VolumeProfileLocationType.InsideLvn) != 0;
             }
 
             // Order Flow & Microstructure
-            ctx.BarDelta = snDelta;
-            ctx.CumulativeDelta = snCumDelta;
+            ctx.BarDelta = currentBarDelta;
+            ctx.CumulativeDelta = currentCumulativeDelta;
             ctx.HasDeltaDivergence = HasCumDeltaDivergence(isBuy);
             ctx.HasAbsorptionEvidence = HasRecentAbsorption(isBuy);
 
@@ -487,7 +484,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     ctx.CurrentMonthlyStartUtc = monthStart;
 
                     // Maintien de l'historique temporel VWAP pour le calcul de pente normalisée
-                    DateTime curTimeUtc = snTimeUtc;
+                    DateTime curTimeUtc = GetVolumetricTime().ToUniversalTime();
                     if (monthlyVwapTimeHistory.Count == 0 || Math.Abs(monthlyVwapTimeHistory[monthlyVwapTimeHistory.Count - 1].Value - curVwap) > 1e-6)
                     {
                         monthlyVwapTimeHistory.Add(new KeyValuePair<DateTime, double>(curTimeUtc, curVwap));
@@ -911,7 +908,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     sig.MonthlyVwapSlopeTicksPerHourAtSetup,
                     sig.MonthlyVwapSlopeAtrNormalizedAtSetup);
 
-                QueueTelegramMessage(msg);
+                SendTelegramMessage(msg, null, MiTelegramChannel);
             }
         }
 
@@ -1044,16 +1041,21 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         #region Helpers & Vérifications Microstructure
 
+        private static bool IsNearVpLevel(double price, double level, double tickSize, int toleranceTicks)
+        {
+            return level > 0 && tickSize > 0 && Math.Abs(price - level) / tickSize <= toleranceTicks;
+        }
+
         private bool HasCumDeltaDivergence(bool isBuy)
         {
             if (isBuy)
-                return snDelta > 0 && snLow <= prevBarValPrice && snClose > snOpen;
-            return snDelta < 0 && snHigh >= prevBarVahPrice && snClose < snOpen;
+                return currentBarDelta > 0 && snLow <= prevBarValPrice && snClose > snOpen;
+            return currentBarDelta < 0 && snHigh >= prevBarVahPrice && snClose < snOpen;
         }
 
         private bool HasRecentAbsorption(bool isBuy)
         {
-            return isBuy ? snDelta > 100 : snDelta < -100;
+            return isBuy ? currentBarDelta > 100 : currentBarDelta < -100;
         }
 
         private bool IsInActiveFvg(double price, bool isBuy)
@@ -1064,11 +1066,17 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private bool HasRecentBos(bool isBuy)
         {
-            if (miAnalyzer != null && miAnalyzer.LastStructureBreak != null)
+            if (miAnalyzer != null)
             {
-                bool isBos = !miAnalyzer.LastStructureBreak.IsChangeOfCharacter;
-                bool dirMatch = isBuy ? miAnalyzer.LastStructureBreak.IsBullish : !miAnalyzer.LastStructureBreak.IsBullish;
-                if (isBos && dirMatch) return true;
+                SMI.MiStructureEvent bos = miAnalyzer.LastBos;
+                if (bos != SMI.MiStructureEvent.None)
+                {
+                    bool dirMatch = isBuy
+                        ? bos == SMI.MiStructureEvent.BullishBos
+                        : bos == SMI.MiStructureEvent.BearishBos;
+                    if (dirMatch && miAnalyzer.BarsSinceBos >= 0 && miAnalyzer.BarsSinceBos <= SmcEventMaxAgeBars)
+                        return true;
+                }
             }
             return isBuy ? snClose > snOpen && snHigh > prevBarVahPrice
                          : snClose < snOpen && snLow < prevBarValPrice;
@@ -1076,11 +1084,17 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private bool HasRecentChoch(bool isBuy)
         {
-            if (miAnalyzerH4 != null && miAnalyzerH4.LastStructureBreak != null)
+            if (miAnalyzerH4 != null)
             {
-                bool isChoch = miAnalyzerH4.LastStructureBreak.IsChangeOfCharacter;
-                bool dirMatch = isBuy ? miAnalyzerH4.LastStructureBreak.IsBullish : !miAnalyzerH4.LastStructureBreak.IsBullish;
-                if (isChoch && dirMatch) return true;
+                SMI.MiStructureEvent choch = miAnalyzerH4.LastChoch;
+                if (choch != SMI.MiStructureEvent.None)
+                {
+                    bool dirMatch = isBuy
+                        ? choch == SMI.MiStructureEvent.BullishChoch
+                        : choch == SMI.MiStructureEvent.BearishChoch;
+                    if (dirMatch && miAnalyzerH4.BarsSinceChoch >= 0 && miAnalyzerH4.BarsSinceChoch <= SmcEventMaxAgeBars)
+                        return true;
+                }
             }
             return isBuy ? snClose > prevBarPocPrice && snOpen < prevBarPocPrice
                          : snClose < prevBarPocPrice && snOpen > prevBarPocPrice;
