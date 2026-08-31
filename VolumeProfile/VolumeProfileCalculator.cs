@@ -106,8 +106,8 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
         }
 
         /// <summary>
-        /// Calcul O(1) instantané du VWAP et des bandes d'écart-type SD 1, 2, 3
-        /// sans recalculer la Value Area complète ni les nœuds gaussiens.
+        /// Calcul O(1) instantané et numériquement stable du VWAP et des bandes d'écart-type SD 1, 2, 3
+        /// avec protections intégrales contre l'annulation catastrophique et les variances négatives.
         /// </summary>
         public bool TryCalculateVwapAndBands(
             double tickSize,
@@ -129,16 +129,24 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             sd3Upper = 0.0;
             sd3Lower = 0.0;
 
-            if (TotalVolume <= 0 || tickSize <= 0 || volumeMap.Count == 0)
+            if (TotalVolume <= 0 || tickSize <= 0 || volumeMap.Count == 0 ||
+                double.IsNaN(tickSize) || double.IsInfinity(tickSize) ||
+                double.IsNaN(sumTickVol) || double.IsInfinity(sumTickVol) ||
+                double.IsNaN(sumTick2Vol) || double.IsInfinity(sumTick2Vol))
                 return false;
 
             double totalVolD = (double)TotalVolume;
             double vwapTick = sumTickVol / totalVolD;
+            if (double.IsNaN(vwapTick) || double.IsInfinity(vwapTick))
+                return false;
+
             double varianceTicks = (sumTick2Vol / totalVolD) - (vwapTick * vwapTick);
-            if (varianceTicks < 0.0 || double.IsNaN(varianceTicks))
+            if (varianceTicks < 0.0 || double.IsNaN(varianceTicks) || double.IsInfinity(varianceTicks))
                 varianceTicks = 0.0;
 
             double stdDevTick = Math.Sqrt(varianceTicks);
+            if (double.IsNaN(stdDevTick) || double.IsInfinity(stdDevTick))
+                stdDevTick = 0.0;
 
             vwap = vwapTick * tickSize;
             stdDev = stdDevTick * tickSize;

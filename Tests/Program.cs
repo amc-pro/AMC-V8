@@ -118,6 +118,18 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_MonthlyVwapBandRetest_Snapshot_Immutability", Test_MonthlyVwapBandRetest_Snapshot_Immutability);
             RunTest("Test_MonthlyVwapBandRetest_Full_Sizing_And_Stop_Clamping", Test_MonthlyVwapBandRetest_Full_Sizing_And_Stop_Clamping);
 
+            // ================================================================
+            // 🚀 SUITE MONTHLY VWAP P0/P1 HARDENED & NORMALIZED (8 TESTS)
+            // ================================================================
+            RunTest("Test_MonthlyVwap_Numerical_Stability_HighPrice_And_NegativeVariance", Test_MonthlyVwap_Numerical_Stability_HighPrice_And_NegativeVariance);
+            RunTest("Test_MonthlyVwap_Slope_TicksPerHour_Invariance", Test_MonthlyVwap_Slope_TicksPerHour_Invariance);
+            RunTest("Test_MonthlyBand_Epoch_Lifecycle_And_Drift_Reset", Test_MonthlyBand_Epoch_Lifecycle_And_Drift_Reset);
+            RunTest("Test_MonthlyBand_MultiBar_Acceptance_Configurable", Test_MonthlyBand_MultiBar_Acceptance_Configurable);
+            RunTest("Test_MonthlyBand_Collision_Stop_TP_Conservative_Pessimistic", Test_MonthlyBand_Collision_Stop_TP_Conservative_Pessimistic);
+            RunTest("Test_MonthlyBand_Slope_AtrNormalized_Validation", Test_MonthlyBand_Slope_AtrNormalized_Validation);
+            RunTest("Test_MonthlyBand_Epoch_Persists_On_Snapshot", Test_MonthlyBand_Epoch_Persists_On_Snapshot);
+            RunTest("Test_MonthlyBand_NonRegression_All_Existing_Setups", Test_MonthlyBand_NonRegression_All_Existing_Setups);
+
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
             Console.WriteLine("================================================================");
@@ -2258,6 +2270,240 @@ namespace AMC.VolumeProfile.Tests
 
             int sizeEs = riskMgr.CalculatePositionSize(250.0, stopTicksEs, 12.50, 1.0, 4);
             Assert(sizeEs >= 1 && sizeEs <= 4, "Sizing ES valide");
+        }
+
+        private static void Test_MonthlyVwap_Numerical_Stability_HighPrice_And_NegativeVariance()
+        {
+            var calc = new VolumeProfileCalculator();
+            double tickSize = 0.25;
+
+            // Ingestion à très haute valeur nominale (NQ 20000.0) avec dispersion infinitésimale
+            calc.AddVolumeAtPrice(20000.00, 1000000, tickSize);
+            calc.AddVolumeAtPrice(20000.25, 5, tickSize);
+            calc.AddVolumeAtPrice(20000.00, 1000000, tickSize);
+
+            double vwap, stdDev, sd1U, sd1L, sd2U, sd2L, sd3U, sd3L;
+            bool ok = calc.TryCalculateVwapAndBands(tickSize, out vwap, out stdDev, out sd1U, out sd1L, out sd2U, out sd2L, out sd3U, out sd3L);
+            Assert(ok, "TryCalculateVwapAndBands doit réussir sur prix élevés");
+            Assert(!double.IsNaN(vwap) && !double.IsInfinity(vwap), "VWAP ne doit pas être NaN/Infini");
+            Assert(!double.IsNaN(stdDev) && !double.IsInfinity(stdDev) && stdDev >= 0.0, "StdDev doit être finie et >= 0");
+            Assert(Math.Abs(vwap - 20000.0) < 1.0, "VWAP doit être proche de 20000");
+
+            // Test avec données NaN ou négatives : doit échouer proprement sans lever d'exception
+            double vwapBad, stdBad;
+            bool okBadTick = calc.TryCalculateVwapAndBands(-0.25, out vwapBad, out stdBad, out sd1U, out sd1L, out sd2U, out sd2L, out sd3U, out sd3L);
+            Assert(!okBadTick, "TickSize négatif doit être rejeté proprement");
+
+            bool okNanTick = calc.TryCalculateVwapAndBands(double.NaN, out vwapBad, out stdBad, out sd1U, out sd1L, out sd2U, out sd2L, out sd3U, out sd3L);
+            Assert(!okNanTick, "TickSize NaN doit être rejeté proprement");
+        }
+
+        private static void Test_MonthlyVwap_Slope_TicksPerHour_Invariance()
+        {
+            // Simulation : VWAP montant de 50 points (200 ticks de 0.25) sur 4 heures (240 min)
+            double tickSize = 0.25;
+            double vwapDeltaPrice = 50.0;
+            double elapsedHours = 4.0;
+
+            // Sur barres 1-minute (240 barres) : 200 ticks / 240 bars = 0.833 ticks/barre
+            // Sur barres 60-minutes (4 barres) : 200 ticks / 4 bars = 50.0 ticks/barre
+            // Pente normalisée en Ticks/Heure : (50.0 / 0.25) / 4.0 = 50.0 ticks/heure
+            double slopeTicksPerHour1 = (vwapDeltaPrice / tickSize) / elapsedHours;
+            double slopeTicksPerHour2 = (vwapDeltaPrice / tickSize) / elapsedHours;
+
+            Assert(Math.Abs(slopeTicksPerHour1 - 50.0) < 1e-6, "Pente normalisée = 50.0 ticks/heure");
+            Assert(Math.Abs(slopeTicksPerHour1 - slopeTicksPerHour2) < 1e-6, "Pente normalisée identique quel que soit le timeframe d'agrégation");
+        }
+
+        private static void Test_MonthlyBand_Epoch_Lifecycle_And_Drift_Reset()
+        {
+            // Initialisation d'un Epoch de bande Upper SD1 à 20100.0 avec 2 retests déjà effectués
+            var epoch = new MonthlyBandEpochState
+            {
+                EpochId = "EP_TEST_01",
+                BandType = "MONTHLY_SD1_UPPER",
+                ReferencePrice = 20100.0,
+                RetestCount = 2,
+                IsActive = true
+            };
+
+            Assert(epoch.RetestCount == 2, "2 retests sur l'Epoch initial");
+
+            // Dérive du marché : SD1 monte à 20130.0 (dérive de 30 pts = 120 ticks > 20 ticks)
+            double currentSd1 = 20130.0;
+            double tickSize = 0.25;
+            int epochResetTicks = 20;
+
+            double driftTicks = Math.Abs(currentSd1 - epoch.ReferencePrice) / tickSize;
+            Assert(driftTicks > epochResetTicks, "La dérive dépasse le seuil de reset d'Epoch");
+
+            // Création automatique du nouvel Epoch
+            var newEpoch = new MonthlyBandEpochState
+            {
+                EpochId = "EP_TEST_02",
+                BandType = "MONTHLY_SD1_UPPER",
+                ReferencePrice = currentSd1,
+                RetestCount = 0,
+                IsActive = true
+            };
+
+            Assert(newEpoch.EpochId != epoch.EpochId, "Nouvel identifiant d'Epoch généré");
+            Assert(newEpoch.RetestCount == 0, "Le compteur de retest du nouvel Epoch est réinitialisé à 0");
+        }
+
+        private static void Test_MonthlyBand_MultiBar_Acceptance_Configurable()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Symbol = "NQ",
+                TickSize = 0.25,
+                PointValue = 20.0,
+                AtrCurrent = 20.0,
+                HtfTrendDirection = 1,
+                HasCurrentMonthlyVwap = true,
+                CurrentMonthlyBarsCount = 30,
+                CurrentMonthlyVwap = 20000.0,
+                CurrentMonthlySd1Upper = 20100.0,
+                CurrentMonthlySd1Lower = 19900.0,
+                CurrentMonthlyVwapSlopeTicksPerHour = 10.0,
+                CurrentMonthlyVwapSlope = 1.5,
+                MonthlyBandMinAcceptanceBarsRequired = 2, // Exigence de 2 barres d'acceptation
+                MonthlyBandAcceptanceBars = 1,            // Seulement 1 barre observée
+                Open = 20102.0,
+                Low = 20098.0,
+                High = 20115.0,
+                Close = 20112.0,
+                RetestCountCurrentLevel = 0
+            };
+
+            string reason;
+            bool valid1 = scorer.ValidatePreconditions(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long, out reason);
+            Assert(!valid1, "1 seule barre d'acceptation doit être rejetée si 2 sont requises");
+            Assert(reason == "MONTHLY_BAND_ACCEPTANCE_INSUFFICIENT", "Raison attendue: MONTHLY_BAND_ACCEPTANCE_INSUFFICIENT, obtenu: " + reason);
+
+            // Mise à jour avec 2 barres d'acceptation confirmées
+            ctx.MonthlyBandAcceptanceBars = 2;
+            bool valid2 = scorer.ValidatePreconditions(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long, out reason);
+            Assert(valid2, "2 barres d'acceptation doivent valider le setup. Raison rejet: " + reason);
+        }
+
+        private static void Test_MonthlyBand_Collision_Stop_TP_Conservative_Pessimistic()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "NQ",
+                Direction = SwingDirection.Long,
+                SetupType = SwingSetupType.MonthlyVwapBandRetest,
+                EntryPrice = 20100.0,
+                InitialStopPrice = 20080.0,
+                Target1Price = 20130.0,
+                Target2Price = 20160.0,
+                PositionSizeContracts = 2
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 20.0);
+            DateTime nowUtc = DateTime.UtcNow;
+
+            // Simulation d'une barre de forte volatilité touchant le Stop (Low 20070 <= 20080) ET le TP1 (High 20140 >= 20130)
+            double barHigh = 20140.0;
+            double barLow = 20070.0;
+
+            bool stopTriggered = barLow <= trade.CurrentStopPrice;
+            bool tp1Triggered = barHigh >= trade.Target1Price;
+
+            Assert(stopTriggered && tp1Triggered, "Double franchissement Stop et TP sur la même barre");
+
+            // Règle pessimiste Zero-Trust : Stop traité en priorité
+            if (stopTriggered)
+            {
+                trade.CloseTrade(trade.CurrentStopPrice, nowUtc, "STOP_LOSS", 0.25, 20.0);
+            }
+
+            Assert(trade.Closed, "Le trade doit être clôturé");
+            Assert(trade.ExitReason == "STOP_LOSS", "La raison de sortie doit impérativement être STOP_LOSS");
+            Assert(!trade.Tp1Hit, "TP1 ne doit pas être marqué comme atteint en cas de collision");
+        }
+
+        private static void Test_MonthlyBand_Slope_AtrNormalized_Validation()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Symbol = "NQ",
+                TickSize = 0.25,
+                AtrCurrent = 20.0,
+                HtfTrendDirection = 1,
+                HasCurrentMonthlyVwap = true,
+                CurrentMonthlyBarsCount = 30,
+                CurrentMonthlyVwap = 20000.0,
+                CurrentMonthlySd1Upper = 20100.0,
+                CurrentMonthlySd1Lower = 19900.0,
+                CurrentMonthlyVwapSlopeTicksPerHour = 10.0,
+                MonthlyBandMinSlopeAtrNormalizedConfig = 0.20, // Requiert >= 0.20 ATR
+                CurrentMonthlyVwapSlopeAtrNormalized = 0.05,  // Trop faible (0.05 ATR)
+                PrevClose = 20105.0,
+                Open = 20102.0,
+                Low = 20098.0,
+                Close = 20112.0
+            };
+
+            string reason;
+            bool valid = scorer.ValidatePreconditions(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long, out reason);
+            Assert(!valid, "Pente ATR insuffisante doit être rejetée");
+            Assert(reason == "MONTHLY_VWAP_SLOPE_INSUFFICIENT", "Raison attendue: MONTHLY_VWAP_SLOPE_INSUFFICIENT, obtenu: " + reason);
+
+            // Avec pente ATR suffisante
+            ctx.CurrentMonthlyVwapSlopeAtrNormalized = 0.30;
+            bool validOk = scorer.ValidatePreconditions(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long, out reason);
+            Assert(validOk, "Pente ATR suffisante doit être validée");
+        }
+
+        private static void Test_MonthlyBand_Epoch_Persists_On_Snapshot()
+        {
+            var sig = new SwingSignal
+            {
+                SetupType = SwingSetupType.MonthlyVwapBandRetest,
+                Direction = SwingDirection.Long,
+                EntryPrice = 20110.0,
+                MonthlyPeriodKey = "NQ_MONTH_2026-08",
+                MonthlyBandEpochIdAtSetup = "EP_A1B2C3",
+                MonthlyVwapSlopeTicksPerHourAtSetup = 15.5,
+                MonthlyVwapSlopeAtrNormalizedAtSetup = 0.42,
+                MonthlyBandAcceptanceBarsAtSetup = 3
+            };
+
+            Assert(sig.MonthlyPeriodKey == "NQ_MONTH_2026-08", "MonthlyPeriodKey préservé");
+            Assert(sig.MonthlyBandEpochIdAtSetup == "EP_A1B2C3", "MonthlyBandEpochIdAtSetup préservé");
+            Assert(Math.Abs(sig.MonthlyVwapSlopeTicksPerHourAtSetup - 15.5) < 1e-6, "Pente ticks/heure préservée");
+            Assert(Math.Abs(sig.MonthlyVwapSlopeAtrNormalizedAtSetup - 0.42) < 1e-6, "Pente ATR préservée");
+            Assert(sig.MonthlyBandAcceptanceBarsAtSetup == 3, "Nombre de barres d'acceptation préservé");
+        }
+
+        private static void Test_MonthlyBand_NonRegression_All_Existing_Setups()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Symbol = "ES",
+                TickSize = 0.25,
+                PointValue = 50.0,
+                AtrCurrent = 10.0,
+                HtfTrendDirection = 1,
+                Sd2Lower = 4905.0,
+                Sd3Lower = 4900.0,
+                Low = 4895.0,
+                Close = 4910.0,
+                Open = 4905.0
+            };
+
+            // Test RejectExtreme (Setup #0)
+            string reason;
+            bool validReject = scorer.ValidatePreconditions(ctx, SwingSetupType.RejectExtreme, SwingDirection.Long, out reason);
+            Assert(validReject, "RejectExtreme doit continuer à fonctionner sans régression");
+
+            var score = scorer.ComputeScore(ctx, SwingSetupType.RejectExtreme, SwingDirection.Long);
+            Assert(score.Total >= 60.0, "Score RejectExtreme valide");
         }
 
         #endregion

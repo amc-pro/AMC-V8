@@ -104,6 +104,26 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Max Retests Autorisés", Order = 23, GroupName = "Swing 01. Moteur")]
         public int MonthlyBandMaxRetestsAllowed { get; set; }
 
+        [Range(1, 5)]
+        [Display(Name = "Barres Min Acceptation Bande", Order = 24, GroupName = "Swing 01. Moteur")]
+        public int MonthlyBandMinAcceptanceBars { get; set; }
+
+        [Range(5, 100)]
+        [Display(Name = "Reset Epoch Drift (Ticks)", Order = 25, GroupName = "Swing 01. Moteur")]
+        public int MonthlyBandEpochResetTicks { get; set; }
+
+        [Range(0.0, 50.0)]
+        [Display(Name = "Pente Min VWAP (Ticks/Heure)", Order = 26, GroupName = "Swing 01. Moteur")]
+        public double MonthlyBandMinSlopeTicksPerHour { get; set; }
+
+        [Range(0.0, 2.0)]
+        [Display(Name = "Pente Min VWAP / ATR", Order = 27, GroupName = "Swing 01. Moteur")]
+        public double MonthlyBandMinSlopeAtrNormalized { get; set; }
+
+        [Range(15, 1440)]
+        [Display(Name = "Lookback Pente VWAP (Minutes)", Order = 28, GroupName = "Swing 01. Moteur")]
+        public int MonthlyBandSlopeLookbackMinutes { get; set; }
+
         #endregion
 
         #region État Interne Swing
@@ -123,6 +143,11 @@ namespace NinjaTrader.NinjaScript.Indicators
         private readonly List<TrackedSwingTrade> openSwingTrades = new List<TrackedSwingTrade>();
         private readonly List<TrackedSwingTrade> closedSwingTrades = new List<TrackedSwingTrade>();
         private readonly List<double> monthlyVwapHistory = new List<double>();
+        private readonly List<KeyValuePair<DateTime, double>> monthlyVwapTimeHistory = new List<KeyValuePair<DateTime, double>>();
+        private MonthlyBandEpochState currentUpperBandEpoch = new MonthlyBandEpochState { BandType = "MONTHLY_SD1_UPPER" };
+        private MonthlyBandEpochState currentLowerBandEpoch = new MonthlyBandEpochState { BandType = "MONTHLY_SD1_LOWER" };
+        private int consecutiveAboveSd1Bars = 0;
+        private int consecutiveBelowSd1Bars = 0;
         private int monthlyBandRetestCount = 0;
         private string resolvedSwingJournalPath;
         private bool swingJournalHeaderWritten;
@@ -155,6 +180,13 @@ namespace NinjaTrader.NinjaScript.Indicators
             MonthlyBandSlopeLookbackBars = 5;
             MonthlyBandMinVwapSlope = 0.5;
             MonthlyBandMaxRetestsAllowed = 2;
+            MonthlyBandMinAcceptanceBars = 2;
+            MonthlyBandEpochResetTicks = 20;
+            MonthlyBandMinSlopeTicksPerHour = 2.0;
+            MonthlyBandMinSlopeAtrNormalized = 0.10;
+            MonthlyBandSlopeLookbackMinutes = 240;
+
+            // Niveaux de score pour catégorisation des Tier
             SwingJournalFilePath = string.Empty;
             EnableSwingTelegramAlerts = true;
         }
@@ -205,6 +237,11 @@ namespace NinjaTrader.NinjaScript.Indicators
             openSwingTrades.Clear();
             closedSwingTrades.Clear();
             monthlyVwapHistory.Clear();
+            monthlyVwapTimeHistory.Clear();
+            currentUpperBandEpoch = new MonthlyBandEpochState { BandType = "MONTHLY_SD1_UPPER" };
+            currentLowerBandEpoch = new MonthlyBandEpochState { BandType = "MONTHLY_SD1_LOWER" };
+            consecutiveAboveSd1Bars = 0;
+            consecutiveBelowSd1Bars = 0;
             monthlyBandRetestCount = 0;
             resolvedSwingJournalPath = ResolveSwingJournalPath();
             swingJournalHeaderWritten = false;
@@ -426,12 +463,14 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 double curVwap, curStdDev, sd1U, sd1L, sd2U, sd2L, sd3U, sd3L;
                 int monthBars;
-                DateTime monthStart;
+                DateTime monthStart, monthEnd;
+                string monthPeriodKey;
                 if (vpManager.TryGetCurrentMonthVwapAndBands(
                     out curVwap, out curStdDev, out sd1U, out sd1L, out sd2U, out sd2L, out sd3U, out sd3L,
-                    out monthBars, out monthStart))
+                    out monthBars, out monthStart, out monthEnd, out monthPeriodKey))
                 {
                     ctx.HasCurrentMonthlyVwap = true;
+                    ctx.MonthlyPeriodKey = monthPeriodKey;
                     ctx.CurrentMonthlyVwap = curVwap;
                     ctx.CurrentMonthlyVwapStdDev = curStdDev;
                     ctx.CurrentMonthlySd1Upper = sd1U;
@@ -443,32 +482,119 @@ namespace NinjaTrader.NinjaScript.Indicators
                     ctx.CurrentMonthlyBarsCount = monthBars;
                     ctx.CurrentMonthlyStartUtc = monthStart;
 
-                    // Maintien de l'historique VWAP pour le calcul de pente
-                    if (monthlyVwapHistory.Count == 0 || Math.Abs(monthlyVwapHistory[monthlyVwapHistory.Count - 1] - curVwap) > 1e-6)
+                    // Maintien de l'historique temporel VWAP pour le calcul de pente normalisée
+                    DateTime curTimeUtc = snTimeUtc;
+                    if (monthlyVwapTimeHistory.Count == 0 || Math.Abs(monthlyVwapTimeHistory[monthlyVwapTimeHistory.Count - 1].Value - curVwap) > 1e-6)
                     {
+                        monthlyVwapTimeHistory.Add(new KeyValuePair<DateTime, double>(curTimeUtc, curVwap));
                         monthlyVwapHistory.Add(curVwap);
-                        if (monthlyVwapHistory.Count > 50)
+                        if (monthlyVwapTimeHistory.Count > 100)
+                            monthlyVwapTimeHistory.RemoveAt(0);
+                        if (monthlyVwapHistory.Count > 100)
                             monthlyVwapHistory.RemoveAt(0);
                     }
 
-                    int slopeLookback = MonthlyBandSlopeLookbackBars > 0 ? MonthlyBandSlopeLookbackBars : 5;
-                    if (monthlyVwapHistory.Count > slopeLookback)
+                    // Calcul de la pente normalisée en Ticks/Heure
+                    int lookbackMins = MonthlyBandSlopeLookbackMinutes > 0 ? MonthlyBandSlopeLookbackMinutes : 240;
+                    DateTime targetLookbackTime = curTimeUtc.AddMinutes(-lookbackMins);
+                    double oldVwap = curVwap;
+                    DateTime oldTime = curTimeUtc;
+
+                    for (int h = monthlyVwapTimeHistory.Count - 1; h >= 0; h--)
                     {
-                        double oldVwap = monthlyVwapHistory[monthlyVwapHistory.Count - 1 - slopeLookback];
-                        double vwapDiffTicks = (curVwap - oldVwap) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25);
-                        ctx.CurrentMonthlyVwapSlope = vwapDiffTicks / slopeLookback;
+                        if (monthlyVwapTimeHistory[h].Key <= targetLookbackTime || h == 0)
+                        {
+                            oldVwap = monthlyVwapTimeHistory[h].Value;
+                            oldTime = monthlyVwapTimeHistory[h].Key;
+                            break;
+                        }
+                    }
+
+                    double elapsedHours = Math.Max(0.25, (curTimeUtc - oldTime).TotalHours);
+                    double vwapDiffTicks = (curVwap - oldVwap) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25);
+                    ctx.CurrentMonthlyVwapSlopeTicksPerHour = vwapDiffTicks / elapsedHours;
+                    ctx.CurrentMonthlyVwapSlopeAtrNormalized = ctx.AtrCurrent > 0 ? Math.Abs(curVwap - oldVwap) / ctx.AtrCurrent : 0.0;
+
+                    // Pente par barre (rétro-compatibilité)
+                    int slopeLookbackBars = MonthlyBandSlopeLookbackBars > 0 ? MonthlyBandSlopeLookbackBars : 5;
+                    if (monthlyVwapHistory.Count > slopeLookbackBars)
+                    {
+                        double oldBarVwap = monthlyVwapHistory[monthlyVwapHistory.Count - 1 - slopeLookbackBars];
+                        ctx.CurrentMonthlyVwapSlope = ((curVwap - oldBarVwap) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25)) / slopeLookbackBars;
                     }
                     else if (monthlyVwapHistory.Count > 1)
                     {
-                        int span = monthlyVwapHistory.Count - 1;
-                        double oldVwap = monthlyVwapHistory[0];
-                        double vwapDiffTicks = (curVwap - oldVwap) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25);
-                        ctx.CurrentMonthlyVwapSlope = vwapDiffTicks / span;
+                        double oldBarVwap = monthlyVwapHistory[0];
+                        ctx.CurrentMonthlyVwapSlope = ((curVwap - oldBarVwap) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25)) / (monthlyVwapHistory.Count - 1);
                     }
                     else
                     {
                         ctx.CurrentMonthlyVwapSlope = 0.0;
                     }
+
+                    // Suivi de l'acceptation multi-barres
+                    if (snClose > sd1U)
+                        consecutiveAboveSd1Bars++;
+                    else
+                        consecutiveAboveSd1Bars = 0;
+
+                    if (snClose < sd1L)
+                        consecutiveBelowSd1Bars++;
+                    else
+                        consecutiveBelowSd1Bars = 0;
+
+                    // Gestion du cycle de vie des Epochs de bandes dynamiques
+                    int epochResetTicks = MonthlyBandEpochResetTicks > 0 ? MonthlyBandEpochResetTicks : 20;
+                    double upperDriftTicks = currentUpperBandEpoch.ReferencePrice > 0 ? Math.Abs(sd1U - currentUpperBandEpoch.ReferencePrice) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25) : 0.0;
+                    if (currentUpperBandEpoch.ReferencePrice <= 0 || upperDriftTicks > epochResetTicks)
+                    {
+                        currentUpperBandEpoch = new MonthlyBandEpochState
+                        {
+                            EpochId = Guid.NewGuid().ToString("N").Substring(0, 8),
+                            BandType = "MONTHLY_SD1_UPPER",
+                            ReferencePrice = sd1U,
+                            ReferenceBarIndex = CurrentBar,
+                            ReferenceTimeUtc = curTimeUtc,
+                            RetestCount = 0,
+                            AcceptanceBarsCount = consecutiveAboveSd1Bars,
+                            IsActive = true
+                        };
+                    }
+                    else
+                    {
+                        currentUpperBandEpoch.AcceptanceBarsCount = consecutiveAboveSd1Bars;
+                    }
+
+                    double lowerDriftTicks = currentLowerBandEpoch.ReferencePrice > 0 ? Math.Abs(sd1L - currentLowerBandEpoch.ReferencePrice) / (ctx.TickSize > 0 ? ctx.TickSize : 0.25) : 0.0;
+                    if (currentLowerBandEpoch.ReferencePrice <= 0 || lowerDriftTicks > epochResetTicks)
+                    {
+                        currentLowerBandEpoch = new MonthlyBandEpochState
+                        {
+                            EpochId = Guid.NewGuid().ToString("N").Substring(0, 8),
+                            BandType = "MONTHLY_SD1_LOWER",
+                            ReferencePrice = sd1L,
+                            ReferenceBarIndex = CurrentBar,
+                            ReferenceTimeUtc = curTimeUtc,
+                            RetestCount = 0,
+                            AcceptanceBarsCount = consecutiveBelowSd1Bars,
+                            IsActive = true
+                        };
+                    }
+                    else
+                    {
+                        currentLowerBandEpoch.AcceptanceBarsCount = consecutiveBelowSd1Bars;
+                    }
+
+                    // Attribution au contexte
+                    MonthlyBandEpochState activeEpoch = isBuy ? currentUpperBandEpoch : currentLowerBandEpoch;
+                    ctx.MonthlyBandEpochId = activeEpoch.EpochId;
+                    ctx.MonthlyBandAcceptanceBars = isBuy ? consecutiveAboveSd1Bars : consecutiveBelowSd1Bars;
+                    ctx.MonthlyBandEpochReferencePrice = activeEpoch.ReferencePrice;
+                    ctx.MonthlyBandEpochDriftTicks = isBuy ? upperDriftTicks : lowerDriftTicks;
+                    ctx.MonthlyBandMinAcceptanceBarsRequired = MonthlyBandMinAcceptanceBars > 0 ? MonthlyBandMinAcceptanceBars : 1;
+                    ctx.MonthlyBandMinSlopeTicksPerHourConfig = MonthlyBandMinSlopeTicksPerHour;
+                    ctx.MonthlyBandMinSlopeAtrNormalizedConfig = MonthlyBandMinSlopeAtrNormalized;
+                    ctx.RetestCountCurrentLevel = activeEpoch.RetestCount;
                 }
             }
 
@@ -718,10 +844,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 PositionSizeContracts = contracts,
                 EstimatedRiskCurrency = (stopDistTicks + ExecutionCostTicks) * tickVal * contracts,
                 ExecutionNotes = string.Format(CultureInfo.InvariantCulture, "{0} | {1} | Score={2:F1}", setup, tier, score.Total),
+                MonthlyPeriodKey = ctx.MonthlyPeriodKey,
                 MonthlyVwapAtSetup = ctx.CurrentMonthlyVwap,
                 MonthlySd1UpperAtSetup = ctx.CurrentMonthlySd1Upper,
                 MonthlySd1LowerAtSetup = ctx.CurrentMonthlySd1Lower,
                 MonthlyVwapSlopeAtSetup = ctx.CurrentMonthlyVwapSlope,
+                MonthlyVwapSlopeTicksPerHourAtSetup = ctx.CurrentMonthlyVwapSlopeTicksPerHour,
+                MonthlyVwapSlopeAtrNormalizedAtSetup = ctx.CurrentMonthlyVwapSlopeAtrNormalized,
+                MonthlyBandEpochIdAtSetup = ctx.MonthlyBandEpochId,
+                MonthlyBandAcceptanceBarsAtSetup = ctx.MonthlyBandAcceptanceBars,
                 RetestDistanceTicks = isLong ? Math.Abs(ctx.Low - ctx.CurrentMonthlySd1Upper) / TickSize
                                              : Math.Abs(ctx.High - ctx.CurrentMonthlySd1Lower) / TickSize
             };
@@ -738,7 +869,13 @@ namespace NinjaTrader.NinjaScript.Indicators
             activeSwingSignals.Add(sig);
 
             if (sig.SetupType == SwingSetupType.MonthlyVwapBandRetest)
+            {
+                if (sig.Direction == SwingDirection.Long)
+                    currentUpperBandEpoch.RetestCount++;
+                else
+                    currentLowerBandEpoch.RetestCount++;
                 monthlyBandRetestCount++;
+            }
 
             // Persistance SQLite
             if (volumeProfileManager != null && volumeProfileManager.Repository != null)
@@ -759,12 +896,16 @@ namespace NinjaTrader.NinjaScript.Indicators
                     "Entrée: <code>{6:F2}</code>\n" +
                     "Stop: <code>{7:F2}</code> ({8:F0} ticks)\n" +
                     "TP1: <code>{9:F2}</code> ({10:F1}R) | TP2: <code>{11:F2}</code> ({12:F1}R)\n" +
-                    "Taille: <b>{13} contrat(s)</b> | Risque: <b>${14:F2}</b>",
+                    "Taille: <b>{13} contrat(s)</b> | Risque: <b>${14:F2}</b>\n" +
+                    "Epoch: <code>{15}</code> | Pente: <b>{16:F1} t/h</b> ({17:F2} ATR)",
                     sig.Direction == SwingDirection.Long ? "ACHAT (LONG)" : "VENTE (SHORT)",
                     sig.Symbol, sig.Symbol, sig.Tier, sig.SetupType, sig.Score.Total,
                     sig.EntryPrice, sig.InitialStopPrice, sig.StopDistanceTicks,
                     sig.Target1Price, sig.RiskRewardRatio1, sig.Target2Price, sig.RiskRewardRatio2,
-                    sig.PositionSizeContracts, sig.EstimatedRiskCurrency);
+                    sig.PositionSizeContracts, sig.EstimatedRiskCurrency,
+                    !string.IsNullOrEmpty(sig.MonthlyBandEpochIdAtSetup) ? sig.MonthlyBandEpochIdAtSetup : "N/A",
+                    sig.MonthlyVwapSlopeTicksPerHourAtSetup,
+                    sig.MonthlyVwapSlopeAtrNormalizedAtSetup);
 
                 QueueTelegramMessage(msg);
             }

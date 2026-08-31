@@ -79,6 +79,38 @@ namespace NinjaTrader.NinjaScript.Indicators
 
     #endregion
 
+    #region Modèles d'Epoch & Identité de Bandes Mobiles
+
+    /// <summary>
+    /// Cycle de vie et identité d'un niveau de bande mensuelle dynamique (SD+1 / SD-1).
+    /// Évite les faux retests sur bandes mobiles et permet un comptage déterministe par Epoch.
+    /// </summary>
+    public sealed class MonthlyBandEpochState
+    {
+        public string EpochId { get; set; }
+        public string BandType { get; set; } // "MONTHLY_SD1_UPPER" ou "MONTHLY_SD1_LOWER"
+        public double ReferencePrice { get; set; }
+        public int ReferenceBarIndex { get; set; }
+        public DateTime ReferenceTimeUtc { get; set; }
+        public int RetestCount { get; set; }
+        public int AcceptanceBarsCount { get; set; }
+        public bool IsActive { get; set; }
+
+        public MonthlyBandEpochState()
+        {
+            EpochId = Guid.NewGuid().ToString("N");
+            BandType = string.Empty;
+            ReferencePrice = 0.0;
+            ReferenceBarIndex = 0;
+            ReferenceTimeUtc = DateTime.MinValue;
+            RetestCount = 0;
+            AcceptanceBarsCount = 0;
+            IsActive = true;
+        }
+    }
+
+    #endregion
+
     #region Modèles de Score & Contexte
 
     /// <summary>
@@ -184,6 +216,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         // VWAP Monthly Courant & Bandes Dynamiques (En cours de mois)
         public bool HasCurrentMonthlyVwap { get; set; }
+        public string MonthlyPeriodKey { get; set; }
         public double CurrentMonthlyVwap { get; set; }
         public double CurrentMonthlyVwapStdDev { get; set; }
         public double CurrentMonthlySd1Upper { get; set; }
@@ -193,8 +226,19 @@ namespace NinjaTrader.NinjaScript.Indicators
         public double CurrentMonthlySd3Upper { get; set; }
         public double CurrentMonthlySd3Lower { get; set; }
         public double CurrentMonthlyVwapSlope { get; set; }
+        public double CurrentMonthlyVwapSlopeTicksPerHour { get; set; }
+        public double CurrentMonthlyVwapSlopeAtrNormalized { get; set; }
         public int CurrentMonthlyBarsCount { get; set; }
         public DateTime CurrentMonthlyStartUtc { get; set; }
+
+        // Identité d'Epoch et Acceptation Multi-Barres
+        public string MonthlyBandEpochId { get; set; }
+        public int MonthlyBandAcceptanceBars { get; set; }
+        public double MonthlyBandEpochReferencePrice { get; set; }
+        public double MonthlyBandEpochDriftTicks { get; set; }
+        public int MonthlyBandMinAcceptanceBarsRequired { get; set; }
+        public double MonthlyBandMinSlopeTicksPerHourConfig { get; set; }
+        public double MonthlyBandMinSlopeAtrNormalizedConfig { get; set; }
 
         // Barres précédentes pour détection de retest / acceptation
         public double PrevClose { get; set; }
@@ -250,8 +294,14 @@ namespace NinjaTrader.NinjaScript.Indicators
             RegimeHtf = SwingMarketRegime.Balance;
             PocMigrationDirection = SwingDirection.None;
             HasCurrentMonthlyVwap = false;
+            MonthlyPeriodKey = string.Empty;
             CurrentMonthlyBarsCount = 0;
             CurrentMonthlyStartUtc = DateTime.MinValue;
+            MonthlyBandEpochId = string.Empty;
+            MonthlyBandAcceptanceBars = 0;
+            MonthlyBandMinAcceptanceBarsRequired = 1;
+            MonthlyBandMinSlopeTicksPerHourConfig = 2.0;
+            MonthlyBandMinSlopeAtrNormalizedConfig = 0.0;
             RetestCountCurrentLevel = 0;
         }
     }
@@ -288,10 +338,15 @@ namespace NinjaTrader.NinjaScript.Indicators
         public double EstimatedRiskCurrency { get; set; }
 
         // Snapshot immuable au signal (Current Monthly VWAP Retest)
+        public string MonthlyPeriodKey { get; set; }
         public double MonthlyVwapAtSetup { get; set; }
         public double MonthlySd1UpperAtSetup { get; set; }
         public double MonthlySd1LowerAtSetup { get; set; }
         public double MonthlyVwapSlopeAtSetup { get; set; }
+        public double MonthlyVwapSlopeTicksPerHourAtSetup { get; set; }
+        public double MonthlyVwapSlopeAtrNormalizedAtSetup { get; set; }
+        public string MonthlyBandEpochIdAtSetup { get; set; }
+        public int MonthlyBandAcceptanceBarsAtSetup { get; set; }
         public double RetestDistanceTicks { get; set; }
 
         // Suivi & Invalidations
@@ -475,6 +530,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                     double tolTicks = Math.Min(8.0, (ctx.AtrCurrent / Math.Max(0.01, ctx.TickSize)) * 0.30);
                     double tolPrice = tolTicks * ctx.TickSize;
 
+                    // Contrôle d'acceptation multi-barres paramétrable (défaut : 1 barre minimum)
+                    int requiredAcceptance = ctx.MonthlyBandMinAcceptanceBarsRequired > 0 ? ctx.MonthlyBandMinAcceptanceBarsRequired : 1;
+
                     if (isLong)
                     {
                         // Long : Tendance HTF haussière requise
@@ -485,14 +543,33 @@ namespace NinjaTrader.NinjaScript.Indicators
                         if (ctx.Close <= ctx.CurrentMonthlyVwap)
                         { rejectionReason = "PRICE_BELOW_MONTHLY_VWAP"; return false; }
 
-                        // Pente du VWAP haussière (>= +0.5 ticks/barre)
-                        if (ctx.CurrentMonthlyVwapSlope < 0.5)
+                        // Pente du VWAP haussière (Vérification normalisée Ticks/h ou brute)
+                        double minSlopePerHour = ctx.MonthlyBandMinSlopeTicksPerHourConfig > 0 ? ctx.MonthlyBandMinSlopeTicksPerHourConfig : 2.0;
+                        bool slopeValid = false;
+                        if (ctx.CurrentMonthlyVwapSlopeTicksPerHour != 0.0)
+                            slopeValid = ctx.CurrentMonthlyVwapSlopeTicksPerHour >= minSlopePerHour;
+                        else
+                            slopeValid = ctx.CurrentMonthlyVwapSlope >= 0.5;
+
+                        if (!slopeValid)
                         { rejectionReason = "MONTHLY_VWAP_SLOPE_INSUFFICIENT"; return false; }
 
-                        // Acceptation préalable au-dessus de SD+1
-                        double prevSd1 = ctx.PrevCurrentMonthlySd1Upper > 0 ? ctx.PrevCurrentMonthlySd1Upper : ctx.CurrentMonthlySd1Upper;
-                        if (ctx.PrevClose <= prevSd1 && ctx.Open <= ctx.CurrentMonthlySd1Upper)
-                        { rejectionReason = "NO_PRIOR_ACCEPTANCE_ABOVE_SD1"; return false; }
+                        // Contrôle de pente ATR si configuré
+                        if (ctx.MonthlyBandMinSlopeAtrNormalizedConfig > 0 && ctx.CurrentMonthlyVwapSlopeAtrNormalized < ctx.MonthlyBandMinSlopeAtrNormalizedConfig)
+                        { rejectionReason = "MONTHLY_VWAP_SLOPE_INSUFFICIENT"; return false; }
+
+                        // Acceptation préalable au-dessus de SD+1 (Multi-barres ou 1 barre précédente)
+                        if (ctx.MonthlyBandAcceptanceBars > 0)
+                        {
+                            if (ctx.MonthlyBandAcceptanceBars < requiredAcceptance)
+                            { rejectionReason = "MONTHLY_BAND_ACCEPTANCE_INSUFFICIENT"; return false; }
+                        }
+                        else
+                        {
+                            double prevSd1 = ctx.PrevCurrentMonthlySd1Upper > 0 ? ctx.PrevCurrentMonthlySd1Upper : ctx.CurrentMonthlySd1Upper;
+                            if (ctx.PrevClose <= prevSd1 && ctx.Open <= ctx.CurrentMonthlySd1Upper)
+                            { rejectionReason = "NO_PRIOR_ACCEPTANCE_ABOVE_SD1"; return false; }
+                        }
 
                         // Retest de SD+1 : Low touche ou pénètre dans la tolérance
                         if (ctx.Low > ctx.CurrentMonthlySd1Upper + tolPrice)
@@ -516,14 +593,33 @@ namespace NinjaTrader.NinjaScript.Indicators
                         if (ctx.Close >= ctx.CurrentMonthlyVwap)
                         { rejectionReason = "PRICE_ABOVE_MONTHLY_VWAP"; return false; }
 
-                        // Pente du VWAP baissière (<= -0.5 ticks/barre)
-                        if (ctx.CurrentMonthlyVwapSlope > -0.5)
+                        // Pente du VWAP baissière (Vérification normalisée Ticks/h ou brute)
+                        double minSlopePerHour = ctx.MonthlyBandMinSlopeTicksPerHourConfig > 0 ? ctx.MonthlyBandMinSlopeTicksPerHourConfig : 2.0;
+                        bool slopeValid = false;
+                        if (ctx.CurrentMonthlyVwapSlopeTicksPerHour != 0.0)
+                            slopeValid = ctx.CurrentMonthlyVwapSlopeTicksPerHour <= -minSlopePerHour;
+                        else
+                            slopeValid = ctx.CurrentMonthlyVwapSlope <= -0.5;
+
+                        if (!slopeValid)
                         { rejectionReason = "MONTHLY_VWAP_SLOPE_INSUFFICIENT"; return false; }
 
-                        // Acceptation préalable sous SD-1
-                        double prevSd1 = ctx.PrevCurrentMonthlySd1Lower > 0 ? ctx.PrevCurrentMonthlySd1Lower : ctx.CurrentMonthlySd1Lower;
-                        if (ctx.PrevClose >= prevSd1 && ctx.Open >= ctx.CurrentMonthlySd1Lower)
-                        { rejectionReason = "NO_PRIOR_ACCEPTANCE_BELOW_SD1"; return false; }
+                        // Contrôle de pente ATR si configuré
+                        if (ctx.MonthlyBandMinSlopeAtrNormalizedConfig > 0 && ctx.CurrentMonthlyVwapSlopeAtrNormalized < ctx.MonthlyBandMinSlopeAtrNormalizedConfig)
+                        { rejectionReason = "MONTHLY_VWAP_SLOPE_INSUFFICIENT"; return false; }
+
+                        // Acceptation préalable sous SD-1 (Multi-barres ou 1 barre précédente)
+                        if (ctx.MonthlyBandAcceptanceBars > 0)
+                        {
+                            if (ctx.MonthlyBandAcceptanceBars < requiredAcceptance)
+                            { rejectionReason = "MONTHLY_BAND_ACCEPTANCE_INSUFFICIENT"; return false; }
+                        }
+                        else
+                        {
+                            double prevSd1 = ctx.PrevCurrentMonthlySd1Lower > 0 ? ctx.PrevCurrentMonthlySd1Lower : ctx.CurrentMonthlySd1Lower;
+                            if (ctx.PrevClose >= prevSd1 && ctx.Open >= ctx.CurrentMonthlySd1Lower)
+                            { rejectionReason = "NO_PRIOR_ACCEPTANCE_BELOW_SD1"; return false; }
+                        }
 
                         // Retest de SD-1 : High touche ou pénètre dans la tolérance
                         if (ctx.High < ctx.CurrentMonthlySd1Lower - tolPrice)
