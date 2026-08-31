@@ -790,10 +790,10 @@ namespace NinjaTrader.NinjaScript.Indicators
         private int currentScalpingProDirection;
         private int currentScalpingProTier;
 
-        /// <summary>true car l'indicateur AuctionMarketCore exécute nativement le pipeline ScalpingPro.</summary>
+        /// <summary>Pipeline ScalpingPro actif uniquement sur le preset dédié (pas en Swing).</summary>
         private bool IsScalpingPro
         {
-            get { return true; }
+            get { return TradingPreset == SniperMarketPreset.ScalpingPro; }
         }
 
         [Display(Name = "HTF mode Soft (Scalping Pro)", Description = "true = le filtre HTF reste actif mais n'est jamais eliminatoire : un desalignement devient une penalite de score.", Order = 9, GroupName = "Sniper 02. Gates")]
@@ -880,6 +880,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             // Un preset d'EXECUTION REELLE ne peut pas s'en accommoder.
             EvaluateOnBarClose = true;
+            EnableSniperEngine = true;
 
             MinScoreToAlert = 45;                     // Seuil d'alerte équilibré à 45 (TierSilver / Grade FORT)
             MaxSniperAlertsPerSession = 0;            // Illimité (0 = illimité)

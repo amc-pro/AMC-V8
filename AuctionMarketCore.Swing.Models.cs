@@ -397,6 +397,7 @@ namespace NinjaTrader.NinjaScript.Indicators
     {
         bool ValidatePreconditions(SwingContext ctx, SwingSetupType setup, SwingDirection dir, out string rejectionReason);
         SwingWeightedScore ComputeScore(SwingContext ctx, SwingSetupType setup, SwingDirection dir);
+        SwingWeightedScore ComputeScore(SwingContext ctx, SwingSetupType setup, SwingDirection dir, double riskRewardRatio);
         SwingTier ResolveTier(double totalScore, double thresholdMoyen, double thresholdFort, double thresholdTresFort);
     }
 
@@ -641,6 +642,11 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         public SwingWeightedScore ComputeScore(SwingContext ctx, SwingSetupType setup, SwingDirection dir)
         {
+            return ComputeScore(ctx, setup, dir, 0.0);
+        }
+
+        public SwingWeightedScore ComputeScore(SwingContext ctx, SwingSetupType setup, SwingDirection dir, double riskRewardRatio)
+        {
             var s = new SwingWeightedScore();
             bool isLong = dir == SwingDirection.Long;
 
@@ -722,8 +728,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (ctx.HasDeltaDivergence) ofScore += 3.0;
             s.OrderFlowScore = Math.Min(10.0, ofScore);
 
-            // 6. Risk / Reward Score (0..10)
-            s.RiskRewardScore = 9.0;
+            // 6. Risk / Reward Score (0..10) — basé sur le RR réel post-sizing si disponible
+            s.RiskRewardScore = MapRiskRewardScore(riskRewardRatio);
 
             // 7. Pénalités
             if (ctx.InNewsWindow) s.Penalties += 15.0;
@@ -734,6 +740,16 @@ namespace NinjaTrader.NinjaScript.Indicators
                 s.HtfContextScore, s.AmtLocationScore, s.VolumeProfileScore, s.StructureSmcScore, s.OrderFlowScore, s.RiskRewardScore, s.Penalties);
 
             return s;
+        }
+
+        /// <summary>RR 1.0→5 pts, 2.0→8 pts, ≥3.0→10 pts ; RR inconnu → score neutre 4.</summary>
+        internal static double MapRiskRewardScore(double riskRewardRatio)
+        {
+            if (riskRewardRatio <= 0) return 4.0;
+            if (riskRewardRatio >= 3.0) return 10.0;
+            if (riskRewardRatio >= 2.0) return 8.0;
+            if (riskRewardRatio >= 1.0) return 5.0;
+            return Math.Max(1.0, riskRewardRatio * 5.0);
         }
 
         public SwingTier ResolveTier(double totalScore, double thresholdMoyen, double thresholdFort, double thresholdTresFort)

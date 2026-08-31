@@ -251,7 +251,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             lock (tcpBridgeSync) consumers = tcpBridgeConsumers.ToArray();
             for (int i = 0; i < consumers.Length; i++)
             {
-                try { consumers[i].ProcessMt5Ack(ackJson); } catch { }
+                try { consumers[i].ProcessMt5Ack(ackJson); }
+                catch (Exception ex) { SafePrintStatic("MT5 ACK dispatch error: " + ex.Message); }
             }
         }
 
@@ -521,9 +522,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                         if (onLog != null) onLog("🟢 Client MT5 EA connecté au Pont TCP !");
                         Task.Run(() => HandleClientAsync(client, token));
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         if (token.IsCancellationRequested || !isRunning) break;
+                        if (onLog != null) onLog("AcceptClientsLoop: " + ex.Message);
                     }
                 }
             }

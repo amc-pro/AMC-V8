@@ -862,6 +862,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             ApplyScalpingProDefaults();
 
+            EnableSniperEngine = true;
             MinScoreToAlert = 45;
             MaxAlertsPerWeek = 0;                 // Illimité (0 = illimité)
             MaxSniperAlertsPerSession = 0;        // Illimité (0 = illimité)
@@ -1011,6 +1012,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         private void SniperOnEvaluatedBar()
         {
             if (!EnableSniperEngine) return;
+            // Preset Swing : le moteur macro Swing remplace l'émission Sniper/ScalpingPro.
+            if (IsSwing && EnableSwingEngine) return;
 
             try
             {

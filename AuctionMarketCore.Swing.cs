@@ -147,6 +147,10 @@ namespace NinjaTrader.NinjaScript.Indicators
         private string resolvedSwingJournalPath;
         private bool swingJournalHeaderWritten;
         private int swingLastEvaluatedBar = -1;
+        private double swingPrevMonthlySd1Upper;
+        private double swingPrevMonthlySd1Lower;
+        private readonly object swingJournalLock = new object();
+        private const int MaxClosedSwingTrades = 500;
 
         #endregion
 
@@ -192,6 +196,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private void ApplySwingPreset()
         {
             EvaluateOnBarClose = true;
+            EnableSniperEngine = false;
             UseSessionProfile = true;
             EnableClosedVolumeProfile = true;
             EnableSQLiteVolumeProfileHistory = true;
@@ -241,6 +246,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             resolvedSwingJournalPath = ResolveSwingJournalPath();
             swingJournalHeaderWritten = false;
             swingLastEvaluatedBar = -1;
+            swingPrevMonthlySd1Upper = 0;
+            swingPrevMonthlySd1Lower = 0;
 
             // Reprise d'état persistant SQLite si actif (Survie aux redémarrages / overnight)
             if (EnableSQLiteVolumeProfileHistory && volumeProfileManager != null && volumeProfileManager.Repository != null)
@@ -328,7 +335,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                 if (Instrument != null && Instrument.MasterInstrument != null)
                     return Instrument.MasterInstrument.PointValue;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                RegisterRuntimeError("ResolvePointValue", ex);
+            }
+            if (EnableDebugMode)
+                Print("VP_Swing: PointValue indisponible, fallback 50.0");
             return 50.0;
         }
 
@@ -394,11 +406,17 @@ namespace NinjaTrader.NinjaScript.Indicators
                 RiskPerTradeCurrency = RiskPerTradeCurrency,
                 HtfTrendDirection = htfEma != null && htfEma.IsValidDataPoint(0) ? (snClose > htfEma[0] ? 1 : -1) : 0,
                 HtfEma = htfEma != null && htfEma.IsValidDataPoint(0) ? htfEma[0] : 0.0,
-                RegimeHtf = isBuy ? SwingMarketRegime.TrendUp : SwingMarketRegime.TrendDown,
+                RegimeHtf = ResolveSwingRegimeHtf(
+                    snClose,
+                    htfEma != null && htfEma.IsValidDataPoint(0) ? htfEma[0] : 0.0,
+                    htfEma != null && htfEma.IsValidDataPoint(0) ? (snClose > htfEma[0] ? 1 : -1) : 0,
+                    regimeAtr != null && regimeAtr.IsValidDataPoint(0) ? regimeAtr[0] : TickSize * 40),
                 IsOvernightHoldAllowed = SwingAllowOvernightHold,
                 InNewsWindow = inNewsWindow,
                 NewsSeverity = newsSeverity,
-                GapPercent = gapPercent
+                GapPercent = gapPercent,
+                PrevCurrentMonthlySd1Upper = swingPrevMonthlySd1Upper,
+                PrevCurrentMonthlySd1Lower = swingPrevMonthlySd1Lower
             };
 
             // Ingestion des données Volume Profile V2 Clôturées
@@ -596,6 +614,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                     ctx.MonthlyBandMinSlopeTicksPerHourConfig = MonthlyBandMinSlopeTicksPerHour;
                     ctx.MonthlyBandMinSlopeAtrNormalizedConfig = MonthlyBandMinSlopeAtrNormalized;
                     ctx.RetestCountCurrentLevel = activeEpoch.RetestCount;
+
+                    swingPrevMonthlySd1Upper = sd1U;
+                    swingPrevMonthlySd1Lower = sd1L;
                 }
             }
 
@@ -625,8 +646,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                 ctx.PrevLow = snLow;
             }
 
-            ctx.PrevCurrentMonthlySd1Upper = ctx.CurrentMonthlySd1Upper;
-            ctx.PrevCurrentMonthlySd1Lower = ctx.CurrentMonthlySd1Lower;
             ctx.RetestCountCurrentLevel = monthlyBandRetestCount;
 
             // Analyse de la migration directionnelle du POC (Multi-Session)
@@ -712,7 +731,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                RegisterRuntimeError("CalculateSessionGapPercent", ex);
+            }
             return 0.0;
         }
 
@@ -745,19 +767,21 @@ namespace NinjaTrader.NinjaScript.Indicators
                 if (!swingScorer.ValidatePreconditions(ctx, setup, dir, out rejectionReason))
                     continue;
 
-                SwingWeightedScore score = swingScorer.ComputeScore(ctx, setup, dir);
+                SwingSignal signal = BuildAndSizeSignal(ctx, setup, dir, null, SwingTier.Aucun);
+                if (signal == null)
+                    continue;
+
+                SwingWeightedScore score = swingScorer.ComputeScore(ctx, setup, dir, signal.RiskRewardRatio1);
                 SwingTier tier = swingScorer.ResolveTier(score.Total, SwingTierSilverScore, SwingTierGoldScore, SwingTierTresFortScore);
 
                 if (tier == SwingTier.Aucun || score.Total < SwingMinScoreToAlert)
                     continue;
 
-                // Construction et dimensionnement du signal
-                SwingSignal signal = BuildAndSizeSignal(ctx, setup, dir, score, tier);
-                if (signal != null && signal.Status == SwingSignalStatus.Validated)
-                {
-                    ExecuteSwingSignal(signal);
-                    break; // Un seul setup prioritaire par barre
-                }
+                signal.Score = score;
+                signal.Tier = tier;
+                signal.ExecutionNotes = string.Format(CultureInfo.InvariantCulture, "{0} | {1} | Score={2:F1}", setup, tier, score.Total);
+                ExecuteSwingSignal(signal);
+                break; // Un seul setup prioritaire par barre
             }
         }
 
@@ -1009,7 +1033,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 if (string.IsNullOrEmpty(resolvedSwingJournalPath))
                     resolvedSwingJournalPath = ResolveSwingJournalPath();
 
-                lock (this)
+                lock (swingJournalLock)
                 {
                     if (!swingJournalHeaderWritten && !File.Exists(resolvedSwingJournalPath))
                     {
@@ -1041,6 +1065,29 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         #region Helpers & Vérifications Microstructure
 
+        private static SwingMarketRegime ResolveSwingRegimeHtf(double close, double htfEmaVal, int htfTrendDir, double atrDaily)
+        {
+            if (htfEmaVal <= 0 || close <= 0)
+                return SwingMarketRegime.Transition;
+
+            double distAtr = atrDaily > 0 ? Math.Abs(close - htfEmaVal) / atrDaily : 0.0;
+            if (htfTrendDir > 0 && close > htfEmaVal)
+                return distAtr < 0.35 ? SwingMarketRegime.Expansion : SwingMarketRegime.TrendUp;
+            if (htfTrendDir < 0 && close < htfEmaVal)
+                return distAtr < 0.35 ? SwingMarketRegime.Compression : SwingMarketRegime.TrendDown;
+            if (distAtr < 0.25)
+                return SwingMarketRegime.Balance;
+            return SwingMarketRegime.Transition;
+        }
+
+        private void TrackClosedSwingTrade(TrackedSwingTrade t)
+        {
+            if (t == null) return;
+            closedSwingTrades.Add(t);
+            while (closedSwingTrades.Count > MaxClosedSwingTrades)
+                closedSwingTrades.RemoveAt(0);
+        }
+
         private static bool IsNearVpLevel(double price, double level, double tickSize, int toleranceTicks)
         {
             return level > 0 && tickSize > 0 && Math.Abs(price - level) / tickSize <= toleranceTicks;
@@ -1055,13 +1102,33 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private bool HasRecentAbsorption(bool isBuy)
         {
-            return isBuy ? currentBarDelta > 100 : currentBarDelta < -100;
+            if (isBuy && isBullishAbsorptionActive) return true;
+            if (!isBuy && isBearishAbsorptionActive) return true;
+            double z = ZDeltaCurrent();
+            return isBuy ? z >= 1.0 : z <= -1.0;
         }
 
+        // FVG : même source que le moteur Sniper (fvgEngineZones / Engine).
         private bool IsInActiveFvg(double price, bool isBuy)
         {
-            return isBuy ? (snLow <= prevBarPocPrice && snClose > prevBarPocPrice)
-                         : (snHigh >= prevBarPocPrice && snClose < prevBarPocPrice);
+            if (fvgEngineZones.Count == 0) return false;
+            double tol = TickSize > 0 ? TickSize * 2.0 : 0.5;
+            int maxAge = FvgZoneMemoryBars > 0 ? FvgZoneMemoryBars : 200;
+
+            for (int i = 0; i < fvgEngineZones.Count; i++)
+            {
+                FvgEngineZone fz = fvgEngineZones[i];
+                if (fz.Invalidated || fz.IsBull != isBuy) continue;
+                if (evalBarIndex - fz.BarIndex > maxAge) continue;
+
+                if (price >= fz.Bottom - tol && price <= fz.Top + tol)
+                    return true;
+                if (isBuy && snLow <= fz.Top + tol && snClose >= fz.Bottom - tol)
+                    return true;
+                if (!isBuy && snHigh >= fz.Bottom - tol && snClose <= fz.Top + tol)
+                    return true;
+            }
+            return false;
         }
 
         private bool HasRecentBos(bool isBuy)

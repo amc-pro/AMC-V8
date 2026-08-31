@@ -2,7 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using NinjaTrader.NinjaScript.Indicators;
+using NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence;
 using NinjaTrader.NinjaScript.Indicators.VolumeProfilePro;
 #endregion
 
@@ -129,6 +131,19 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_MonthlyBand_Slope_AtrNormalized_Validation", Test_MonthlyBand_Slope_AtrNormalized_Validation);
             RunTest("Test_MonthlyBand_Epoch_Persists_On_Snapshot", Test_MonthlyBand_Epoch_Persists_On_Snapshot);
             RunTest("Test_MonthlyBand_NonRegression_All_Existing_Setups", Test_MonthlyBand_NonRegression_All_Existing_Setups);
+
+            // ================================================================
+            // 🔧 SUITE CORRECTIONS POST-AUDIT (PROMPT_CORRECTIONS_AUDIT_COMPLET.md)
+            // ================================================================
+            RunTest("Test_Audit_ScalpingPro_Preset_Guard_In_Source", Test_Audit_ScalpingPro_Preset_Guard_In_Source);
+            RunTest("Test_Audit_Sniper_Enabled_And_Swing_Isolation", Test_Audit_Sniper_Enabled_And_Swing_Isolation);
+            RunTest("Test_Audit_Swing_Microstructure_Helpers_In_Source", Test_Audit_Swing_Microstructure_Helpers_In_Source);
+            RunTest("Test_Audit_Swing_RiskRewardScore_From_Real_RR", Test_Audit_Swing_RiskRewardScore_From_Real_RR);
+            RunTest("Test_Audit_Swing_RiskRewardScore_Low_When_RR_Below_Min", Test_Audit_Swing_RiskRewardScore_Low_When_RR_Below_Min);
+            RunTest("Test_MonthlyBand_Acceptance_Uses_Prev_Sd1_Values", Test_MonthlyBand_Acceptance_Uses_Prev_Sd1_Values);
+            RunTest("Test_Audit_Configs_No_Secrets_ScalpingPro_And_Swing", Test_Audit_Configs_No_Secrets_ScalpingPro_And_Swing);
+            RunTest("Test_Audit_TelegramDispatcher_Dedup_Not_Blocked_After_Send_Failure", Test_Audit_TelegramDispatcher_Dedup_Not_Blocked_After_Send_Failure);
+            RunTest("Test_Audit_EnforcePresetBarCloseDiscipline_In_Source", Test_Audit_EnforcePresetBarCloseDiscipline_In_Source);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
@@ -2059,7 +2074,8 @@ namespace AMC.VolumeProfile.Tests
             bool valid = scorer.ValidatePreconditions(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long, out reason);
             Assert(valid, "Le retest Long confirmé doit être validé. Raison rejet: " + reason);
 
-            var score = scorer.ComputeScore(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long);
+            // RR 2.0 = typique pour un retest VWAP Monthly (post-sizing réel)
+            var score = scorer.ComputeScore(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long, 2.0);
             Assert(score.Total >= 70.0, string.Format("Score attendu >= 70, obtenu: {0:F1}", score.Total));
         }
 
@@ -2092,7 +2108,8 @@ namespace AMC.VolumeProfile.Tests
             bool valid = scorer.ValidatePreconditions(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Short, out reason);
             Assert(valid, "Le retest Short confirmé doit être validé. Raison rejet: " + reason);
 
-            var score = scorer.ComputeScore(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Short);
+            // RR 2.0 = typique pour un retest VWAP Monthly (post-sizing réel)
+            var score = scorer.ComputeScore(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Short, 2.0);
             Assert(score.Total >= 70.0, string.Format("Score attendu >= 70, obtenu: {0:F1}", score.Total));
         }
 
@@ -2504,6 +2521,153 @@ namespace AMC.VolumeProfile.Tests
 
             var score = scorer.ComputeScore(ctx, SwingSetupType.RejectExtreme, SwingDirection.Long);
             Assert(score.Total >= 60.0, "Score RejectExtreme valide");
+        }
+
+        #endregion
+
+        #region Suite Corrections Post-Audit
+
+        private static void Test_Audit_ScalpingPro_Preset_Guard_In_Source()
+        {
+            string root = GetProjectRoot();
+            string scalpingFile = Path.Combine(root, "AuctionMarketCore.ScalpingPro.cs");
+            string text = File.ReadAllText(scalpingFile);
+            Assert(text.Contains("TradingPreset == SniperMarketPreset.ScalpingPro"),
+                "IsScalpingPro doit être lié au preset ScalpingPro.");
+            Assert(text.Contains("if (!IsScalpingPro) return;"),
+                "ScalpingProOnEvaluatedBar doit court-circuiter hors preset ScalpingPro.");
+        }
+
+        private static void Test_Audit_Sniper_Enabled_And_Swing_Isolation()
+        {
+            string root = GetProjectRoot();
+            string sniperFile = Path.Combine(root, "AuctionMarketCore.Sniper.cs");
+            string text = File.ReadAllText(sniperFile);
+            Assert(text.Contains("EnableSniperEngine = true;"),
+                "EnableSniperEngine doit être activé par défaut dans ApplySniperDefaults.");
+            Assert(text.Contains("if (IsSwing && EnableSwingEngine) return;"),
+                "SniperOnEvaluatedBar doit être ignoré en preset Swing actif.");
+        }
+
+        private static void Test_Audit_Swing_Microstructure_Helpers_In_Source()
+        {
+            string root = GetProjectRoot();
+            string swingFile = Path.Combine(root, "AuctionMarketCore.Swing.cs");
+            string text = File.ReadAllText(swingFile);
+            Assert(text.Contains("fvgEngineZones") && text.Contains("IsInActiveFvg"),
+                "IsInActiveFvg doit utiliser fvgEngineZones.");
+            Assert(text.Contains("isBullishAbsorptionActive") && text.Contains("isBearishAbsorptionActive"),
+                "HasRecentAbsorption doit utiliser les flags moteur.");
+            Assert(text.Contains("ResolveSwingRegimeHtf"),
+                "RegimeHtf doit être dérivé du HTF réel, pas de la direction du setup.");
+            Assert(!text.Contains("RegimeHtf = isBuy ? SwingMarketRegime.TrendUp : SwingMarketRegime.TrendDown"),
+                "RegimeHtf ne doit plus être assigné par direction du candidat.");
+        }
+
+        private static void Test_Audit_Swing_RiskRewardScore_From_Real_RR()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Symbol = "NQ", TickSize = 0.25, AtrCurrent = 20.0, HtfTrendDirection = 1,
+                Sd2Lower = 19900.0, Low = 19895.0, Close = 19910.0, Open = 19905.0
+            };
+            var score = scorer.ComputeScore(ctx, SwingSetupType.RejectExtreme, SwingDirection.Long, 3.0);
+            Assert(score.RiskRewardScore >= 9.5, "RR 3.0 doit produire un RiskRewardScore proche de 10.");
+        }
+
+        private static void Test_Audit_Swing_RiskRewardScore_Low_When_RR_Below_Min()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Symbol = "NQ", TickSize = 0.25, AtrCurrent = 20.0, HtfTrendDirection = 1,
+                Sd2Lower = 19900.0, Low = 19895.0, Close = 19910.0, Open = 19905.0
+            };
+            var score = scorer.ComputeScore(ctx, SwingSetupType.RejectExtreme, SwingDirection.Long, 0.4);
+            Assert(score.RiskRewardScore < 5.0, "RR 0.4 doit produire un RiskRewardScore faible.");
+        }
+
+        private static void Test_MonthlyBand_Acceptance_Uses_Prev_Sd1_Values()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Symbol = "NQ",
+                TickSize = 0.25,
+                PointValue = 20.0,
+                AtrCurrent = 20.0,
+                HtfTrendDirection = 1,
+                HasCurrentMonthlyVwap = true,
+                CurrentMonthlyBarsCount = 30,
+                CurrentMonthlyVwap = 20000.0,
+                CurrentMonthlySd1Upper = 20100.0,
+                CurrentMonthlySd1Lower = 19900.0,
+                CurrentMonthlyVwapSlopeTicksPerHour = 10.0,
+                CurrentMonthlyVwapSlope = 1.5,
+                MonthlyBandMinAcceptanceBarsRequired = 1,
+                MonthlyBandAcceptanceBars = 0,
+                PrevCurrentMonthlySd1Upper = 20098.0,
+                PrevClose = 20105.0,
+                Open = 20102.0,
+                Low = 20098.0,
+                High = 20115.0,
+                Close = 20112.0,
+                RetestCountCurrentLevel = 0
+            };
+
+            string reason;
+            bool valid = scorer.ValidatePreconditions(ctx, SwingSetupType.MonthlyVwapBandRetest, SwingDirection.Long, out reason);
+            Assert(valid, "Acceptation via PrevCurrentMonthlySd1Upper doit valider le retest. Raison: " + reason);
+        }
+
+        private static void Test_Audit_Configs_No_Secrets_ScalpingPro_And_Swing()
+        {
+            string root = GetProjectRoot();
+            string[] folders = new string[] { "SWING", "SCALPING_PRO" };
+            foreach (string folder in folders)
+            {
+                string dir = Path.Combine(root, "configs", folder);
+                if (!Directory.Exists(dir)) continue;
+                foreach (string f in Directory.GetFiles(dir, "*.xml"))
+                {
+                    string text = File.ReadAllText(f);
+                    Assert(text.Contains("YOUR_BOT_TOKEN_HERE"),
+                        "Placeholder token attendu dans " + f);
+                }
+            }
+        }
+
+        private static void Test_Audit_TelegramDispatcher_Dedup_Not_Blocked_After_Send_Failure()
+        {
+            int attempts = 0;
+            var dispatcher = new TelegramDispatcher(
+                (text, onComplete) =>
+                {
+                    attempts++;
+                    onComplete(false);
+                },
+                null,
+                () => DateTime.UtcNow);
+            dispatcher.MinInterval = TimeSpan.FromMilliseconds(0);
+            dispatcher.MaxAttempts = 1;
+            dispatcher.DuplicateWindow = TimeSpan.FromMinutes(1);
+
+            Assert(dispatcher.Dispatch("audit-dedup-test"), "Premier envoi accepté.");
+            Thread.Sleep(150);
+            Assert(dispatcher.Dispatch("audit-dedup-test"), "Second envoi identique autorisé après échec (hash non verrouillé).");
+            dispatcher.Dispose();
+        }
+
+        private static void Test_Audit_EnforcePresetBarCloseDiscipline_In_Source()
+        {
+            string root = GetProjectRoot();
+            string amcFile = Path.Combine(root, "AuctionMarketCore.cs");
+            string text = File.ReadAllText(amcFile);
+            Assert(text.Contains("EnforcePresetBarCloseDiscipline"),
+                "La discipline bar-close preset doit exister.");
+            Assert(text.Contains("EvaluateOnBarClose = true"),
+                "EvaluateOnBarClose doit être forcé pour les presets actifs.");
         }
 
         #endregion

@@ -1077,7 +1077,8 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                     Action<DbConnection> action;
                     while (writeQueue.TryDequeue(out action))
                     {
-                        try { action(connection); } catch { }
+                        try { action(connection); }
+                        catch (Exception ex) { logAction("VolumeProfileRepository FlushQueue: " + ex.Message); }
                     }
                 }
             }
@@ -1096,6 +1097,19 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
             {
                 cts.Cancel();
                 writeSignal.Set();
+
+                if (backgroundWorkerTask != null)
+                {
+                    try
+                    {
+                        if (!backgroundWorkerTask.Wait(TimeSpan.FromSeconds(5)))
+                            logAction("VolumeProfileRepository: timeout worker lors du Dispose.");
+                    }
+                    catch (Exception ex)
+                    {
+                        logAction("VolumeProfileRepository Dispose worker: " + ex.Message);
+                    }
+                }
 
                 // Vidage final de la file d'attente
                 FlushQueue();

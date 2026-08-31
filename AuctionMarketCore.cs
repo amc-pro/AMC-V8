@@ -1316,6 +1316,16 @@ namespace NinjaTrader.NinjaScript.Indicators
                 ApplyScalpingProPreset();
         }
 
+        /// <summary>Presets actifs exigent l'évaluation bar-close (anti-repaint).</summary>
+        private void EnforcePresetBarCloseDiscipline()
+        {
+            if (TradingPreset != SniperMarketPreset.ScalpingPro && TradingPreset != SniperMarketPreset.Swing)
+                return;
+            if (EvaluateOnBarClose) return;
+            Print("VP: EvaluateOnBarClose réinitialisé à true (obligatoire pour preset ScalpingPro/Swing).");
+            EvaluateOnBarClose = true;
+        }
+
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -1529,6 +1539,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 MaximumBarsLookBack = MaximumBarsLookBack.Infinite;
 
                 ApplyTradingPreset();
+                EnforcePresetBarCloseDiscipline();
 
                 // lastTarget1 vaut au minimum entree +/- risque x TargetR1. Si
                 // MinRiskReward > TargetR1, le filtre R:R ne peut etre satisfait que
@@ -2010,9 +2021,12 @@ namespace NinjaTrader.NinjaScript.Indicators
         }
 
         // true si le signal est compatible avec le biais HTF.
+        // Mode strict (HtfSoftMode=false + MI actif) : alignement H1+M15 via Market Intelligence.
         private bool IsHtfAligned(bool isBuy)
         {
             if (!EnableHtfFilter || htfEma == null) return true;
+            if (EnableMarketIntelligence && !HtfSoftMode)
+                return IsH1M15Aligned(isBuy);
             if (htfBias == 0) return !HtfStrictMode;
             return isBuy ? htfBias > 0 : htfBias < 0;
         }
