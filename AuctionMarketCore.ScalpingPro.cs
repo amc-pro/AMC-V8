@@ -882,7 +882,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             EvaluateOnBarClose = true;
             EnableSniperEngine = true;
 
-            MinScoreToAlert = 45;                     // Seuil d'alerte équilibré à 45 (TierSilver / Grade FORT)
+            MinScoreToAlert = 50;                     // Seuil d'alerte calibré à 50 (TierSilver / Grade FORT)
+            TierSilverScore = 50;
             MaxSniperAlertsPerSession = 0;            // Illimité (0 = illimité)
             MaxAlertsPerWeek = 0;                     // Illimité (0 = illimité)
             MaxAlertsPerSession = 0;                  // Illimité (0 = illimité)
@@ -901,9 +902,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             MaxEntryDriftAtr = 0.5;
 
             EnableHtfFilter = true;
-            HtfStrictMode = false;
+            HtfStrictMode = true;
             HtfSoftMode = true; // Actif par défaut pour un scalping plus fluide
-            HtfGateAppliesToMeanReversion = false;
+            HtfGateAppliesToMeanReversion = true;
             HtfMisalignmentPenalty = 4;
             EnableMarketIntelligence = true;
 

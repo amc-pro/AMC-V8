@@ -157,7 +157,7 @@
       <EnableHtfFilter>true</EnableHtfFilter>
       <HtfMinutes>15</HtfMinutes>
       <HtfEmaPeriod>50</HtfEmaPeriod>
-      <HtfStrictMode>false</HtfStrictMode>
+      <HtfStrictMode>true</HtfStrictMode>
       <EnableTradeJournal>true</EnableTradeJournal>
       <JournalMaxBarsInTrade>24</JournalMaxBarsInTrade>
       <JournalFilePath />
@@ -167,11 +167,11 @@
       <IbPeriodMinutes>30</IbPeriodMinutes>
       <ExecutionMode>Sniper</ExecutionMode>
       <EnableSniperEngine>true</EnableSniperEngine>
-      <MinScoreToAlert>45</MinScoreToAlert>
+      <MinScoreToAlert>50</MinScoreToAlert>
       <MaxAlertsPerWeek>0</MaxAlertsPerWeek>
       <MaxSniperAlertsPerSession>0</MaxSniperAlertsPerSession>
       <SelectionBufferBars>0</SelectionBufferBars>
-      <SniperRthOnly>false</SniperRthOnly>
+      <SniperRthOnly>true</SniperRthOnly>
       <NewsBlackoutMinutes>10</NewsBlackoutMinutes>
       <NewsTimesCsv>0830,1000,1430,1500</NewsTimesCsv>
       <NewsWindowPenalty>15</NewsWindowPenalty>
@@ -182,12 +182,12 @@
       <GateN2MinScore>3</GateN2MinScore>
       <GateN3MinScore>3</GateN3MinScore>
       <GateN4MinScore>2</GateN4MinScore>
-      <HtfGateAppliesToMeanReversion>false</HtfGateAppliesToMeanReversion>
+      <HtfGateAppliesToMeanReversion>true</HtfGateAppliesToMeanReversion>
       <HtfMisalignmentPenalty>2</HtfMisalignmentPenalty>
       <HtfSoftMode>true</HtfSoftMode>
       <SmcEventMaxAgeBars>12</SmcEventMaxAgeBars>
       <RequireFootprintEvidence>true</RequireFootprintEvidence>
-      <TierSilverScore>45</TierSilverScore>
+      <TierSilverScore>50</TierSilverScore>
       <TierGoldScore>65</TierGoldScore>
       <NormalizeScoresPerSetup>true</NormalizeScoresPerSetup>
       <MaxImbalanceRetests>5</MaxImbalanceRetests>

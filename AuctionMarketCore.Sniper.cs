@@ -863,7 +863,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             ApplyScalpingProDefaults();
 
             EnableSniperEngine = true;
-            MinScoreToAlert = 45;
+            MinScoreToAlert = 50;
+            TierSilverScore = 50;
             MaxAlertsPerWeek = 0;                 // Illimité (0 = illimité)
             MaxSniperAlertsPerSession = 0;        // Illimité (0 = illimité)
             SelectionBufferBars = 0;
@@ -879,7 +880,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             GateN2MinScore = 3;
             GateN3MinScore = 3;
             GateN4MinScore = 2;
-            HtfGateAppliesToMeanReversion = false;
+            HtfStrictMode = true;
+            HtfGateAppliesToMeanReversion = true;
             HtfMisalignmentPenalty = 4;
             HtfSoftMode = true;
             RequireFootprintEvidence = true;

@@ -132,9 +132,9 @@
       <EnableExhaustion>true</EnableExhaustion>
       <ExhaustionPercentile>85</ExhaustionPercentile>
       <ExhaustionFailBars>1</ExhaustionFailBars>
-      <EnableDeltaFlip>true</EnableDeltaFlip>
+      <EnableDeltaFlip>false</EnableDeltaFlip>
       <DeltaFlipLookback>2</DeltaFlipLookback>
-      <DeltaFlipMinPercentile>40</DeltaFlipMinPercentile>
+      <DeltaFlipMinPercentile>45</DeltaFlipMinPercentile>
       <EnableCumDeltaDivergence>true</EnableCumDeltaDivergence>
       <CumDeltaSwingStrength>3</CumDeltaSwingStrength>
       <CumDeltaDivergenceLookback>25</CumDeltaDivergenceLookback>
@@ -157,7 +157,7 @@
       <EnableHtfFilter>true</EnableHtfFilter>
       <HtfMinutes>15</HtfMinutes>
       <HtfEmaPeriod>50</HtfEmaPeriod>
-      <HtfStrictMode>false</HtfStrictMode>
+      <HtfStrictMode>true</HtfStrictMode>
       <EnableTradeJournal>true</EnableTradeJournal>
       <JournalMaxBarsInTrade>24</JournalMaxBarsInTrade>
       <JournalFilePath />
@@ -167,7 +167,7 @@
       <IbPeriodMinutes>30</IbPeriodMinutes>
       <ExecutionMode>Sniper</ExecutionMode>
       <EnableSniperEngine>true</EnableSniperEngine>
-      <MinScoreToAlert>45</MinScoreToAlert>
+      <MinScoreToAlert>50</MinScoreToAlert>
       <MaxAlertsPerWeek>0</MaxAlertsPerWeek>
       <MaxSniperAlertsPerSession>0</MaxSniperAlertsPerSession>
       <SelectionBufferBars>0</SelectionBufferBars>
@@ -182,12 +182,12 @@
       <GateN2MinScore>3</GateN2MinScore>
       <GateN3MinScore>3</GateN3MinScore>
       <GateN4MinScore>2</GateN4MinScore>
-      <HtfGateAppliesToMeanReversion>false</HtfGateAppliesToMeanReversion>
+      <HtfGateAppliesToMeanReversion>true</HtfGateAppliesToMeanReversion>
       <HtfMisalignmentPenalty>4</HtfMisalignmentPenalty>
       <HtfSoftMode>true</HtfSoftMode>
       <SmcEventMaxAgeBars>12</SmcEventMaxAgeBars>
       <RequireFootprintEvidence>true</RequireFootprintEvidence>
-      <TierSilverScore>45</TierSilverScore>
+      <TierSilverScore>50</TierSilverScore>
       <TierGoldScore>65</TierGoldScore>
       <NormalizeScoresPerSetup>true</NormalizeScoresPerSetup>
       <MaxImbalanceRetests>5</MaxImbalanceRetests>
