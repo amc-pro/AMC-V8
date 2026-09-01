@@ -52,7 +52,7 @@
       <MovementThresholdTicks>3</MovementThresholdTicks>
       <LookbackBars>150</LookbackBars>
       <ValueAreaPercent>70</ValueAreaPercent>
-      <VolumetricTimeframe>2</VolumetricTimeframe>
+      <VolumetricTimeframe>5</VolumetricTimeframe>
       <UseSessionProfile>true</UseSessionProfile>
       <ShowDashboard>true</ShowDashboard>
       <ShowLevelLines>true</ShowLevelLines>
