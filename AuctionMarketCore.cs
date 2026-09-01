@@ -45,13 +45,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 
     public enum SniperMarketPreset
     {
-        /// <summary>Reglages de base (seuils relaches).</summary>
-        Standard,
-        /// <summary>Seuils renforces : peu de signaux, qualite maximale.</summary>
-        Sniper,
-        Scanner,
-        /// <summary>Profil scalping haute fréquence.</summary>
-        Scalping,
         /// <summary>Profil Scalping Pro avec confluence SMC, Footprint et scoring pondéré (5-10 setups/session).</summary>
         ScalpingPro,
         /// <summary>Profil Swing institutionnel sur barres clôturées, références fermées (VP/VWAP/SD) et horizon macro.</summary>
@@ -202,7 +195,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Afficher Lignes POC/VAH/VAL", Order = 2, GroupName = "Dashboard")]
         public bool ShowLevelLines { get; set; }
 
-        [Display(Name = "Preset de trading", Order = 4, GroupName = "Debug", Description = "Standard = reglages de base. Sniper = seuils renforces (moins de signaux, meilleure qualite). Scanner = mode souple V7 (gates modulateurs, quotas elargis, beaucoup plus de signaux). Scalping = mode ultra-reactif V7.2 (emission intrabar, gates quasi neutralises, HTF off, R:R 0.5 : 20-50 signaux/jour, a utiliser en Research/journal avant tout trading reel). ScalpingPro = mode d'EXECUTION REELLE V7.3 (score pondere Structure/Footprint/Volume/Momentum/Contexte, confluence SMC, footprint obligatoire, HTF Soft, R:R 1.0, stop 1.0 ATR, 5-10 setups de haute qualite par session, alertes Moyen/Fort/Tres Fort).")]
+        [Display(Name = "Preset de trading", Order = 4, GroupName = "Moteur", Description = "ScalpingPro = Mode intraday haute confluence (SMC, Footprint, VWAP clôturés, scoring pondéré 100 pts, 5-10 setups/session). Swing = Mode macro intersession (Rejets extrêmes SD±2/±3, VA Reentry, Breakout Retest, POC Migration, Monthly VWAP Retest).")]
         public SniperMarketPreset TradingPreset { get; set; }
 
         [Display(Name = "Mode Debug", Order = 3, GroupName = "Debug")]

@@ -1,12 +1,36 @@
 # AuctionMarketCore (AMC-V8)
 
-**AuctionMarketCore** est la version spécialisée du moteur AMC-V8, conçue pour **NinjaTrader 8** et dédiée exclusivement au preset **ScalpingPro** (5 à 10 setups institutionnels par session). Les anciens presets `SCALPING`, `SNIPER`, `SCANNER` et `STANDARD` ainsi que leur code spécifique ont été retirés du périmètre actif. [1] Il combine l'analyse de la théorie des enchères (*Auction Market Theory*), le **Volume Profile institutionnel multi-périodes** (*Closed References*), les **VWAP clôturés avec bandes d'écart-type ($SD \pm 1, \pm 2, \pm 3$)**, les nœuds de volume (**HVN / LVN**), l'ordre de flux (*Footprint / Delta Analysis*), la structure de marché (*Market Structure SMC*) et une gouvernance stricte des risques.
+**AuctionMarketCore** est le moteur institutionnel haute précision d'AMC-V8 pour **NinjaTrader 8**, articulé autour de deux modes opérationnels exclusifs et strictement étanches : **ScalpingPro** (intraday à haute confluence, 5 à 10 setups/session) et **Swing** (macro théorie des enchères, 1 à 4 setups majeurs/semaine). Les anciens presets génériques (`SCALPING`, `SNIPER`, `SCANNER`, `STANDARD`) ont été définitivement retirés du périmètre actif.
+
+Le système fusionne la théorie des enchères (*Auction Market Theory*), le **Volume Profile institutionnel multi-périodes** (*Closed References* immuables Daily, Weekly, Monthly persistées sous SQLite), les **VWAP clôturés et dynamiques avec bandes d'écart-type ($SD \pm 1, \pm 2, \pm 3$)**, les nœuds de volume (**HVN / LVN**), l'analyse d'Order Flow (*Footprint / Delta / CVD Divergence*), la structure de marché (*Market Structure SMC / BOS / CHoCH / FVG*) et un moteur de risque quantitatif déterministe.
 
 ---
 
-## 🚀 Dernières Mises à Jour & Optimisations (Août 2026)
+## 🚀 Dernières Mises à Jour & Nouveautés (Août / Septembre 2026)
 
-### 1. Module Volume Profile Institutionnel & VWAP Clôturés
+### 1. Moteur Institutionnel Swing V8
+* **Architecture Dédiée et Étanche** : Implémenté dans [`AuctionMarketCore.Swing.cs`](file:///c:/AMC-Pro/AMC-V8/AuctionMarketCore.Swing.cs) et [`AuctionMarketCore.Swing.Models.cs`](file:///c:/AMC-Pro/AMC-V8/AuctionMarketCore.Swing.Models.cs), le mode Swing s'active via `<TradingPreset>Swing</TradingPreset>` sans perturber le pipeline `ScalpingPro`.
+* **7 Setups Institutionnels Macro AMT & SMC** :
+  1. **`RejectExtreme`** : Rejet statistique violent des bandes $SD \pm 2 / \pm 3$ ou clôture hors Value Area avec bougie de confirmation.
+  2. **`ValueReentry`** : Réintégration confirmée de la Value Area d'une période clôturée (Daily/Weekly/Monthly) avec visée du POC opposé.
+  3. **`BreakoutRetest`** : Franchissement directionnel net d'un niveau institutionnel (VAH/VAL/POC/HVN) suivi d'un retest défendu.
+  4. **`MacroReversal`** : Retournement structurel de fond avec divergence Delta/CVD majeure et preuve d'absorption.
+  5. **`HtfContinuation`** : Pullback vers un FVG, HVN ou VWAP institutionnel dans le sens de la tendance 4H / Daily.
+  6. **`PocMigration`** : Détection mathématique de la dérive directionnelle consistante du POC sur $\ge 3$ sessions consécutives avec filtre anti-chase et stop structurel sur l'Oldest POC.
+  7. **`MonthlyVwapBandRetest`** : Exploitation dynamique du retest des bandes $SD \pm 1$ du VWAP Monthly en cours de formation, avec gestion d'Epochs immuables, validation de pente normalisée (ticks/h et ATR) et acceptation multi-barres.
+* **Modèle de Scoring Pondéré Swing (0 à 100 points)** :
+  * *HTF Context* (20 pts), *AMT Location* (25 pts), *Volume Profile* (20 pts), *Structure SMC* (15 pts), *Order Flow* (10 pts), *Risk/Reward* (10 pts) avec déductions adaptatives pour news économiques et gaps.
+  * Tiers de qualité : **Moyen** ($\ge 50$), **Fort** ($\ge 70$), **Très Fort** ($\ge 85$).
+* **Gestion du Risque & Machine d'États à Sorties Partielles** :
+  * Sizing dynamique exact par contrat basé sur la valeur du tick et le risque monétaire alloué.
+  * Stop hybride sécuritaire ($2.0 \text{ à } 2.25 \times \text{ATR}$ vs structurel), strictement borné par `MinStopTicks` et `MaxStopTicks`.
+  * **Sortie Partielle TP1 à $1.5\text{R}$ (50%)** avec déplacement automatique du stop à **Break-Even (+1 tick)**, puis clôture finale **TP2 à $3.0\text{R}$** ou sur mur adverse.
+  * Maintien overnight autorisé (`SwingAllowOvernightHold = true`) et protection anti-stacking.
+  * Journal Shadow Swing dédié : `shadow/swing_trades.csv` et persistance SQLite.
+
+---
+
+### 2. Module Volume Profile Institutionnel & VWAP Clôturés
 * **Zéro Biais d'Anticipation (*Strict Anti-Lookahead*)** : Séparation stricte entre les accumulateurs live en direct et les profils clôturés immuables (`Jour Précédent`, `Semaine Précédente`, `Mois Précédent`). Les niveaux ne dérivent jamais en cours de session.
 * **VWAP Clôturés & Bandes d'Écart-Type ($SD \pm 1\sigma, \pm 2\sigma, \pm 3\sigma$)** : Calcul déterministe du VWAP et de la variance statistique sur les périodes hebdomadaire et mensuelle clôturées.
 * **Niveaux de Classe A+ Institutionnels** : Les tests des bandes $SD \pm 2$ et $SD \pm 3$ (support/résistance macro) accordent automatiquement **+12 points** de localisation en $N2$.
@@ -14,23 +38,43 @@
 * **Filtre Anti-Continuité sur Mur Macro** : Interdiction d'exécuter des ventes directes sur un support $SD -2 / -3$ ou des achats sur une résistance $SD +2 / +3$.
 * **Persistance SQLite Locale** : Sauvegarde automatique de l'ensemble des profils, nœuds et métriques dans `amc_volume_profile.db` avec migration automatique du schéma.
 
-### 2. Déverrouillage & Spécialisation des Gates (Scalping Pro)
-* **Seuil Minimal d'Alerte** : Calibré à **`50/100`** pour un flux équilibré de 5 à 10 opportunités de qualité par session (Paliers : *Moyen* $\ge 45$, *Fort* $\ge 50$, *Très Fort* $\ge 65$) [2].
-* **Spécialisation des Portes par Famille de Setup** : Les setups de flux/momentum (`DELTA_FLIP`, `CUM_DELTA_DIV`, `BREAKOUT_VAH/VAL`) ne sont plus bloqués par l'absence d'absorption passive ($N3$) ou de mèche contre-tendance ($N4$) lorsqu'une impulsion directionnelle de delta est confirmée [3].
-* **Levée Intelligente des Portes Secondaires** : Lorsqu'un setup atteint un score global fort ($\ge 50$), les sous-notes marginales non-critiques n'entraînent plus de rejet éliminatoire [2].
+---
 
-### 3. Architecture Avancée du Risque & Stop Loss Dynamique
-* **Stop Loss Dynamique Réel (`1.75 ATR`)** : Suppression du bridage artificiel en pips (`MaxStopPips = 0`) au profit d'un dimensionnement adapté à la volatilité de chaque instrument (15 à 40 points sur NQ/MNQ, 2 à 8 points sur ES, etc.) protégé par les niveaux structurels et un buffer de 6 ticks [2].
-* **Filtre Anti-Doublon & Anti-Empilement** : Interdiction d'ouvrir un nouveau trade dans le même sens tant qu'une position de même direction est active (`openTrades`), éliminant l'accumulation de pertes consécutives sur les faux départs [3].
-
-### 4. Gestion Adaptative des News & Contexte
-* **Mode Pénalité News** : `NewsHardBlock = false` avec pénalité adaptative de **`-15 points`** (`NewsWindowPenalty = 15`) pendant les fenêtres économiques, permettant aux opportunités de très haute conviction d'être exécutées [2].
-* **Mode Souple HTF (`HtfSoftMode = true`)** : Les désalignements sur les unités de temps supérieures appliquent une pénalité modulatrice de score sans rejet bloquant [2].
-* **Configurations Multi-Actifs Synchronisées** : Alignement complet des 8 fichiers XML de configuration (`MNQ`, `NQ`, `ES`, `MES`, `GC`, `MGC`, `CL`, `MCL`) dans `configs/SCALPING_PRO/`.
+### 3. Moteur ScalpingPro & Amortissement Continu
+* **Seuil Minimal d'Alerte** : Calibré à **`50/100`** pour un flux équilibré de 5 à 10 opportunités de qualité par session (Paliers : *Moyen* $\ge 45$, *Fort* $\ge 50$, *Très Fort* $\ge 65$).
+* **Spécialisation des Portes par Famille de Setup** : Les setups de flux/momentum (`DELTA_FLIP`, `CUM_DELTA_DIV`, `BREAKOUT_VAH/VAL`) ne sont plus bloqués par l'absence d'absorption passive ($N3$) ou de mèche contre-tendance ($N4$) lorsqu'une impulsion directionnelle de delta est confirmée.
+* **Stop Loss Dynamique Réel (`1.75 ATR`)** : Dimensionnement adapté à la volatilité de chaque instrument, protégé par les niveaux structurels et un buffer de 6 ticks.
+* **Filtre Anti-Doublon & Anti-Empilement** : Interdiction d'ouvrir un nouveau trade dans le même sens tant qu'une position de même direction est active (`openTrades`).
 
 ---
 
-## 📊 Fonctionnement Approfondi : Volume Profile, VWAP & Nœuds
+### 4. Gestion Adaptative des News, Contexte & Configurations Multi-Actifs
+* **Mode Pénalité News** : `NewsHardBlock = false` (ScalpingPro) avec pénalité adaptative de **`-15 points`** (`NewsWindowPenalty = 15`), et blocage dur configurable pour les news majeures en mode Swing.
+* **Configurations Multi-Actifs Synchronisées** : 16 fichiers XML de configuration de production répartis dans `configs/SCALPING_PRO/` et `configs/SWING/` (`ES`, `MES`, `NQ`, `MNQ`, `GC`, `MGC`, `CL`, `MCL`).
+
+---
+
+## ⚖️ Comparatif Architectural : ScalpingPro vs Swing
+
+| Caractéristique | ScalpingPro (Intraday Haute Confluence) | Swing (Macro Auction Market) |
+| :--- | :--- | :--- |
+| **Horizon Temporel** | 5 minutes à 60 minutes (Intrasession) | Plusieurs heures à plusieurs jours (Intersession) |
+| **Timeframe de Base** | 1 min, 2 min ou 5 min Volumetric | 15 min ou 60 min |
+| **Séries HTF Référence** | 15 min / 60 min (EMA 50) | 240 min (4 Heures) / Daily (1440 min) |
+| **Fréquence Cible** | 5 à 10 setups par session | 1 à 4 setups par semaine |
+| **Références de Niveaux** | Session courante + Composite 15 jours | Profils clôturés Daily, Weekly, Monthly SQLite |
+| **Bandes SD Référence** | Intraday SD ±1 / ±2 | Bandes SD ±2 / ±3 Mois & Semaine + Monthly SD ±1 |
+| **Multiplicateur Stop ATR** | $1.75 \times \text{ATR}$ (adapté au micro-bruit) | $2.0 \text{ à } 2.25 \times \text{ATR}$ (respiration macro) |
+| **Bornes Stops (ES / MES)** | Min 12 ticks (3 pts) / Max 160 ticks | Min 16 ticks (4 pts) / Max 80 ticks (20 pts) |
+| **Bornes Stops (NQ / MNQ)** | Min 12 ticks (3 pts) / Max 160 ticks | Min 40 ticks (10 pts) / Max 240 ticks (60 pts) |
+| **Rapport R/R Visé** | TP1: $1.0\text{R}$, TP2: $2.0\text{R}$ (Min R/R = 1.0) | TP1: $1.5\text{R}$, TP2: $3.0\text{R}$ (Min R/R = 1.5) |
+| **Gestion Overnight** | Clôture obligatoire à la fin de session RTH | Maintien de position autorisé avec sizing adapté |
+| **Sorties & Trailing** | Trailing ATR intraday | Sortie partielle 50% TP1 + Stop Break-Even (+ 1 tick) |
+| **Journal Shadow Cible** | `shadow/trades.csv` | `shadow/swing_trades.csv` |
+
+---
+
+## 📊 Fonctionnement Approfondi : Volume Profile, VWAP & Modèles Quantitatifs
 
 ```
                        FLUX DE MARCHÉ (TICKS / BARRES VOLUMÉTRIQUES)
@@ -39,8 +83,8 @@
                       ┌─────────────────────────────────────────────┐
                       │    Accumulateurs Live Déterministes         │
                       │       - Session Journée RTH / ETH           │
-                      │       - Semaine en cours                    │
-                      │       - Mois en cours                       │
+                      │       - Semaine & Mois en cours             │
+                      │       - Current Monthly VWAP & Bandes SD±1  │
                       └──────────────────────┬──────────────────────┘
                                              │
                                 Clôture de Période (CME)
@@ -53,24 +97,24 @@
                       │       - Nœuds Lissés HVN & LVN              │
                       └──────────────┬──────────────────────────────┘
                                      │
-                 ┌───────────────────┴───────────────────┐
-                 ▼                                       ▼
-    ┌─────────────────────────┐             ┌─────────────────────────┐
-    │   Base SQLite Locale    │             │ VolumeProfileAnalyzer   │
-    │  amc_volume_profile.db  │             │ (VP LOC / VP CONF / N2) │
-    └─────────────────────────┘             └─────────────────────────┘
+                 ┌───────────────────┼───────────────────┐
+                 ▼                   ▼                   ▼
+    ┌─────────────────────────┐ ┌────────────────┐ ┌─────────────────────────┐
+    │   Base SQLite Locale    │ │ POC Migration  │ │  Moteur Scoring Swing   │
+    │  amc_volume_profile.db  │ │    Analyzer    │ │   & ScalpingPro Engine  │
+    └─────────────────────────┘ └────────────────┘ └─────────────────────────┘
 ```
 
 ### 1. Les Références Clôturées (*Closed References*)
 * **POC (*Point of Control*)** : Prix ayant concentré le volume le plus massif de la période clôturée (accord maximal / *fair value*).
 * **VAH (*Value Area High*) & VAL (*Value Area Low*)** : Encadrent **70% du volume total** distribué sur la période.
-  * *Inside Value* : Marché en équilibre, propice aux stratégies de retournement vers le POC.
-  * *Outside Value (Above VAH / Below VAL)* : Marché en déséquilibre (*imbalance*), propice aux continuations directionnelles ou aux réintégrations agressives.
+  * *Inside Value* : Marché en équilibre, propice aux stratégies de retournement vers le POC (`ValueReentry`).
+  * *Outside Value (Above VAH / Below VAL)* : Marché en déséquilibre (*imbalance*), propice aux continuations directionnelles ou aux retests de breakout.
 
 ---
 
 ### 2. Les VWAP Clôturés & Bandes d'Écart-Type ($SD \pm 1, \pm 2, \pm 3$)
-Le VWAP clôturé hebdomadaire et mensuel représente le barycentre volumétrique officiel de l'institution. Les bandes d'écart-type statistiques sont calculées selon :
+Le VWAP clôturé hebdomadaire et mensuel représente le barycentre volumétrique institutionnel immuable :
 
 $$\text{VWAP} = \frac{\sum (P_i \times V_i)}{\sum V_i}, \quad \sigma = \sqrt{\max\left(0, \frac{\sum (P_i^2 \times V_i)}{\sum V_i} - \text{VWAP}^2\right)}$$
 
@@ -80,57 +124,48 @@ $$\text{Bande } SD \pm k = \text{VWAP} \pm (k \times \sigma) \quad \text{avec } 
 | :--- | :---: | :--- | :--- |
 | **VWAP Clôturé** | Barycentre | Pivot central institutionnel / Règle de polarité | Pivot / Confluence |
 | **$SD \pm 1\sigma$** | $68.27\%$ | Frontière de distribution normale standard | Confluence x1 (+2 pts) |
-| **$SD \pm 2\sigma$** | $95.45\%$ | **Support / Résistance Macro Majeur** (Mur institutionnel) | **Classe A+ (+12 pts)**, Bonus Mean-Reversion (+2 pts) |
-| **$SD \pm 3\sigma$** | $99.73\%$ | **Extrême Statistique Absolu** (Épuisement / Rebond violent) | **Classe A+ (+12 pts)**, Bonus Mean-Reversion (+2 pts) |
-
-* **Comportement Réel Validé (Exemple du 24 Août 2026 sur MNQ)** : Le creux à 28 947.75 a testé précisément la bande **$SD -2$ du VWAP Monthly Clôturé** avant d'engager un puissant rebond de plus de 170 points.
+| **$SD \pm 2\sigma$** | $95.45\%$ | **Support / Résistance Macro Majeur** (Mur institutionnel) | **Classe A+ (+12 pts)**, Setup `RejectExtreme` |
+| **$SD \pm 3\sigma$** | $99.73\%$ | **Extrême Statistique Absolu** (Épuisement / Rebond violent) | **Classe A+ (+12 pts)**, Setup `RejectExtreme` |
 
 ---
 
 ### 3. Nœuds de Volume : HVN (*High Volume Node*) & LVN (*Low Volume Node*)
-Détectés mathématiquement sur les profils hebdomadaires et mensuels par un **filtre de lissage Gaussien ($\sigma = 2.5\text{ ticks}$)** et calcul de proéminence relative :
+Détectés mathématiquement sur les profils par un **filtre de lissage Gaussien ($\sigma = 2.5\text{ ticks}$)** et calcul de proéminence relative :
 
-```text
-Volume
-  ▲
-  │        /\             /\    <─── HVN : Zone d'acceptation / Aimant de prix (Magnet)
-  │       /  \   /\      /  \
-  │──────/────\_/──\────/────\─── Volume Moyen de la Période
-  │            \    \  /
-  │             \____\/         <─── LVN : Zone de rejet / Accélération du flux (Vacuum)
-  └───────────────────────────────────► Prix
-```
-
-* **HVN (*High Volume Node*) — Zones d'Acceptation** :
-  * Régions où d'importants échanges ont été négociés dans le passé.
-  * **Comportement** : Ralentissement de la vitesse des cours, absorption des ordres agressifs, zone de consolidation / congestion.
-* **LVN (*Low Volume Node*) — Zones de Rejet & d'Accélération** :
-  * Creux de volume marqués entre deux zones d'acceptation (manque de contrepartie historique).
-  * **Comportement** :
-    1. *Au premier test* : Rejet dynamique violent (barrière de liquidité).
-    2. *En cas de traversée confirmée* : Traversée ultra-rapide (*slippage favorisé / pass-through*) sans résistance.
-  * La qualité mathématique $q_{\text{LVN}} \in [0, 1]$ module la note $N2$ jusqu'à **+12 points**.
+* **HVN (*High Volume Node*) — Zones d'Acceptation** : Ralentissement du flux, absorption des ordres agressifs, zone d'équilibre et de consolidation.
+* **LVN (*Low Volume Node*) — Zones de Rejet & d'Accélération** : Creux de volume marqués. Rejet dynamique violent au premier contact, ou traversée ultra-rapide (*slippage favorisé / pass-through*) en cas de franchissement confirmé.
 
 ---
 
-### 4. Moteur d'Inflexion & Régime Adaptatif Multi-Actifs (*Macro-Inflection & Continuous Stretch Engine*)
-Le système intègre un moteur continu d'adaptation multi-régimes permettant de capturer les retournements majeurs d'épuisement tout en protégeant le capital lors des vraies tendances lourdes :
-
-* **Reconnaissance Dynamique du Contexte ($N1$)** :
-  * Lors d'une journée en forte tendance impulsive (*Trend Day*), les tests de bandes extrêmes ($SD \pm 2 / \pm 3$ ou $|Z_{\text{vwap}}| \ge 2.0\sigma$) sont identifiés comme des **zones d'inflexion macro valides** (+10 pts en $N1$).
-  * L'extension d'$IB$ extrême ($IB_{\text{ext}} \ge 2.0$) et le non-chevauchement de Value Area sont valorisés (+6 pts chacun) comme signatures d'élongation terminale.
-  * La note de contexte $N1$ passe ainsi de **4.0/30 à 26.0/30**, déverrouillant les opportunités d'inversion statistique.
-* **Amortissement Continu d'Étirement dans ScalpingPro** :
-  * Les pénalités de contre-tendance (`htfM15`, `ibMod`) s'amortissent progressivement au fur et à mesure que l'élongation augmente ($|Z| \ge 2.0\sigma \rightarrow 0.0$, $|Z| \ge 2.5\sigma \rightarrow +1.0$).
-  * Maintien strict du filtre anti-continuation interdisant les achats sous $SD +2/+3$ ou les ventes sur $SD -2/-3$ (`ibMod -= 5.0`).
-* **Verrou de Sécurité Anti-Couteau Tombant ($N3 / N4$)** :
-  * Aucun trade n'est pris au simple toucher passif d'une bande : l'obligation de preuve par la microstructure et l'Orderflow ($N3 \ge 3.0$ : DeltaFlip validé, divergence CVD, bougie de rejet $\ge 40\%$, ou Finished Auction) reste **infranchissable**, éliminant les faux rebonds sur les instruments directionnels lourds (Gold, Crude Oil).
+### 4. Modèle Déterministe de POC Migration
+L'analyseur [`PocMigrationAnalyzer`](file:///c:/AMC-Pro/AMC-V8/AuctionMarketCore.Swing.Models.cs) évalue la dérive du POC sur $\ge 3$ profils clôturés consécutifs :
+* **Détection du Drift** : Vérifie la stricte consistance directionnelle ($POC_{t} > POC_{t-1} > POC_{t-2}$ pour un flux acheteur).
+* **Force de Migration ($0..100$)** : Calcule le drift cumulé en ticks, le drift moyen par session et l'overlap des Value Areas.
+* **Sécurité Anti-Chase & Stop Structurel** : Interdiction formelle d'acheter au-dessus du VAH du jour (`POC_MIGRATION_LONG_ABOVE_VAH`), forçant l'entrée sur pullback. Le stop structurel est placé sous le premier POC de la séquence (`OldestPoc`).
 
 ---
 
-### 5. Indicateurs Dashboard & Confluences : `VP LOC` & `VP CONF`
-* **`VP LOC` (*Volume Profile Location*)** : Synthétise la position exacte du prix par rapport à la structure globale (`INSIDE_VALUE`, `ABOVE_VAH`, `BELOW_VAL`, `TEST_POC`, `TEST_SD2_MONTH`, etc.).
-* **`VP CONF` (*Volume Profile Confluence*)** : Identifie les intersections multi-temporelles et multi-modèles (ex: $\text{VAL Semaine} + \text{VWAP } SD -2\text{ Mois} + \text{NPOC}$), déclenchant des alertes Telegram prioritaires et le scoring maximal de confluence.
+### 5. Setup Dynamique : Current Monthly VWAP Band Retest
+Implémenté selon le setup `MonthlyVwapBandRetest` :
+* **Objectif** : Capter les accélérations de tendance mensuelle sur retest des bandes $SD \pm 1$ du VWAP en cours de construction.
+* **Gestion des Epochs Mobiles** : Utilise [`MonthlyBandEpochState`](file:///c:/AMC-Pro/AMC-V8/AuctionMarketCore.Swing.Models.cs) pour geler le prix de référence et éviter les faux retests sur bandes dérivantes.
+* **Validation de Pente Normalisée** : La pente du VWAP est validée en ticks/heure ($\ge 2.0\text{ t/h}$) et normalisée par l'ATR.
+* **Discipline de Clôture** : Rejet strict des contacts intrabar non confirmés ; nécessite une acceptation multi-barres préalable et une clôture confirmée au-dessus de $SD +1$ (Long) ou sous $SD -1$ (Short).
+
+---
+
+## 🎯 Matrice Quantitative Multi-Actifs (8 Instruments)
+
+| Symbole | Nom de l'Instrument | Exchange | Tick Size | Valeur du Tick | Risque Scalping ($) | Risque Swing ($) | Min / Max Stop Swing (Ticks) | Presets Dédiés |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **ES** | E-mini S&P 500 | CME | 0.25 | **$12.50** | $250 | $250 | 16 t (4.0 pts) / 80 t (20.0 pts) | `CONFIG_ES_SCALPING_PRO` / `CONFIG_ES_SWING` |
+| **MES** | Micro E-mini S&P 500 | CME | 0.25 | **$1.25** | $50 | $50 | 16 t (4.0 pts) / 80 t (20.0 pts) | `CONFIG_MES_SCALPING_PRO` / `CONFIG_MES_SWING` |
+| **NQ** | E-mini Nasdaq 100 | CME | 0.25 | **$5.00** | $300 | $300 | 40 t (10.0 pts) / 240 t (60.0 pts) | `CONFIG_NQ_SCALPING_PRO` / `CONFIG_NQ_SWING` |
+| **MNQ** | Micro E-mini Nasdaq 100 | CME | 0.25 | **$0.50** | $60 | $60 | 40 t (10.0 pts) / 240 t (60.0 pts) | `CONFIG_MNQ_SCALPING_PRO` / `CONFIG_MNQ_SWING` |
+| **GC** | Gold Futures | COMEX | 0.10 | **$10.00** | $250 | $250 | 20 t ($2.0) / 150 t ($15.0) | `CONFIG_GC_SCALPING_PRO` / `CONFIG_GC_SWING` |
+| **MGC** | Micro Gold Futures | COMEX | 0.10 | **$1.00** | $50 | $50 | 20 t ($2.0) / 150 t ($15.0) | `CONFIG_MGC_SCALPING_PRO` / `CONFIG_MGC_SWING` |
+| **CL** | Crude Oil Futures | NYMEX | 0.01 | **$10.00** | $250 | $250 | 25 t ($0.25) / 150 t ($1.50) | `CONFIG_CL_SCALPING_PRO` / `CONFIG_CL_SWING` |
+| **MCL** | Micro Crude Oil | NYMEX | 0.01 | **$1.00** | $50 | $50 | 25 t ($0.25) / 150 t ($1.50) | `CONFIG_MCL_SCALPING_PRO` / `CONFIG_MCL_SWING` |
 
 ---
 
@@ -138,84 +173,102 @@ Le système intègre un moteur continu d'adaptation multi-régimes permettant de
 
 ```text
 AMC-V8/
-├── AuctionMarketCore.cs              # Moteur principal & Intégration NinjaTrader (classe partielle racine)
-├── AuctionMarketCore.Sniper.cs       # Pipeline N1-N4, Gates, Scoring & Shadow Journal
-├── AuctionMarketCore.ScalpingPro.cs  # SMC, Footprint, Scoring pondéré 100pts, Amortissement VWAP
-├── AuctionMarketCore.Engine.cs       # Moteur de calcul des flux, deltas, CVD et microstructure
+├── AuctionMarketCore.cs              # Moteur racine & Cycle de vie NinjaTrader (classe partielle)
+├── AuctionMarketCore.Swing.cs        # Pipeline d'évaluation, signaux, risque & trades Swing
+├── AuctionMarketCore.Swing.Models.cs # Modèles, énumérations, PocMigration, MonthlyBandEpoch, Scoring
+├── AuctionMarketCore.ScalpingPro.cs  # SMC, Footprint, Scoring 100pts & Amortissement VWAP Scalping
+├── AuctionMarketCore.Sniper.cs       # Pipeline N1-N4 historique, Gates & Journal Shadow Scalping
+├── AuctionMarketCore.Engine.cs       # Calculs de flux, deltas, CVD, OrderFlow VWAP & SD bands
 ├── AuctionMarketCore.Features.cs     # Extraction des patterns de footprint & absorption
-├── AuctionMarketCore.VolumeProfile.cs# Gestion des événements VP, contextes et alertes Telegram
-├── AuctionMarketCore.Render.cs       # Rendu graphique WPF et affichage du Dashboard
-├── AuctionMarketCore.Network.cs      # Telegram, alertes et communication réseau
-├── AuctionMarketCore.Exports.cs      # Exports publics pour Strategy Analyzer et pont MT5
-├── AuctionMarketCore.MarketIntelligence.cs # Module Market Intelligence
-├── VolumeProfile/                      # Moteur Volume Profile autonome
-│   ├── VolumeProfileModels.cs          # Modèles de données (ClosedVolumeProfile, Nodes, RefLevel)
+├── AuctionMarketCore.VolumeProfile.cs# Événements VP, contextes multi-sessions et alertes
+├── AuctionMarketCore.Render.cs       # Rendu graphique WPF/Direct2D et Dashboard UI
+├── AuctionMarketCore.Network.cs      # Pont réseau TCP/JSON et émetteur Telegram asynchrone
+├── AuctionMarketCore.Exports.cs      # Exports CSV temps réel, Strategy Analyzer & pont MT5
+├── AuctionMarketCore.MarketIntelligence.cs # Contexte multi-facteurs & calendrier news
+├── VolumeProfile/                      # Moteur Volume Profile autonome & SQLite
+│   ├── VolumeProfileModels.cs          # Modèles (ClosedVolumeProfile, Nodes, RefLevel)
 │   ├── VolumeProfileCalculator.cs      # Calcul déterministe POC, VA 70%, VWAP, SD1/2/3, HVN/LVN
 │   ├── VolumeProfileRepository.cs      # Persistance SQLite, tables et migration de schéma
 │   ├── VolumeProfileManager.cs         # Transitions de sessions (RTH/Jour/Sem/Mois) et cache RAM
 │   └── VolumeProfileAnalyzer.cs        # Analyse de proximité, confluences et VP LOC / VP CONF
 ├── Tests/                              # Suite de tests de production (.NET Core)
-│   ├── Program.cs                      # 35 tests unitaires validant calculs, SQLite, scoring et inflexion
+│   ├── Program.cs                      # 99 tests unitaires et d'intégration validant 100% du moteur
 │   └── VolumeProfileTests.csproj       # Projet de tests automatisés
-├── MD/                                 # Guides techniques et documentation approfondie
-│   └── VOLUME_PROFILE_GUIDE.md         # Manuel complet Volume Profile, mathématiques et playbooks
-├── configs/                            # Fichiers de configuration XML institutionnels par instrument
-│   └── SCALPING_PRO/                   # Presets Scalping Pro (MNQ, NQ, ES, MES, GC, MGC, CL, MCL)
-├── Python/                             # Scripts d'audit de performance et analyse de signaux
+├── configs/                            # Configurations XML institutionnelles de production
+│   ├── SCALPING_PRO/                   # Presets ScalpingPro (MNQ, NQ, ES, MES, GC, MGC, CL, MCL)
+│   └── SWING/                          # Presets Swing (MNQ, NQ, ES, MES, GC, MGC, CL, MCL)
+├── MD/                                 # Manuels techniques, ADR et rapports d'audit
+│   ├── SCALPING_PRO_VS_SWING_DIFFERENCES.md # Comparatif détaillé des deux moteurs
+│   ├── SWING_CONFIGURATION_MATRIX.md   # Matrice quantitative des 8 instruments Swing
+│   ├── SWING_AUDIT_AND_ADR_REPORT.md   # ADR & Diagnostic d'architecture Swing
+│   ├── ZERO_TRUST_SWING_TEST_REPORT.md # Rapport de validation des 99 tests unitaires
+│   └── VOLUME_PROFILE_GUIDE.md         # Manuel complet Volume Profile et playbooks
+├── Python/                             # Scripts d'audit de performance, shadow analysis et synchronisation
 ├── historical-data/                    # Données de marché haute résolution (Ticks / 1-Minute)
-├── shadow/                             # Journaux d'audit de production (Shadow Outlines)
+├── shadow/                             # Journaux d'audit de production
+│   ├── trades.csv                      # Journal d'audit Shadow ScalpingPro
+│   └── swing_trades.csv                # Journal d'audit Shadow Swing
 └── README.md                           # Documentation générale du projet
 ```
 
 ---
 
-## 🛠️ Installation et Validation
+## 🛠️ Installation, Déploiement et Validation
 
-### 1. Compilation & Tests Automatisés
-Le projet intègre une suite complète de **35 tests unitaires de non-régression** (Volume Profile, VWAP Clôturé, SD Bands, SQLite, Inflexion Macro N1, Amortissement Continu, SMC, FVG, Footprint, Dashboard) :
+### 1. Compilation & Suite de Tests Automatisés
+Le projet intègre une suite de **99 tests de non-régression et d'intégration stateful** (Volume Profile, VWAP Clôturé, Bandes SD, SQLite, POC Migration, Monthly VWAP Retest, SMC, Risk Manager, Trailing TP1/BE/TP2, News Filter, Isolation ScalpingPro/Swing) :
+
 ```powershell
 dotnet run --project Tests/VolumeProfileTests.csproj
 ```
+*Validation attendue : `99 REUSSIS, 0 ECHOUES (100% PASS)`.*
+
+---
 
 ### 2. Déploiement dans NinjaTrader 8
-Le script `Python/sync_nt8_custom.py` synchronise les sources vers le dossier `AuctionMarketCore` de NinjaTrader. Vérifiez les chemins locaux dans le script avant utilisation.
+Le script `Python/sync_nt8_custom.py` synchronise automatiquement les sources vers le dossier d'indicateurs de NinjaTrader 8 :
 
-1. Copiez les fichiers `.cs` et les dossiers `VolumeProfile/` et `MarketIntelligence/` dans le répertoire d'indicateurs personnalisés de NinjaTrader 8 :
+```powershell
+python Python/sync_nt8_custom.py
+```
+
+Ou effectuez une copie manuelle :
+1. Copiez tous les fichiers `.cs` et les dossiers `VolumeProfile/` et `MarketIntelligence/` dans :
    ```text
-   Documents\NinjaTrader 8\bin\Custom\Indicators\
+   Documents\NinjaTrader 8\bin\Custom\Indicators\AuctionMarketCore\
    ```
-2. Compilez via l'éditeur NinjaScript (touche `F5`).
-3. Appliquez l'indicateur `AuctionMarketCore` sur votre graphique (par exemple `MNQ` ou `NQ` en 1-minute / 5-minutes volumétrique).
-4. Chargez le preset XML correspondant à votre instrument dans `configs/SCALPING_PRO/`.
+2. Compilez dans l'éditeur NinjaScript (touche **`F5`**).
+3. Insérez l'indicateur `AuctionMarketCore` sur votre graphique :
+   * **Pour ScalpingPro** : Graphique 1 min ou 5 min volumétrique (`MNQ`, `NQ`, `ES`, etc.).
+   * **Pour Swing** : Graphique 15 min ou 60 min avec série HTF 240 min (4H).
+4. Chargez le template XML adapté depuis `configs/SCALPING_PRO/` ou `configs/SWING/`.
 
 ---
 
 ## 📊 Analyse des Performances & Audit Shadow
 
-Pour analyser et valider les performances du système :
-* Exécutez le script d'analyse sur vos journaux d'audit shadow récents :
-  ```bash
+Pour analyser et auditer les signaux générés :
+* **Audit ScalpingPro** :
+  ```powershell
   python Python/analyze_latest_shadow.py
   ```
-* Testez l'impact du stop dynamique et du filtre anti-doublon :
-  ```bash
-  python Python/test_cooldown_impact.py
-  ```
-* Consultez les journaux d'audit situés dans `shadow/AuctionMarketCore_journal_sniper.csv` pour analyser chaque opportunité détectée, son score pondéré, ses sous-notes ($N1$ à $N4$) et ses $R$-multiples.
+  Consultez `shadow/trades.csv` pour inspecter les sous-notes $N1$ à $N4$, les scores et les $R$-multiples intraday.
+* **Audit Swing** :
+  Consultez `shadow/swing_trades.csv` pour analyser les exécutions partielles TP1 ($1.5\text{R}$), les stops déplacés à Break-Even ($+1\text{ tick}$) et les prises de bénéfice finales TP2 ($3.0\text{R}$).
 
 ---
 
-## Nettoyage et périmètre du projet
+## 🔒 Périmètre & Gouvernance du Projet
 
-Le dépôt ne conserve que le moteur `AuctionMarketCore` et les configurations `SCALPING_PRO`. Les anciens presets et le code mort associé ont été retirés. Toute nouvelle fonctionnalité doit préserver ce périmètre et éviter de réintroduire des branches génériques de preset sans justification d’architecture.
+Le dépôt `AMC-V8` est strictement réservé aux deux moteurs officiels : **`ScalpingPro`** et **`Swing`**. Tout code orphelin ou ancien preset non maintenu est exclu. Toute modification future doit préserver l'isolation totale entre les deux moteurs et maintenir la validation intégrale des **99 tests unitaires**.
 
-## Références
+---
 
-[1] Documentation technique du projet AMC-V8, *Architecture institutionnelle*, Août 2026.
-[2] Fichier `AuctionMarketCore.ScalpingPro.cs`, Paramètres de seuil, scoring pondéré, modulateurs VWAP et risque.
-[3] Fichier `AuctionMarketCore.Sniper.cs`, Pipeline N1-N4, Gates et gestion du risque.
-[4] Module `VolumeProfile/`, Modèles mathématiques, calcul déterministe et persistance SQLite.
-[5] Document `MD/VOLUME_PROFILE_GUIDE.md`, Manuel complet Volume Profile et playbooks d'intervention.
-[6] Dépôt GitHub `amc-pro/AMC-V8`, Dossier `/configs/SCALPING_PRO/`.
-[7] Système de journalisation Shadow, `shadow/AuctionMarketCore_journal_sniper.csv`.
+## 📚 Références & Documentation Associée
 
+* [1] Architecture & Différences : [`MD/SCALPING_PRO_VS_SWING_DIFFERENCES.md`](file:///c:/AMC-Pro/AMC-V8/MD/SCALPING_PRO_VS_SWING_DIFFERENCES.md)
+* [2] Matrice de Configuration Swing : [`configs/SWING/SWING_CONFIGURATION_MATRIX.md`](file:///c:/AMC-Pro/AMC-V8/configs/SWING/SWING_CONFIGURATION_MATRIX.md)
+* [3] ADR & Audit d'Architecture Swing : [`MD/SWING_AUDIT_AND_ADR_REPORT.md`](file:///c:/AMC-Pro/AMC-V8/MD/SWING_AUDIT_AND_ADR_REPORT.md)
+* [4] Rapport de Validation 99 Tests : [`MD/ZERO_TRUST_SWING_TEST_REPORT.md`](file:///c:/AMC-Pro/AMC-V8/MD/ZERO_TRUST_SWING_TEST_REPORT.md)
+* [5] Manuel Volume Profile & Playbooks : [`MD/VOLUME_PROFILE_GUIDE.md`](file:///c:/AMC-Pro/AMC-V8/MD/VOLUME_PROFILE_GUIDE.md)
+* [6] Moteur Swing C# : [`AuctionMarketCore.Swing.cs`](file:///c:/AMC-Pro/AMC-V8/AuctionMarketCore.Swing.cs) et [`AuctionMarketCore.Swing.Models.cs`](file:///c:/AMC-Pro/AMC-V8/AuctionMarketCore.Swing.Models.cs)
