@@ -938,7 +938,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             RequireFootprintEvidence = true;         // footprint obligatoire pour reversals
             SmcEventMaxAgeBars = 12;
-            TierSilverScore = 45;
+            TierSilverScore = 50;
             TierGoldScore = 65;
 
             EnableShadowJournal = true;
