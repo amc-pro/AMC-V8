@@ -553,11 +553,11 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Période ATR Régime", Order = 2, GroupName = "Filtres Régime")]
         public int RegimeAtrPeriod { get; set; }
 
-        [Range(0.1, 10.0)]
+        [Range(0.1, 100.0)]
         [Display(Name = "ATR Min Régime (ticks)", Order = 3, GroupName = "Filtres Régime")]
         public double RegimeMinAtrTicks { get; set; }
 
-        [Range(0.0, 50.0)]
+        [Range(0.0, 500.0)]
         [Display(Name = "ATR Max Régime (ticks)", Order = 4, GroupName = "Filtres Régime")]
         public double RegimeMaxAtrTicks { get; set; }
 
