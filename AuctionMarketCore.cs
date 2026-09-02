@@ -1890,7 +1890,29 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             runtimeErrorCount++;
             string msg = ex == null ? "?" : (ex.GetType().Name + (string.IsNullOrEmpty(ex.Message) ? "" : " - " + ex.Message));
-            lastRuntimeError = (origin ?? "?") + ": " + msg;
+            // Extraire la première frame AMC pour le diagnostic dashboard
+            string frame = "";
+            if (ex != null)
+            {
+                try
+                {
+                    var st = new System.Diagnostics.StackTrace(ex, true);
+                    for (int i = 0; i < st.FrameCount; i++)
+                    {
+                        var f = st.GetFrame(i);
+                        var m = f.GetMethod();
+                        if (m != null && m.DeclaringType != null && m.DeclaringType.FullName != null
+                            && m.DeclaringType.FullName.IndexOf("AuctionMarketCore", StringComparison.Ordinal) >= 0)
+                        {
+                            int line = f.GetFileLineNumber();
+                            frame = " @" + m.Name + (line > 0 ? ":L" + line : "");
+                            break;
+                        }
+                    }
+                }
+                catch { }
+            }
+            lastRuntimeError = (origin ?? "?") + ": " + msg + frame;
             if (EnableDebugMode && ex != null)
                 Print("VP_Error[" + origin + "]: " + ex.GetType().Name + " - " + ex.Message + " @ " + ex.StackTrace);
         }

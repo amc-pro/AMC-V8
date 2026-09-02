@@ -360,35 +360,36 @@ namespace NinjaTrader.NinjaScript.Indicators
                 InitSwingEngine();
             }
 
-            try
+            if (evalBarIndex < 0 || evalBarIndex == swingLastEvaluatedBar) return;
+            swingLastEvaluatedBar = evalBarIndex;
+
+            if (CurrentBars == null || volumetricBarsIndex < 0 || volumetricBarsIndex >= CurrentBars.Length || CurrentBars[volumetricBarsIndex] < 5) return;
+
+            if (snClose <= 0 && volumetricBarsIndex < BarsArray.Length)
             {
-                if (evalBarIndex < 0 || evalBarIndex == swingLastEvaluatedBar) return;
-                swingLastEvaluatedBar = evalBarIndex;
-
-                if (CurrentBars == null || volumetricBarsIndex < 0 || volumetricBarsIndex >= CurrentBars.Length || CurrentBars[volumetricBarsIndex] < 5) return;
-
-                if (snClose <= 0 && volumetricBarsIndex < BarsArray.Length)
-                {
-                    CacheEvaluatedBar();
-                }
-
-                // 1. Mise à jour des trades ouverts (vérification des Stops et Take Profits)
-                UpdateOpenSwingTrades();
-
-                // 2. Construction du contexte de marché Swing immuable
-                SwingContext ctxLong = BuildSwingContext(true);
-                SwingContext ctxShort = BuildSwingContext(false);
-
-                // 3. Détection et évaluation des signaux sur les 5 familles institutionnelles
-                EvaluateSwingDirection(ctxLong, SwingDirection.Long);
-                EvaluateSwingDirection(ctxShort, SwingDirection.Short);
+                try { CacheEvaluatedBar(); }
+                catch (Exception ex) { RegisterRuntimeError("Swing.CacheBar", ex); return; }
             }
-            catch (Exception ex)
-            {
-                RegisterRuntimeError("SwingOnEvaluatedBar", ex);
-                if (EnableDebugMode)
-                    Print("VP_Swing Error: " + ex.Message);
-            }
+
+            // 1. Mise à jour des trades ouverts (vérification des Stops et Take Profits)
+            try { UpdateOpenSwingTrades(); }
+            catch (Exception ex) { RegisterRuntimeError("Swing.UpdateTrades", ex); }
+
+            // 2. Construction du contexte de marché Swing immuable
+            SwingContext ctxLong = null;
+            SwingContext ctxShort = null;
+            try { ctxLong = BuildSwingContext(true); }
+            catch (Exception ex) { RegisterRuntimeError("Swing.BuildCtxLong", ex); }
+
+            try { ctxShort = BuildSwingContext(false); }
+            catch (Exception ex) { RegisterRuntimeError("Swing.BuildCtxShort", ex); }
+
+            // 3. Détection et évaluation des signaux sur les 5 familles institutionnelles
+            try { EvaluateSwingDirection(ctxLong, SwingDirection.Long); }
+            catch (Exception ex) { RegisterRuntimeError("Swing.EvalLong", ex); }
+
+            try { EvaluateSwingDirection(ctxShort, SwingDirection.Short); }
+            catch (Exception ex) { RegisterRuntimeError("Swing.EvalShort", ex); }
         }
 
         private SwingContext BuildSwingContext(bool isBuy)
@@ -817,19 +818,22 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private SwingSignal BuildAndSizeSignal(SwingContext ctx, SwingSetupType setup, SwingDirection dir, SwingWeightedScore score, SwingTier tier)
         {
+            if (ctx == null) return null;
+
+            double tick = ctx.TickSize > 0 ? ctx.TickSize : (TickSize > 0 ? TickSize : 0.25);
             double entry = ctx.Close;
             bool isLong = dir == SwingDirection.Long;
 
             // Calcul du niveau structurel de référence
-            double structuralLevel = isLong ? ctx.Low - (StopBufferTicks * TickSize) : ctx.High + (StopBufferTicks * TickSize);
+            double structuralLevel = isLong ? ctx.Low - (StopBufferTicks * tick) : ctx.High + (StopBufferTicks * tick);
             if (setup == SwingSetupType.RejectExtreme && ctx.Sd2Lower > 0 && isLong)
-                structuralLevel = Math.Min(structuralLevel, ctx.Sd2Lower - (StopBufferTicks * TickSize));
+                structuralLevel = Math.Min(structuralLevel, ctx.Sd2Lower - (StopBufferTicks * tick));
             else if (setup == SwingSetupType.RejectExtreme && ctx.Sd2Upper > 0 && !isLong)
-                structuralLevel = Math.Max(structuralLevel, ctx.Sd2Upper + (StopBufferTicks * TickSize));
+                structuralLevel = Math.Max(structuralLevel, ctx.Sd2Upper + (StopBufferTicks * tick));
             else if (setup == SwingSetupType.PocMigration && ctx.PocMigrationOldestPoc > 0)
             {
-                structuralLevel = isLong ? ctx.PocMigrationOldestPoc - (StopBufferTicks * TickSize)
-                                         : ctx.PocMigrationOldestPoc + (StopBufferTicks * TickSize);
+                structuralLevel = isLong ? ctx.PocMigrationOldestPoc - (StopBufferTicks * tick)
+                                         : ctx.PocMigrationOldestPoc + (StopBufferTicks * tick);
             }
             else if (setup == SwingSetupType.MonthlyVwapBandRetest)
             {
@@ -837,21 +841,22 @@ namespace NinjaTrader.NinjaScript.Indicators
                 {
                     double bandRef = ctx.CurrentMonthlySd1Upper;
                     double lowRef = Math.Min(ctx.Low, bandRef);
-                    structuralLevel = lowRef - (StopBufferTicks * TickSize);
+                    structuralLevel = lowRef - (StopBufferTicks * tick);
                 }
                 else
                 {
                     double bandRef = ctx.CurrentMonthlySd1Lower;
                     double highRef = Math.Max(ctx.High, bandRef);
-                    structuralLevel = highRef + (StopBufferTicks * TickSize);
+                    structuralLevel = highRef + (StopBufferTicks * tick);
                 }
             }
 
             // Calcul du Stop hybride (ATR + Structurel borné par Min/MaxStopTicks)
-            double stop = swingRiskManager.CalculateHybridStop(
-                entry, dir, structuralLevel, ctx.AtrCurrent, StopAtrMultiple, TickSize, MinStopTicks, MaxStopTicks);
+            double stop = swingRiskManager != null
+                ? swingRiskManager.CalculateHybridStop(entry, dir, structuralLevel, ctx.AtrCurrent, StopAtrMultiple, tick, MinStopTicks, MaxStopTicks)
+                : (isLong ? entry - (tick * 20) : entry + (tick * 20));
 
-            double stopDistTicks = Math.Abs(entry - stop) / TickSize;
+            double stopDistTicks = Math.Abs(entry - stop) / tick;
             if (stopDistTicks < MinStopTicks || stopDistTicks > MaxStopTicks)
                 return null;
 
@@ -860,21 +865,33 @@ namespace NinjaTrader.NinjaScript.Indicators
                                           : (ctx.DailyVal < entry ? ctx.DailyVal : (ctx.Sd2Lower < entry ? ctx.Sd2Lower : 0.0));
 
             double tp1, tp2;
-            swingRiskManager.CalculateTargets(entry, stop, dir, TargetR1, TargetR2, opposingLevel, out tp1, out tp2);
+            if (swingRiskManager != null)
+            {
+                swingRiskManager.CalculateTargets(entry, stop, dir, TargetR1, TargetR2, opposingLevel, out tp1, out tp2);
+            }
+            else
+            {
+                tp1 = isLong ? entry + (stopDistTicks * tick * TargetR1) : entry - (stopDistTicks * tick * TargetR1);
+                tp2 = isLong ? entry + (stopDistTicks * tick * TargetR2) : entry - (stopDistTicks * tick * TargetR2);
+            }
 
-            double tp1DistTicks = Math.Abs(entry - tp1) / TickSize;
-            double tp2DistTicks = Math.Abs(entry - tp2) / TickSize;
+            double tp1DistTicks = Math.Abs(entry - tp1) / tick;
+            double tp2DistTicks = Math.Abs(entry - tp2) / tick;
             double rr1 = stopDistTicks > 0 ? tp1DistTicks / stopDistTicks : 0.0;
             double rr2 = stopDistTicks > 0 ? tp2DistTicks / stopDistTicks : 0.0;
 
             if (rr1 < MinRiskReward) return null;
 
             // Dimensionnement exact de la position selon la valeur du tick
-            double tickVal = ctx.PointValue * TickSize;
-            int contracts = swingRiskManager.CalculatePositionSize(
-                ctx.RiskPerTradeCurrency, stopDistTicks, tickVal, ExecutionCostTicks, MaxContracts);
+            double ptVal = ctx.PointValue > 0 ? ctx.PointValue : ResolvePointValue();
+            double tickVal = ptVal * tick;
+            int contracts = swingRiskManager != null
+                ? swingRiskManager.CalculatePositionSize(ctx.RiskPerTradeCurrency, stopDistTicks, tickVal, ExecutionCostTicks, MaxContracts)
+                : 1;
 
             if (contracts <= 0) return null;
+
+            double totalScoreVal = score != null ? score.Total : 0.0;
 
             var signal = new SwingSignal
             {
@@ -898,7 +915,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 RiskRewardRatio2 = rr2,
                 PositionSizeContracts = contracts,
                 EstimatedRiskCurrency = (stopDistTicks + ExecutionCostTicks) * tickVal * contracts,
-                ExecutionNotes = string.Format(CultureInfo.InvariantCulture, "{0} | {1} | Score={2:F1}", setup, tier, score.Total),
+                ExecutionNotes = string.Format(CultureInfo.InvariantCulture, "{0} | {1} | Score={2:F1}", setup, tier, totalScoreVal),
                 MonthlyPeriodKey = ctx.MonthlyPeriodKey,
                 MonthlyVwapAtSetup = ctx.CurrentMonthlyVwap,
                 MonthlySd1UpperAtSetup = ctx.CurrentMonthlySd1Upper,
@@ -908,8 +925,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 MonthlyVwapSlopeAtrNormalizedAtSetup = ctx.CurrentMonthlyVwapSlopeAtrNormalized,
                 MonthlyBandEpochIdAtSetup = ctx.MonthlyBandEpochId,
                 MonthlyBandAcceptanceBarsAtSetup = ctx.MonthlyBandAcceptanceBars,
-                RetestDistanceTicks = isLong ? Math.Abs(ctx.Low - ctx.CurrentMonthlySd1Upper) / TickSize
-                                             : Math.Abs(ctx.High - ctx.CurrentMonthlySd1Lower) / TickSize
+                RetestDistanceTicks = isLong ? Math.Abs(ctx.Low - ctx.CurrentMonthlySd1Upper) / tick
+                                             : Math.Abs(ctx.High - ctx.CurrentMonthlySd1Lower) / tick
             };
 
             return signal;
