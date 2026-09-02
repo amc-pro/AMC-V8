@@ -1889,9 +1889,10 @@ namespace NinjaTrader.NinjaScript.Indicators
         private void RegisterRuntimeError(string origin, Exception ex)
         {
             runtimeErrorCount++;
-            lastRuntimeError = (origin ?? "?") + ": " + (ex == null ? "?" : ex.GetType().Name);
+            string msg = ex == null ? "?" : (ex.GetType().Name + (string.IsNullOrEmpty(ex.Message) ? "" : " - " + ex.Message));
+            lastRuntimeError = (origin ?? "?") + ": " + msg;
             if (EnableDebugMode && ex != null)
-                Print("VP_Error[" + origin + "]: " + ex.GetType().Name + " - " + ex.Message);
+                Print("VP_Error[" + origin + "]: " + ex.GetType().Name + " - " + ex.Message + " @ " + ex.StackTrace);
         }
 
         // chemin temps reel (premier tick de session) : plus de divergence possible.

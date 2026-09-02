@@ -1013,9 +1013,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         /// microstructurelles de la barre evaluee.</summary>
         private void SniperOnEvaluatedBar()
         {
-            if (!EnableSniperEngine) return;
-            // Preset Swing : le moteur macro Swing remplace l'émission Sniper/ScalpingPro.
-            if (IsSwing && EnableSwingEngine) return;
+            if (!EnableSniperEngine && !IsSwing) return;
 
             try
             {
@@ -1052,6 +1050,10 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 // 4. Microstructure : evenements d'absorption normalises
                 DetectSniperAbsorption();
+
+                // Preset Swing : les étapes 1 à 4 ont préparé les données partagées (barres, profils, absorption),
+                // l'émission des signaux scalping / sniper et le suivi des trades scalping sont contournés.
+                if (IsSwing && EnableSwingEngine) return;
 
                 //       Le suivi SMC doit voir la barre AVANT le scoring des candidats.
                 ScalpingProOnEvaluatedBar();

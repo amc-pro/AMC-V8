@@ -131,16 +131,16 @@ namespace NinjaTrader.NinjaScript.Indicators
             get { return vpManager; }
         }
 
-        private ISwingScorer swingScorer;
-        private ISwingRiskManager swingRiskManager;
-        private PocMigrationAnalyzer pocMigrationAnalyzer;
+        private ISwingScorer swingScorer = new SwingScorer();
+        private ISwingRiskManager swingRiskManager = new SwingRiskManager();
+        private PocMigrationAnalyzer pocMigrationAnalyzer = new PocMigrationAnalyzer();
         private readonly List<SwingSignal> activeSwingSignals = new List<SwingSignal>();
         private readonly List<TrackedSwingTrade> openSwingTrades = new List<TrackedSwingTrade>();
         private readonly List<TrackedSwingTrade> closedSwingTrades = new List<TrackedSwingTrade>();
         private readonly List<double> monthlyVwapHistory = new List<double>();
         private readonly List<KeyValuePair<DateTime, double>> monthlyVwapTimeHistory = new List<KeyValuePair<DateTime, double>>();
-        private MonthlyBandEpochState currentUpperBandEpoch;
-        private MonthlyBandEpochState currentLowerBandEpoch;
+        private MonthlyBandEpochState currentUpperBandEpoch = new MonthlyBandEpochState { BandType = "MONTHLY_SD1_UPPER" };
+        private MonthlyBandEpochState currentLowerBandEpoch = new MonthlyBandEpochState { BandType = "MONTHLY_SD1_LOWER" };
         private int consecutiveAboveSd1Bars = 0;
         private int consecutiveBelowSd1Bars = 0;
         private int monthlyBandRetestCount = 0;
@@ -355,12 +355,22 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (!IsSwing || !EnableSwingEngine) return;
 
+            if (swingScorer == null || swingRiskManager == null || pocMigrationAnalyzer == null || currentUpperBandEpoch == null || currentLowerBandEpoch == null)
+            {
+                InitSwingEngine();
+            }
+
             try
             {
                 if (evalBarIndex < 0 || evalBarIndex == swingLastEvaluatedBar) return;
                 swingLastEvaluatedBar = evalBarIndex;
 
-                if (CurrentBars[volumetricBarsIndex] < 5) return;
+                if (CurrentBars == null || volumetricBarsIndex < 0 || volumetricBarsIndex >= CurrentBars.Length || CurrentBars[volumetricBarsIndex] < 5) return;
+
+                if (snClose <= 0 && volumetricBarsIndex < BarsArray.Length)
+                {
+                    CacheEvaluatedBar();
+                }
 
                 // 1. Mise à jour des trades ouverts (vérification des Stops et Take Profits)
                 UpdateOpenSwingTrades();
@@ -389,11 +399,16 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             double gapPercent = CalculateSessionGapPercent();
 
+            DateTime rawBarTime = GetVolumetricTime();
+            DateTime barTimeUtc = rawBarTime != DateTime.MinValue
+                ? (rawBarTime.Kind == DateTimeKind.Utc ? rawBarTime : rawBarTime.ToUniversalTime())
+                : DateTime.UtcNow;
+
             var ctx = new SwingContext
             {
                 Symbol = Instrument != null && Instrument.MasterInstrument != null ? Instrument.MasterInstrument.Name : "SYM",
                 BarIndex = evalBarIndex,
-                TimeUtc = GetVolumetricTime().ToUniversalTime(),
+                TimeUtc = barTimeUtc,
                 Open = snOpen,
                 High = snHigh,
                 Low = snLow,
@@ -502,7 +517,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     ctx.CurrentMonthlyStartUtc = monthStart;
 
                     // Maintien de l'historique temporel VWAP pour le calcul de pente normalisée
-                    DateTime curTimeUtc = GetVolumetricTime().ToUniversalTime();
+                    DateTime curTimeUtc = barTimeUtc;
                     if (monthlyVwapTimeHistory.Count == 0 || Math.Abs(monthlyVwapTimeHistory[monthlyVwapTimeHistory.Count - 1].Value - curVwap) > 1e-6)
                     {
                         monthlyVwapTimeHistory.Add(new KeyValuePair<DateTime, double>(curTimeUtc, curVwap));
@@ -605,7 +620,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                     }
 
                     // Attribution au contexte
-                    MonthlyBandEpochState activeEpoch = isBuy ? currentUpperBandEpoch : currentLowerBandEpoch;
+                    MonthlyBandEpochState activeEpoch = (isBuy ? currentUpperBandEpoch : currentLowerBandEpoch)
+                        ?? new MonthlyBandEpochState { BandType = isBuy ? "MONTHLY_SD1_UPPER" : "MONTHLY_SD1_LOWER" };
                     ctx.MonthlyBandEpochId = activeEpoch.EpochId;
                     ctx.MonthlyBandAcceptanceBars = isBuy ? consecutiveAboveSd1Bars : consecutiveBelowSd1Bars;
                     ctx.MonthlyBandEpochReferencePrice = activeEpoch.ReferencePrice;
@@ -623,7 +639,14 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Récupération des données de la barre précédente
             try
             {
-                if (volumetricBarsIndex < BarsArray.Length && CurrentBars[volumetricBarsIndex] >= 1)
+                if (volumetricBarsIndex >= 0
+                    && CurrentBars != null
+                    && volumetricBarsIndex < CurrentBars.Length
+                    && CurrentBars[volumetricBarsIndex] >= 1
+                    && Closes != null && volumetricBarsIndex < Closes.Length && Closes[volumetricBarsIndex].Count > 1
+                    && Opens != null && volumetricBarsIndex < Opens.Length && Opens[volumetricBarsIndex].Count > 1
+                    && Highs != null && volumetricBarsIndex < Highs.Length && Highs[volumetricBarsIndex].Count > 1
+                    && Lows != null && volumetricBarsIndex < Lows.Length && Lows[volumetricBarsIndex].Count > 1)
                 {
                     ctx.PrevClose = Closes[volumetricBarsIndex][1];
                     ctx.PrevOpen = Opens[volumetricBarsIndex][1];
@@ -693,8 +716,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             severity = 0;
             if (!EnableNewsFilter) return;
 
-            DateTime barTime = GetVolumetricTime();
-            if (barTime == DateTime.MinValue) return;
+            DateTime rawTime = GetVolumetricTime();
+            if (rawTime == DateTime.MinValue) return;
+            DateTime barTime = rawTime.Kind == DateTimeKind.Utc ? rawTime : rawTime.ToUniversalTime();
 
             int hourUtc = barTime.Hour;
             int minute = barTime.Minute;
@@ -717,10 +741,16 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             try
             {
-                if (sessionStartBarIndex >= 0 && volumetricBarsIndex < BarsArray.Length && CurrentBars[volumetricBarsIndex] >= sessionStartBarIndex)
+                if (sessionStartBarIndex >= 0
+                    && volumetricBarsIndex >= 0
+                    && volumetricBarsIndex < BarsArray.Length
+                    && CurrentBars != null
+                    && volumetricBarsIndex < CurrentBars.Length
+                    && CurrentBars[volumetricBarsIndex] >= sessionStartBarIndex)
                 {
                     int sessionStartOffset = CurrentBars[volumetricBarsIndex] - sessionStartBarIndex;
-                    if (sessionStartOffset >= 0 && sessionStartOffset < Opens[volumetricBarsIndex].Count && (sessionStartOffset + 1) < Closes[volumetricBarsIndex].Count)
+                    if (Opens != null && volumetricBarsIndex < Opens.Length && sessionStartOffset >= 0 && sessionStartOffset < Opens[volumetricBarsIndex].Count
+                        && Closes != null && volumetricBarsIndex < Closes.Length && (sessionStartOffset + 1) < Closes[volumetricBarsIndex].Count)
                     {
                         double sessionOpen = Opens[volumetricBarsIndex][sessionStartOffset];
                         double priorSessionClose = Closes[volumetricBarsIndex][sessionStartOffset + 1];
@@ -889,50 +919,60 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (sig == null) return;
 
-            var trade = new TrackedSwingTrade(sig, TickSize, ResolvePointValue());
-            openSwingTrades.Add(trade);
-            activeSwingSignals.Add(sig);
+            var trade = new TrackedSwingTrade(sig, TickSize > 0 ? TickSize : 0.25, ResolvePointValue());
+            if (openSwingTrades != null) openSwingTrades.Add(trade);
+            if (activeSwingSignals != null) activeSwingSignals.Add(sig);
 
             if (sig.SetupType == SwingSetupType.MonthlyVwapBandRetest)
             {
                 if (sig.Direction == SwingDirection.Long)
-                    currentUpperBandEpoch.RetestCount++;
+                {
+                    if (currentUpperBandEpoch != null) currentUpperBandEpoch.RetestCount++;
+                }
                 else
-                    currentLowerBandEpoch.RetestCount++;
+                {
+                    if (currentLowerBandEpoch != null) currentLowerBandEpoch.RetestCount++;
+                }
                 monthlyBandRetestCount++;
             }
 
             // Persistance SQLite
             if (volumeProfileManager != null && volumeProfileManager.Repository != null)
             {
-                volumeProfileManager.Repository.UpsertSwingTrade(trade);
+                try { volumeProfileManager.Repository.UpsertSwingTrade(trade); }
+                catch (Exception ex) { RegisterRuntimeError("ExecuteSwingSignal.UpsertSwingTrade", ex); }
             }
 
             // Log d'entrée dans le journal Shadow
-            LogSwingTrade(trade);
+            try { LogSwingTrade(trade); }
+            catch (Exception ex) { RegisterRuntimeError("ExecuteSwingSignal.LogSwingTrade", ex); }
 
             // Notification Telegram si activée
             if (EnableSwingTelegramAlerts && (sig.Tier == SwingTier.Fort || sig.Tier == SwingTier.TresFort))
             {
-                string msg = string.Format(CultureInfo.InvariantCulture,
-                    "🚨 <b>SWING {0} {1}</b>\n" +
-                    "Instrument: <code>{2}</code> | Tier: <b>{3}</b>\n" +
-                    "Setup: <b>{4}</b> | Score: <b>{5:F1}/100</b>\n" +
-                    "Entrée: <code>{6:F2}</code>\n" +
-                    "Stop: <code>{7:F2}</code> ({8:F0} ticks)\n" +
-                    "TP1: <code>{9:F2}</code> ({10:F1}R) | TP2: <code>{11:F2}</code> ({12:F1}R)\n" +
-                    "Taille: <b>{13} contrat(s)</b> | Risque: <b>${14:F2}</b>\n" +
-                    "Epoch: <code>{15}</code> | Pente: <b>{16:F1} t/h</b> ({17:F2} ATR)",
-                    sig.Direction == SwingDirection.Long ? "ACHAT (LONG)" : "VENTE (SHORT)",
-                    sig.Symbol, sig.Symbol, sig.Tier, sig.SetupType, sig.Score.Total,
-                    sig.EntryPrice, sig.InitialStopPrice, sig.StopDistanceTicks,
-                    sig.Target1Price, sig.RiskRewardRatio1, sig.Target2Price, sig.RiskRewardRatio2,
-                    sig.PositionSizeContracts, sig.EstimatedRiskCurrency,
-                    !string.IsNullOrEmpty(sig.MonthlyBandEpochIdAtSetup) ? sig.MonthlyBandEpochIdAtSetup : "N/A",
-                    sig.MonthlyVwapSlopeTicksPerHourAtSetup,
-                    sig.MonthlyVwapSlopeAtrNormalizedAtSetup);
+                try
+                {
+                    string msg = string.Format(CultureInfo.InvariantCulture,
+                        "🚨 <b>SWING {0} {1}</b>\n" +
+                        "Instrument: <code>{2}</code> | Tier: <b>{3}</b>\n" +
+                        "Setup: <b>{4}</b> | Score: <b>{5:F1}/100</b>\n" +
+                        "Entrée: <code>{6:F2}</code>\n" +
+                        "Stop: <code>{7:F2}</code> ({8:F0} ticks)\n" +
+                        "TP1: <code>{9:F2}</code> ({10:F1}R) | TP2: <code>{11:F2}</code> ({12:F1}R)\n" +
+                        "Taille: <b>{13} contrat(s)</b> | Risque: <b>${14:F2}</b>\n" +
+                        "Epoch: <code>{15}</code> | Pente: <b>{16:F1} t/h</b> ({17:F2} ATR)",
+                        sig.Direction == SwingDirection.Long ? "ACHAT (LONG)" : "VENTE (SHORT)",
+                        sig.Symbol ?? "SYM", sig.Symbol ?? "SYM", sig.Tier, sig.SetupType, sig.Score != null ? sig.Score.Total : 0.0,
+                        sig.EntryPrice, sig.InitialStopPrice, sig.StopDistanceTicks,
+                        sig.Target1Price, sig.RiskRewardRatio1, sig.Target2Price, sig.RiskRewardRatio2,
+                        sig.PositionSizeContracts, sig.EstimatedRiskCurrency,
+                        !string.IsNullOrEmpty(sig.MonthlyBandEpochIdAtSetup) ? sig.MonthlyBandEpochIdAtSetup : "N/A",
+                        sig.MonthlyVwapSlopeTicksPerHourAtSetup,
+                        sig.MonthlyVwapSlopeAtrNormalizedAtSetup);
 
-                SendTelegramMessage(msg, null, MiTelegramChannel);
+                    SendTelegramMessage(msg, null, MiTelegramChannel);
+                }
+                catch { }
             }
         }
 
@@ -942,17 +982,23 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private void UpdateOpenSwingTrades()
         {
-            if (openSwingTrades.Count == 0) return;
+            if (openSwingTrades == null || openSwingTrades.Count == 0) return;
 
-            DateTime nowUtc = GetVolumetricTime().ToUniversalTime();
+            DateTime rawNow = GetVolumetricTime();
+            DateTime nowUtc = rawNow != DateTime.MinValue
+                ? (rawNow.Kind == DateTimeKind.Utc ? rawNow : rawNow.ToUniversalTime())
+                : DateTime.UtcNow;
+
             double high = snHigh;
             double low = snLow;
             double close = snClose;
+            double tick = TickSize > 0 ? TickSize : 0.25;
+            double ptVal = ResolvePointValue();
 
             for (int i = openSwingTrades.Count - 1; i >= 0; i--)
             {
                 TrackedSwingTrade t = openSwingTrades[i];
-                if (t.Closed)
+                if (t == null || t.Closed)
                 {
                     openSwingTrades.RemoveAt(i);
                     continue;
@@ -964,11 +1010,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                 bool stopTriggered = (t.IsLong && low <= t.CurrentStopPrice) || (!t.IsLong && high >= t.CurrentStopPrice);
                 if (stopTriggered)
                 {
-                    t.CloseTrade(t.CurrentStopPrice, nowUtc, "STOP_LOSS", TickSize, ResolvePointValue());
+                    t.CloseTrade(t.CurrentStopPrice, nowUtc, "STOP_LOSS", tick, ptVal);
                     if (volumeProfileManager != null && volumeProfileManager.Repository != null)
-                        volumeProfileManager.Repository.UpsertSwingTrade(t);
+                    {
+                        try { volumeProfileManager.Repository.UpsertSwingTrade(t); }
+                        catch { }
+                    }
                     LogSwingTrade(t);
-                    closedSwingTrades.Add(t);
+                    if (closedSwingTrades != null) closedSwingTrades.Add(t);
                     openSwingTrades.RemoveAt(i);
                     continue;
                 }
@@ -979,16 +1028,19 @@ namespace NinjaTrader.NinjaScript.Indicators
                     bool tp1Triggered = (t.IsLong && high >= t.Target1Price) || (!t.IsLong && low <= t.Target1Price);
                     if (tp1Triggered)
                     {
-                        t.ExecutePartialExitTp1(t.Target1Price, nowUtc, TickSize, ResolvePointValue());
+                        t.ExecutePartialExitTp1(t.Target1Price, nowUtc, tick, ptVal);
                         t.ExecutionNotes += string.Format(CultureInfo.InvariantCulture, " [TP1_HIT ({0}c) -> BE]", t.PartialExitContracts);
                         if (volumeProfileManager != null && volumeProfileManager.Repository != null)
-                            volumeProfileManager.Repository.UpsertSwingTrade(t);
+                        {
+                            try { volumeProfileManager.Repository.UpsertSwingTrade(t); }
+                            catch { }
+                        }
                         LogSwingTrade(t);
 
                         // Si le trade a été clôturé intégralement à TP1 (ex: 1 seul contrat initial)
                         if (t.Closed)
                         {
-                            closedSwingTrades.Add(t);
+                            if (closedSwingTrades != null) closedSwingTrades.Add(t);
                             openSwingTrades.RemoveAt(i);
                             continue;
                         }
@@ -1001,11 +1053,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                     bool tp2Triggered = (t.IsLong && high >= t.Target2Price) || (!t.IsLong && low <= t.Target2Price);
                     if (tp2Triggered)
                     {
-                        t.CloseTrade(t.Target2Price, nowUtc, "TAKE_PROFIT_2", TickSize, ResolvePointValue());
+                        t.CloseTrade(t.Target2Price, nowUtc, "TAKE_PROFIT_2", tick, ptVal);
                         if (volumeProfileManager != null && volumeProfileManager.Repository != null)
-                            volumeProfileManager.Repository.UpsertSwingTrade(t);
+                        {
+                            try { volumeProfileManager.Repository.UpsertSwingTrade(t); }
+                            catch { }
+                        }
                         LogSwingTrade(t);
-                        closedSwingTrades.Add(t);
+                        if (closedSwingTrades != null) closedSwingTrades.Add(t);
                         openSwingTrades.RemoveAt(i);
                         continue;
                     }
