@@ -964,8 +964,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             try { LogSwingTrade(trade); }
             catch (Exception ex) { RegisterRuntimeError("ExecuteSwingSignal.LogSwingTrade", ex); }
 
-            // Notification Telegram si activée
-            if (EnableSwingTelegramAlerts && (sig.Tier == SwingTier.Fort || sig.Tier == SwingTier.TresFort))
+            // Notification Telegram si activée (Temps réel uniquement, pas pendant Replay / Historique)
+            if (State == State.Realtime && EnableSwingTelegramAlerts && (sig.Tier == SwingTier.Fort || sig.Tier == SwingTier.TresFort))
             {
                 try
                 {
@@ -996,6 +996,43 @@ namespace NinjaTrader.NinjaScript.Indicators
         #endregion
 
         #region Suivi des Trades Shadow Swing & Idempotence
+
+        private void RecordSwingOutcome(TrackedSwingTrade t)
+        {
+            if (t == null || t.Signal == null) return;
+            try
+            {
+                string family = t.Signal.SetupType.ToString();
+                FamilyStats fs;
+                if (!statsByFamily.TryGetValue(family, out fs))
+                {
+                    fs = new FamilyStats();
+                    statsByFamily[family] = fs;
+                }
+
+                if (t.RealizedR > 0)
+                {
+                    fs.Wins++;
+                    globalStats.Wins++;
+                }
+                else if (t.RealizedR < 0)
+                {
+                    fs.Losses++;
+                    globalStats.Losses++;
+                }
+                else
+                {
+                    fs.Timeouts++;
+                    globalStats.Timeouts++;
+                }
+
+                fs.SumR += t.RealizedR;
+                globalStats.SumR += t.RealizedR;
+
+                SavePersistedStats();
+            }
+            catch { }
+        }
 
         private void UpdateOpenSwingTrades()
         {
@@ -1034,6 +1071,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         catch { }
                     }
                     LogSwingTrade(t);
+                    RecordSwingOutcome(t);
                     if (closedSwingTrades != null) closedSwingTrades.Add(t);
                     openSwingTrades.RemoveAt(i);
                     continue;
@@ -1057,6 +1095,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         // Si le trade a été clôturé intégralement à TP1 (ex: 1 seul contrat initial)
                         if (t.Closed)
                         {
+                            RecordSwingOutcome(t);
                             if (closedSwingTrades != null) closedSwingTrades.Add(t);
                             openSwingTrades.RemoveAt(i);
                             continue;
@@ -1077,6 +1116,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                             catch { }
                         }
                         LogSwingTrade(t);
+                        RecordSwingOutcome(t);
                         if (closedSwingTrades != null) closedSwingTrades.Add(t);
                         openSwingTrades.RemoveAt(i);
                         continue;
@@ -1107,11 +1147,10 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 lock (swingJournalLock)
                 {
+                    string header = "TradeId,SignalId,Symbol,Direction,SetupType,Tier,Status,EntryTimeUtc,ExitTimeUtc,EntryPrice,ExitPrice,StopPrice,TP1,TP2,InitialContracts,RemainingContracts,RealizedR,RealizedUSD,ExitReason,Notes\n";
                     if (!swingJournalHeaderWritten && !File.Exists(resolvedSwingJournalPath))
                     {
-                        File.WriteAllText(resolvedSwingJournalPath,
-                            "TradeId,SignalId,Symbol,Direction,SetupType,Tier,Status,EntryTimeUtc,ExitTimeUtc,EntryPrice,ExitPrice,StopPrice,TP1,TP2,InitialContracts,RemainingContracts,RealizedR,RealizedUSD,ExitReason,Notes\n",
-                            System.Text.Encoding.UTF8);
+                        File.WriteAllText(resolvedSwingJournalPath, header, System.Text.Encoding.UTF8);
                         swingJournalHeaderWritten = true;
                     }
 
@@ -1125,6 +1164,19 @@ namespace NinjaTrader.NinjaScript.Indicators
                         t.InitialContracts, t.RemainingContracts, t.RealizedR, t.RealizedPnlCurrency, t.ExitReason, t.ExecutionNotes);
 
                     File.AppendAllText(resolvedSwingJournalPath, line, System.Text.Encoding.UTF8);
+
+                    // Miroir direct vers le dossier shadow du repo s'il existe
+                    string sym = t.Signal != null && !string.IsNullOrEmpty(t.Signal.Symbol) ? t.Signal.Symbol : (Instrument != null && Instrument.MasterInstrument != null ? Instrument.MasterInstrument.Name : "GC");
+                    string repoDir = @"c:\AMC-Pro\AMC-V8\shadow\SWING\" + sym;
+                    if (Directory.Exists(repoDir))
+                    {
+                        string repoPath = Path.Combine(repoDir, "swing_trades_" + sym + ".csv");
+                        if (!File.Exists(repoPath))
+                        {
+                            File.WriteAllText(repoPath, header, System.Text.Encoding.UTF8);
+                        }
+                        File.AppendAllText(repoPath, line, System.Text.Encoding.UTF8);
+                    }
                 }
             }
             catch (Exception ex)
