@@ -245,16 +245,71 @@ Ou effectuez une copie manuelle :
 
 ---
 
+## 📈 Campagne d'Audit de Performance Multi-Actifs Shadow (ScalpingPro)
+
+Une campagne exhaustive de backtesting et d'audit Shadow a été menée sur **5 actifs majeurs** (`GC`, `MNQ`, `ES`, `CL`, `NQ`) sur une période commune de plus de 3 mois (**25 Mai 2026 au 01 Septembre 2026**, soit 11 630 barres 5-minutes par actif et plus de 35 000 signaux bruts évalués).
+
+### 1. Chronologie & Évolution des Tests
+
+```mermaid
+graph TD
+    T1["Test 1 : Baseline Brut (3 048 trades)
+    PnL: +37.52 R | PF: 1.02
+    Découverte: Asymétrie Short (+142 R) vs Long (-105 R)
+    Coupable: Finished Auction Long (-116 R)"] --> OPT1["Phase d'Optimisation 1
+    • Seuil MinScore = 50
+    • HtfStrictMode = true & HtfGate = true
+    • Spécialisation XML (DeltaFlip off sur GC, on sur CL/NQ)
+    • VolumetricTimeframe = 5 (M5)"]
+    OPT1 --> T2["Test 2 : Validation Optimisée (2 589 trades)
+    PnL: +88.26 R | PF: 1.07 (100% Actifs Verts)
+    • GC explose à +66.70 R (PF 1.21)
+    • CL passe de -15.25 R à +12.03 R
+    • ES passe de -11.18 R à +0.38 R
+    • Finished Auction guéri : -47 R -> +84 R"]
+    T2 --> OPT2["Phase d'Optimisation 2
+    • Rétablissement 24h sur NQ/MNQ (SniperRthOnly = false)
+    • Désactivation FVG standard sur ES (-24.5 R) et CL (-8.2 R)"]
+    OPT2 --> T3["Test 3 : Consolidation Finale (En cours)
+    Objectif Portefeuille : +140 R à +160 R (PF > 1.25)"]
+```
+
+### 2. Tableau Comparatif Consolidé : Test 1 (Brut) vs Test 2 (Optimisé)
+
+| Actif | T1 Trades | T1 Gain Net | T1 PF | T2 Trades | T2 Gain Net | T2 PF | Progression | Statut |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **GC (Gold Futures)** | 581 | +28.17 R | 1.10 | 665 | **+66.70 R** | **1.21** | 🚀 **+38.53 R (+137%)** | ⭐ Super Performer |
+| **CL (Crude Oil Futures)**| 775 | -15.25 R | 0.96 | 614 | **+12.03 R** | **1.04** | 🚀 **+27.28 R** | ⭐ Sorti du rouge |
+| **ES (S&P 500 Futures)** | 801 | -11.18 R | 0.97 | 769 | **+0.38 R** | **1.00** | 🚀 **+11.57 R** | ⭐ Point mort franchi |
+| **NQ (Nasdaq E-mini)** | 512 | +29.96 R | 1.10 | 270 | **+4.58 R** | **1.03** | ℹ️ *(RTH trop strict)* | ⭐ Positif |
+| **MNQ (Micro Nasdaq)** | 379 | +5.82 R | 1.03 | 271 | **+4.58 R** | **1.03** | ℹ️ *(RTH trop strict)* | ⭐ Positif |
+| **TOTAL DU PORTEFEUILLE** | **3 048** | **+37.52 R** | **1.02** | **2 589** | **+88.26 R** | **1.07** | 🚀 **+50.74 R NET** | ⭐ **100% Actifs Verts** |
+
+### 3. Les Découvertes Clés & Règles Universelles
+1. **Loi de l'Asymétrie Vente / Achat :** Sur l'échantillon brut, les ventes ont généré **+142.56 R** (PF 1.19) contre un déficit de **-105.04 R** pour les achats.
+2. **La Guérison de `FINISHED_AUCTION` :** Le verrouillage strict du contexte (`HtfStrictMode = true` et `HtfGateAppliesToMeanReversion = true`) a transformé ce setup de **-47.19 R de pertes à +84.10 R de gains nets** (retournement net de **+131.29 R** !).
+3. **Spécialisation des Setups par Marché :**
+   * **Gold (GC) :** Dominé par `FINISHED_AUCTION` Short (+35.3 R), `CUM_DELTA_DIV` Short (+17.4 R) et `RETEST_FVG_HTF` (+5.3 R).
+   * **Pétrole (CL) :** Dominé par `DELTA_FLIP` (+9.04 R, Win Rate 59.4%, PF 1.70 ⭐) et les heures RTH NYMEX.
+   * **Nasdaq (NQ/MNQ) :** Dominé par `DELTA_FLIP` et `CUM_DELTA_DIV` (exigeant le trading 24h/24 pour capter les flux pré-market).
+   * **S&P 500 (ES) :** Dominé par `FINISHED_AUCTION` Short (+28.37 R) et le filtrage des faux retests FVG.
+
+---
+
 ## 📊 Analyse des Performances & Audit Shadow
 
 Pour analyser et auditer les signaux générés :
-* **Audit ScalpingPro** :
+* **Rapports Complets Disponibles dans `MD/`** :
+  * [`MD/RAPPORT_PERFORMANCE_MULTI_ACTIFS_SHADOW_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_MULTI_ACTIFS_SHADOW_SCALPINGPRO.md) *(Master Rapport Multi-Actifs)*
+  * [`MD/RAPPORT_PERFORMANCE_SHADOW_GC_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_SHADOW_GC_SCALPINGPRO.md) *(Gold)*
+  * [`MD/RAPPORT_PERFORMANCE_SHADOW_NQ_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_SHADOW_NQ_SCALPINGPRO.md) *(Nasdaq)*
+  * [`MD/RAPPORT_PERFORMANCE_SHADOW_ES_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_SHADOW_ES_SCALPINGPRO.md) *(S&P 500)*
+  * [`MD/RAPPORT_PERFORMANCE_SHADOW_CL_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_SHADOW_CL_SCALPINGPRO.md) *(Pétrole)*
+  * [`MD/RAPPORT_PERFORMANCE_SHADOW_MNQ_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_SHADOW_MNQ_SCALPINGPRO.md) *(Micro Nasdaq)*
+* **Synchronisation Instantanée des Templates XML vers NinjaTrader 8** :
   ```powershell
-  python Python/analyze_latest_shadow.py
+  python Python/copy_xml_templates.py
   ```
-  Consultez `shadow/trades.csv` pour inspecter les sous-notes $N1$ à $N4$, les scores et les $R$-multiples intraday.
-* **Audit Swing** :
-  Consultez `shadow/swing_trades.csv` pour analyser les exécutions partielles TP1 ($1.5\text{R}$), les stops déplacés à Break-Even ($+1\text{ tick}$) et les prises de bénéfice finales TP2 ($3.0\text{R}$).
 
 ---
 
