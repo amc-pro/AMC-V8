@@ -123,6 +123,7 @@
       <ImbalanceZoneMemoryBars>15</ImbalanceZoneMemoryBars>
       <ImbalanceZoneRetestTicks>4</ImbalanceZoneRetestTicks>
       <ImbalanceZoneMinLevels>2</ImbalanceZoneMinLevels>
+      <EnableFvgRetestTrigger>false</EnableFvgRetestTrigger>
       <EnableFinishedAuction>true</EnableFinishedAuction>
       <FinishedAuctionMaxVolume>5</FinishedAuctionMaxVolume>
       <UseAdaptiveFinishedAuction>true</UseAdaptiveFinishedAuction>
@@ -171,7 +172,7 @@
       <MaxAlertsPerWeek>0</MaxAlertsPerWeek>
       <MaxSniperAlertsPerSession>0</MaxSniperAlertsPerSession>
       <SelectionBufferBars>0</SelectionBufferBars>
-      <SniperRthOnly>true</SniperRthOnly>
+      <SniperRthOnly>false</SniperRthOnly>
       <NewsBlackoutMinutes>10</NewsBlackoutMinutes>
       <NewsTimesCsv>0830,1000,1430,1500</NewsTimesCsv>
       <NewsWindowPenalty>15</NewsWindowPenalty>

@@ -123,6 +123,7 @@
       <ImbalanceZoneMemoryBars>15</ImbalanceZoneMemoryBars>
       <ImbalanceZoneRetestTicks>3</ImbalanceZoneRetestTicks>
       <ImbalanceZoneMinLevels>2</ImbalanceZoneMinLevels>
+      <EnableFvgRetestTrigger>false</EnableFvgRetestTrigger>
       <EnableFinishedAuction>true</EnableFinishedAuction>
       <FinishedAuctionMaxVolume>5</FinishedAuctionMaxVolume>
       <UseAdaptiveFinishedAuction>true</UseAdaptiveFinishedAuction>
