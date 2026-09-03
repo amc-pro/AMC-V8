@@ -1279,6 +1279,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         private string lastDashboardText = null;
         // evaluee avant toute construction de chaine.
         private long lastDashboardFingerprint = long.MinValue;
+        private long lastIntermediateProfileCalcTime = 0;
+        private long lastRenderWallTime = 0;
         private const int BidAskProbeBars = 50;
         private const int MaxTelegramInFlight = 8;
         private int telegramInFlightCount;
@@ -1805,8 +1807,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                         if (!isBarClose)
                         {
                             // Court-circuit immédiat sur ticks intermédiaires :
-                            // En mode Swing (ou en historique/replay), aucun calcul de profil lourd n'est requis entre deux clôtures.
+                            // En mode Swing (ou en historique ou si le dashboard est masqué), aucun calcul n'est requis entre clôtures.
                             if (IsSwing || State == State.Historical || !ShowDashboard) return;
+
+                            // En mode ScalpingPro temps réel / replay : brider le recalcul du profil intermédiaire
+                            // à au plus 2 fois par seconde (500 ms) pour éliminer l'étouffement CPU sur MNQ/NQ
+                            long nowTicks = Environment.TickCount64;
+                            if (nowTicks - lastIntermediateProfileCalcTime < 500) return;
+                            lastIntermediateProfileCalcTime = nowTicks;
 
                             // Profil rafraichi pour le dashboard (temps réel ScalpingPro uniquement).
                             UpdateCurrentVwap(0);
@@ -1836,8 +1844,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                         frozenVahPrice = vahPrice;
                         frozenValPrice = valPrice;
 
-                        // Profil complet (barre courante incluse) pour l'affichage dashboard temps réel (ScalpingPro uniquement).
-                        if (State == State.Realtime && !IsSwing)
+                        // Profil complet (barre courante incluse) pour l'affichage dashboard temps réel (ScalpingPro uniquement si dashboard actif).
+                        if (State == State.Realtime && !IsSwing && ShowDashboard)
                         {
                             CalculateRollingVolumeProfile(barIdx, barsType);
                             UpdateCurrentVwap(0);
@@ -1874,9 +1882,14 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 if (BarsInProgress == 0)
                 {
-                    // En mode Swing, limiter le rendu visuel (dashboard et lignes) au premier tick de chaque barre
-                    // pour éviter d'inonder le moteur graphique DirectX avec 50 000 appels de dessin par bougie
-                    bool shouldRender = !IsSwing || IsFirstTickOfBar || State == State.Historical;
+                    // Limiter le rendu visuel DirectX (dashboard et lignes) :
+                    // - Toujours exécuté à l'ouverture de barre (IsFirstTickOfBar) ou lors du chargement historique
+                    // - En temps réel / replay intermédiaire : bridé à 250ms (4 FPS max) pour éviter de saturer le thread UI DirectX
+                    long nowRender = Environment.TickCount64;
+                    bool shouldRender = State == State.Realtime 
+                        ? (IsFirstTickOfBar || (nowRender - lastRenderWallTime >= 250)) 
+                        : IsFirstTickOfBar;
+                    if (shouldRender) lastRenderWallTime = nowRender;
 
                     if (ShowDashboard && CurrentBars[0] >= 0 && shouldRender)
                     {
