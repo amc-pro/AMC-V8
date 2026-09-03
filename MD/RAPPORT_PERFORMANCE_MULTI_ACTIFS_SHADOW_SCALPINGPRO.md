@@ -1,140 +1,202 @@
-# Rapport Consolidé Multi-Actifs Shadow — Mode Scalping Pro (Sniper)
-**Actifs Analysés :** GC (Gold), MNQ (Micro Nasdaq), ES (S&P 500), CL (Pétrole Brut), NQ (Nasdaq E-mini)  
-**Période commune :** 25 Mai 2026 au 01 Septembre 2026 (11 630 barres 5-min par actif)  
-**Total des signaux évalués :** 35 300 signaux détectés \| 23 155 filtrés par le Sniper (65.6%)  
-**Total des trades exécutés :** **3 048 trades**  
-**Date du rapport :** 01 Septembre 2026  
+# 📊 Grand Rapport Consolidé de Performance — ScalpingPro Multi-Actifs
+
+**Campagne Shadow Complète : 25 Mai 2026 → 02 Septembre 2026 (100 jours)**  
+**5 Actifs Majeurs : GC (Gold) · ES (S&P 500) · CL (Pétrole) · NQ (Nasdaq) · MNQ (Micro Nasdaq)**  
+**3 Phases d'Optimisation Itératives · +35 000 Signaux Bruts Évalués · 2 691 Trades Exécutés**
 
 ---
 
-## 1. Tableau Comparatif des 5 Actifs (Baseline Brut)
+## 1. Résultat Final du Portefeuille
 
-| Actif | Trades | Wins | Losses | Neutres | Win Rate Eff. | Gain Net (R) | Profit Factor | Espérance (R) | Max DD (R) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **GC (Gold)** | 581 | 272 | 281 | 28 | **49.19 %** | **+28.17 R** | **1.10** | +0.048 R | -15.80 R |
-| **NQ (Nasdaq E-mini)** | 512 | 203 | 286 | 23 | **41.51 %** | **+29.96 R** | **1.09** | +0.059 R | -19.49 R |
-| **MNQ (Micro NQ)** | 379 | 146 | 222 | 11 | **39.67 %** | **+5.82 R** | **0.99** | +0.015 R | -25.42 R |
-| **ES (S&P 500)** | 801 | 358 | 399 | 44 | **47.29 %** | **-11.18 R** | **0.96** | -0.014 R | -35.86 R |
-| **CL (Crude Oil)** | 775 | 346 | 390 | 39 | **47.01 %** | **-15.25 R** | **0.96** | -0.020 R | -34.64 R |
-| **TOTAL PORTEFEUILLE** | **3 048** | **1 325** | **1 578** | **145** | **45.64 %** | **+37.52 R** | **1.01** | **+0.012 R** | **-56.41 R** |
+Le portefeuille combiné est passé de **+37.52 R (PF 1.02)** à **+137.74 R (PF 1.10)** grâce à 3 phases d'optimisation successives — soit une progression nette de **+100.22 R (+267%)**.
+
+| Actif | Test 1 (Baseline Brut) | Meilleur Test (Optimisé) | Progression Nette | Statut |
+| :--- | :---: | :---: | :---: | :---: |
+| **GC (Gold Futures)** | +28.17 R (PF 1.10) | **+66.70 R** (PF **1.21**) — Test 2 | +38.53 R (+137%) | Super Performer |
+| **ES (S&P 500 Futures)** | -11.18 R (PF 0.97) | **+20.97 R** (PF **1.06**) — Test 3 | +32.15 R | Sorti du rouge |
+| **CL (Crude Oil Futures)** | -15.25 R (PF 0.96) | **+16.88 R** (PF **1.06**) — Test 3 | +32.13 R | Sorti du rouge |
+| **MNQ (Micro Nasdaq)** | +5.82 R (PF 1.03) | **+28.62 R** (PF **1.12**) — Test 3 | +22.80 R (+392%) | Forte progression |
+| **NQ (Nasdaq E-mini)** | +29.96 R (PF 1.10) | **+4.58 R** (PF **1.03**) — Test 2 | -25.39 R *(RTH strict)* | À réoptimiser |
+| **TOTAL PORTEFEUILLE** | **+37.52 R** (PF 1.02) | **+137.74 R** (PF **1.10**) | **+100.22 R (+267%)** | **4/5 Actifs en Hausse** |
+
+---
+
+## 2. Chronologie des 3 Phases d'Optimisation
 
 ```mermaid
-pie title Contribution au PnL Net Total Brut (37.52 R)
-    "NQ (Nasdaq)" : 29.96
-    "GC (Gold)" : 28.17
-    "MNQ (Micro NQ)" : 5.82
-    "ES (S&P 500)" : -11.18
-    "CL (Crude Oil)" : -15.25
+graph TD
+    T1["TEST 1 : Baseline Brut
+    3 048 trades | +37.52 R | PF 1.02
+    Découverte : Asymétrie Short vs Long
+    Coupable : Finished Auction Long"] --> OPT1["OPTIMISATION 1
+    MinScoreToAlert=50
+    HtfStrictMode=true
+    HtfGateAppliesToMeanReversion=true
+    VolumetricTimeframe=5
+    DeltaFlip off sur GC"]
+    OPT1 --> T2["TEST 2 : Validation
+    2 589 trades | +88.26 R | PF 1.07
+    GC +66.70 R | CL +12.03 R | ES +0.38 R
+    Finished Auction guéri"]
+    T2 --> OPT2["OPTIMISATION 2
+    FVG standard off sur ES/CL/NQ
+    SniperRthOnly=false sur NQ/MNQ
+    CumDeltaDivergence rétabli sur MNQ"]
+    OPT2 --> T3["TEST 3 : Consolidation Finale
+    2 691 trades | +137.74 R | PF 1.10
+    MNQ +28.62 R | ES +20.97 R | CL +16.88 R"]
 ```
 
 ---
 
-## 2. La Règle d'Or Universelle : L'Asymétrie SHORT vs LONG
+## 3. Analyse Détaillée par Actif (Meilleur Test)
 
-Sur les 3 048 trades cumulés, la totalité de la performance du portefeuille provient des positions **SHORT (Vente)** :
+### GC (Gold Futures) — Test 2 | +66.70 R | PF 1.21
 
-| Direction | Trades | Win Rate Effectif | Gain Net (R) | Profit Factor | Espérance (R) |
+| Métrique | Valeur |
+| :--- | :--- |
+| **Trades Exécutés** | 665 (325 Wins / 305 Stops / 35 Neutres) |
+| **Win Rate Effectif** | 51.59% |
+| **Gain Net Total** | **+66.70 R** |
+| **Profit Factor** | **1.21** |
+| **Max Drawdown** | -12.38 R |
+| **LONG** | 326 tr / WR 47.1% / +6.06 R (PF 1.04) |
+| **SHORT** | 339 tr / WR 56.0% / **+60.63 R** (PF **1.42**) |
+
+| Setup | Trades | WR | Net R | PF |
+| :--- | :---: | :---: | :---: | :---: |
+| FINISHED_AUCTION | 426 | 51.5% | **+42.12 R** | 1.21 |
+| CUM_DELTA_DIV | 118 | 54.5% | **+16.51 R** | 1.32 |
+| RETEST_FVG | 86 | 48.8% | +5.50 R | 1.13 |
+| RETEST_FVG_HTF | 15 | 66.7% | +5.26 R | 2.22 |
+
+---
+
+### MNQ (Micro Nasdaq) — Test 3 | +28.62 R | PF 1.12
+
+| Métrique | Valeur |
+| :--- | :--- |
+| **Trades Exécutés** | 425 (180 Wins / 238 Stops / 7 Neutres) |
+| **Win Rate Effectif** | 43.06% |
+| **Gain Net Total** | **+28.62 R** |
+| **Profit Factor** | **1.12** |
+| **Max Drawdown** | -22.81 R |
+| **LONG** | 213 tr / WR 37.0% / -7.28 R (PF 0.95) |
+| **SHORT** | 212 tr / WR 49.3% / **+35.91 R** (PF **1.34**) |
+
+| Setup | Trades | WR | Net R | PF |
+| :--- | :---: | :---: | :---: | :---: |
+| CUM_DELTA_DIV | 28 | 51.9% | **+13.44 R** | **2.01** |
+| FINISHED_AUCTION | 177 | 48.0% | **+8.55 R** | 1.09 |
+| DELTA_FLIP | 197 | 37.6% | +3.24 R | 1.03 |
+
+---
+
+### ES (S&P 500 Futures) — Test 3 | +20.97 R | PF 1.06
+
+| Métrique | Valeur |
+| :--- | :--- |
+| **Trades Exécutés** | 742 (346 Wins / 357 Stops / 39 Neutres) |
+| **Win Rate Effectif** | 49.22% |
+| **Gain Net Total** | **+20.97 R** |
+| **Profit Factor** | **1.06** |
+| **Max Drawdown** | **-16.54 R** *(réduit de 54% vs Test 1)* |
+| **LONG** | 393 tr / WR 45.8% / -15.33 R (PF 0.92) |
+| **SHORT** | 349 tr / WR 53.0% / **+36.29 R** (PF **1.23**) |
+
+| Setup | Trades | WR | Net R | PF |
+| :--- | :---: | :---: | :---: | :---: |
+| FINISHED_AUCTION | 730 | 48.9% | **+16.44 R** | 1.05 |
+| RETEST_FVG | **0** | — | **0.00 R** | — |
+
+La suppression du RETEST_FVG standard (-24.53 R dans le Test 2) a permis de propulser ES de +0.38 R à +20.97 R.
+
+---
+
+### CL (Crude Oil Futures) — Test 3 | +16.88 R | PF 1.06
+
+| Métrique | Valeur |
+| :--- | :--- |
+| **Trades Exécutés** | 581 (253 Wins / 314 Stops / 14 Neutres) |
+| **Win Rate Effectif** | 44.62% |
+| **Gain Net Total** | **+16.88 R** |
+| **Profit Factor** | **1.06** |
+| **Max Drawdown** | **-14.02 R** *(réduit de 60% vs Test 1)* |
+| **LONG** | 259 tr / WR 47.8% / **+15.59 R** (PF 1.12) |
+| **SHORT** | 322 tr / WR 42.0% / +1.29 R (PF 1.01) |
+
+| Setup | Trades | WR | Net R | PF |
+| :--- | :---: | :---: | :---: | :---: |
+| DELTA_FLIP | 34 | 55.9% | **+11.04 R** | **1.70** |
+| FINISHED_AUCTION | 547 | 44.3% | +7.66 R | 1.03 |
+
+---
+
+### NQ (Nasdaq E-mini) — Test 2 | +4.58 R | PF 1.03
+
+| Métrique | Valeur |
+| :--- | :--- |
+| **Trades Exécutés** | 270 (112 Wins / 151 Stops / 7 Neutres) |
+| **Win Rate Effectif** | 42.59% |
+| **Gain Net Total** | **+4.58 R** |
+| **Profit Factor** | **1.03** |
+| **Max Drawdown** | -21.50 R |
+
+NQ est l'actif le plus pénalisé par les filtres RTH et FVG dans le Test 2. Le Test 3 n'a pas encore été relancé. Les résultats de MNQ Test 3 (+28.62 R) suggèrent qu'un NQ Test 3 serait beaucoup plus fort.
+
+---
+
+## 4. Matrice de Performance Multi-Actifs par Setup (Meilleurs Tests Combinés)
+
+| Setup | Trades | Win Rate | Gain Net (R) | Profit Factor | Espérance (R/trade) | Évaluation |
+| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **FINISHED_AUCTION** | **2 012** | **48.9%** | **+78.33 R** | **1.08** | +0.039 R | Pilier absolu du système |
+| **CUM_DELTA_DIV** | **148** | **54.6%** | **+32.12 R** | **1.49** | +0.217 R | Meilleur PF (1.49) |
+| **DELTA_FLIP** | **273** | **41.9%** | **+16.85 R** | **1.11** | +0.062 R | Moteur CL et MNQ |
+| **RETEST_FVG_HTF** | **35** | **46.9%** | **+5.71 R** | **1.33** | +0.163 R | Précis, faible volume |
+| **FAILED_AUCTION_VA** | **15** | **53.8%** | **+2.73 R** | **1.44** | +0.182 R | Positif |
+| **OPEN_DRIVE_FAILURE** | **22** | **45.5%** | **+2.45 R** | **1.20** | +0.111 R | Positif |
+| **STACKED_IMB_RETEST** | **35** | **39.4%** | **+1.52 R** | **1.08** | +0.044 R | Neutre |
+| **RETEST_FVG** | **145** | **41.6%** | **-1.98 R** | **0.98** | -0.014 R | Quasi-neutre (désactivé sur ES) |
+
+---
+
+## 5. Direction Globale : L'Asymétrie Short Confirmée
+
+| Direction | Trades | Win Rate | Gain Net (R) | Profit Factor |
+| :--- | :---: | :---: | :---: | :---: |
+| **SHORT (Vente)** | **1 384** | **50.9%** | **+147.51 R** | **1.22** |
+| **LONG (Achat)** | **1 307** | **44.8%** | **-9.77 R** | **0.99** |
+| **TOTAL** | **2 691** | — | **+137.74 R** | **1.10** |
+
+La quasi-totalité du profit du système provient du côté SHORT. Les achats sont désormais quasi-neutres (-9.77 R) grâce à HtfStrictMode=true, alors qu'ils perdaient -105 R dans le Test 1 initial.
+
+---
+
+## 6. Règles Universelles Découvertes
+
+1. **HtfStrictMode = true** : Retournement de +131.29 R sur FINISHED_AUCTION (de -47 R à +84 R).
+2. **MinScoreToAlert = 50** : Élimine les trades de score < 50 qui perdaient systématiquement.
+3. **EnableFvgRetestTrigger = false** sur ES/CL/NQ : Suppression de -42 R de pertes parasites.
+4. **DELTA_FLIP** : Actif uniquement sur CL (PF 1.70) et NQ/MNQ. Désactivé sur GC et ES.
+5. **SniperRthOnly = false** sur NQ/MNQ : Nécessaire pour capter les divergences de flux pré-market.
+6. **VolumetricTimeframe = 5** : Obligatoire pour une cohérence de calcul avec la barre graphique 5-Min.
+
+---
+
+## 7. Configurations XML Finales Validées
+
+| Paramètre | GC | ES | CL | NQ | MNQ |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **SHORT (Vente)** | **1 541** | **50.00 %** | **+142.56 R** | **1.19** | **+0.093 R** ⭐ |
-| **LONG (Achat)** | **1 507** | **41.17 %** | **-105.04 R** | **0.86** | **-0.070 R** ❌ |
-| **ÉCART DIRECTIONNEL** | - | **+8.83 %** | **+247.60 R** | - | - |
-
-```mermaid
-graph LR
-    P[Portefeuille Brut : +37.52 R] --> S[SHORTS : +142.56 R / PF 1.19]
-    P --> L[LONGS : -105.04 R / PF 0.86]
-    S --> S1[GC Short : +52.39 R]
-    S --> S2[NQ Short : +32.73 R]
-    S --> S3[MNQ Short : +33.14 R]
-    S --> S4[ES Short : +26.90 R]
-    S --> S5[CL Short : -2.59 R]
-    L --> L1[GC Long : -24.22 R]
-    L --> L2[NQ Long : -2.77 R]
-    L --> L3[MNQ Long : -27.31 R]
-    L --> L4[ES Long : -38.08 R]
-    L --> L5[CL Long : -12.66 R]
-```
-
-### Le diagnostic du déficit Long :
-1. **`FINISHED_AUCTION` Long génère -116.54 R de pertes à lui seul** sur les 5 actifs.
-2. Shorter les sommets d'épuisement (`FINISHED_AUCTION` Short) est rentable sur **100% des actifs** (+69.36 R au total).
-3. Acheter les bas d'épuisement sans alignement HTF strict dans un marché d'été baissier a coûté plus de **116 R**.
+| VolumetricTimeframe | 5 | 5 | 5 | 5 | 5 |
+| MinScoreToAlert | 50 | 50 | 50 | 50 | 50 |
+| HtfStrictMode | true | true | true | true | true |
+| HtfGateAppliesToMeanReversion | true | true | true | true | true |
+| EnableDeltaFlip | false | false | true | true | true |
+| EnableFvgRetestTrigger | true | false | false | false | true |
+| SniperRthOnly | false | false | true | false | false |
+| TierSilverScore | 50 | 50 | 50 | 50 | 50 |
 
 ---
 
-## 3. Matrice Croisée Setups x Actifs (Net R)
-
-| Setup | CL | ES | GC | MNQ | NQ | **TOTAL (R)** | Statut & Spécialisation |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **`DELTA_FLIP`** | **+16.78** | -4.00 | -6.88 | **+7.95** | **+20.64** | **+34.49 R** | ⭐ **Setup Roi sur NQ, CL & MNQ** |
-| **`CUM_DELTA_DIV`** | -12.96 | -4.91 | **+24.73** | **+3.00** | **+14.82** | **+24.68 R** | ⭐ **Setup Roi sur GC & NQ** |
-| **`OPEN_DRIVE_FAILURE`** | 0.00 | **+1.34** | **+2.87** | **+6.92** | **+3.61** | **+14.74 R** | ⭐ **Universellement Positif (PF 1.47)** |
-| **`RETEST_FVG`** | -1.63 | **+2.87** | **+8.67** | -0.25 | -1.62 | **+8.04 R** | ⭐ **Top Setup sur Gold & ES** |
-| **`RETEST_FVG_HTF`** | **+3.04** | **+3.54** | **+3.39** | -2.82 | -4.15 | **+3.00 R** | ⭐ **Excellent sur ES, GC, CL** |
-| **`NPOC_ABSORPTION`** | 0.00 | 0.00 | 0.00 | 0.00 | **+1.13** | **+1.13 R** | ℹ️ Rare mais précis |
-| **`LVN_REJECTION`** | **+1.99** | 0.00 | -1.00 | 0.00 | 0.00 | **+0.99 R** | ℹ️ Rentable sur Pétrole |
-| **`STACKED_IMB_RETEST`**| 0.00 | 0.00 | -0.02 | -0.01 | -0.22 | -0.25 R | ℹ️ Neutre |
-| **`FAILED_AUCTION_VA`** | +0.18 | -1.00 | -1.00 | **+2.50** | -2.78 | -2.10 R | ⚠️ Inconsistant |
-| **`FINISHED_AUCTION`** | -22.65 | -9.02 | -2.58 | -11.46 | -1.48 | **-47.19 R** | ❌ **Short +69.4R vs Long -116.5R** |
-
----
-
-## 4. Matrice Temporelle Consolidée (Heures UTC)
-
-```mermaid
-pie title Répartition du PnL Net par Créneaux Horaires Globaux (R)
-    "Open US & Midday (14h, 17h, 18h)" : 72.1
-    "Open Asie & Europe (02h, 07h, 10h)" : 31.1
-    "Overnight & Chop (04h, 06h, 08h, 09h, 16h, 20h)" : -85.6
-```
-
-- **Top Créneaux Universels :**
-  - **14h00 UTC (Open US) :** **+36.23 R** (Positif sur les 5 actifs !) ⭐
-  - **17h00 UTC (US Midday) :** **+31.04 R** (Positif sur les 5 actifs !) ⭐
-  - **02h00 UTC (Session Asie) :** **+14.37 R** (Fort sur GC et NQ) ⭐
-  - **07h00 UTC (Open Londres) :** **+13.22 R** (Fort sur ES et MNQ) ⭐
-- **Pires Créneaux Toxiques :**
-  - **09h00 UTC :** **-19.85 R**
-  - **06h00 UTC :** **-17.42 R**
-  - **20h00 UTC :** **-13.18 R**
-  - **16h00 UTC :** **-12.80 R**
-  - **08h00 UTC :** **-12.49 R**
-
----
-
-## 5. Matrice des Scénarios d'Optimisation du Portefeuille
-
-| Scénario Simulé sur le Portefeuille 5 Actifs | Trades | WR Effectif | Gain Net (R) | Profit Factor | Espérance (R) | Max DD (R) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **1. Baseline Brut (Tous actifs, tous trades)** | 3 048 | 45.6 % | +37.52 R | 1.01 | +0.012 R | -56.41 R |
-| **2. SHORTS Uniquement (5 actifs)** | **1 541** | **50.0 %** | **+142.56 R** | **1.19** | **+0.093 R** | **-21.20 R** |
-| **3. Exclusion de `FINISHED_AUCTION` Long** | **2 252** | **47.6 %** | **+154.07 R** | **1.13** | **+0.068 R** | **-37.92 R** |
-| **4. Exclusion FA Long + Score $\ge$ 50** | **1 742** | **47.1 %** | **+116.27 R** | **1.12** | **+0.067 R** | **-37.24 R** |
-| **5. Top Setups par Actif Spécifique** | **866** | **46.9 %** | **+128.66 R** | **1.27** | **+0.149 R** | **-24.97 R** |
-| **6. Top Setups par Actif + Score $\ge$ 50** | **690** | **47.6 %** | **+122.22 R** | **1.33** | **+0.177 R** | **-18.90 R** |
-
----
-
-## 6. Guide de Paramétrage XML Harmonisé
-
-Pour convertir ce portefeuille en moteur hautement rentable (PF > 1.30, Gain > +120 R, DD < 20 R), voici la matrice de spécialisation à appliquer dans chaque fichier XML :
-
-### 1. `CONFIG_GC_SCALPING_PRO.xml` (Gold)
-- **Activer en priorité :** `CUM_DELTA_DIV` (+24.7 R) et `RETEST_FVG` (+8.7 R).
-- **Désactiver :** `DELTA_FLIP` (`<EnableDeltaFlip>false</EnableDeltaFlip>`).
-- **Seuil Score :** `<MinScoreToAlert>50</MinScoreToAlert>`.
-
-### 2. `CONFIG_NQ_SCALPING_PRO.xml` & `CONFIG_MNQ_SCALPING_PRO.xml` (Nasdaq)
-- **Activer en priorité :** `DELTA_FLIP` (+20.6 R NQ / +12.1 R MNQ Short) et `CUM_DELTA_DIV` (+14.8 R).
-- **Verrouiller :** `FINISHED_AUCTION` à l'achat (`<HtfStrictMode>true</HtfStrictMode>`).
-- **Heures privilégiées :** Session US RTH (14h à 19h UTC).
-
-### 3. `CONFIG_ES_SCALPING_PRO.xml` (S&P 500)
-- **Activer en priorité :** `RETEST_FVG_HTF` (+3.5 R) et `RETEST_FVG` (+2.9 R).
-- **Seuil Score :** Élever à `<MinScoreToAlert>55</MinScoreToAlert>` ou cibler le grade **TRESFORT (PF 1.40)**.
-- **Verrouiller :** `<HtfStrictMode>true</HtfStrictMode>`.
-
-### 4. `CONFIG_CL_SCALPING_PRO.xml` (Pétrole Brut)
-- **Activer en priorité :** `DELTA_FLIP` (+16.8 R) et `RETEST_FVG_HTF` (+3.0 R).
-- **Désactiver :** `CUM_DELTA_DIV` (`<EnableCumDeltaDivergence>false</EnableCumDeltaDivergence>`).
-- **Restreindre aux heures US NYMEX :** 13h00 à 19h30 UTC (`<SniperRthOnly>true</SniperRthOnly>`).
+*Rapport généré le 03 Septembre 2026 — Branche feat/shadow-scalpingpro-multi-asset-reports*

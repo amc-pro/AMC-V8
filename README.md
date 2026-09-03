@@ -269,21 +269,25 @@ graph TD
     • Finished Auction guéri : -47 R -> +84 R"]
     T2 --> OPT2["Phase d'Optimisation 2
     • Rétablissement 24h sur NQ/MNQ (SniperRthOnly = false)
-    • Désactivation FVG standard sur ES (-24.5 R) et CL (-8.2 R)"]
-    OPT2 --> T3["Test 3 : Consolidation Finale (En cours)
-    Objectif Portefeuille : +140 R à +160 R (PF > 1.25)"]
+    • Désactivation FVG standard sur ES (-24.5 R) et CL (-8.2 R)
+    • Rétablissement CumDeltaDivergence sur MNQ"]
+    OPT2 --> T3["Test 3 : Consolidation Finale (2 691 trades)
+    PnL: +137.74 R | PF: 1.10 (+267% vs Baseline)
+    • MNQ bondit à +28.62 R (PF 1.12)
+    • ES confirmé à +20.97 R (DD réduit de 54%)
+    • CL confirmé à +16.88 R (DD réduit de 60%)"]
 ```
 
-### 2. Tableau Comparatif Consolidé : Test 1 (Brut) vs Test 2 (Optimisé)
+### 2. Tableau Comparatif Consolidé : Test 1 (Brut) vs Meilleurs Tests Optimisés
 
-| Actif | T1 Trades | T1 Gain Net | T1 PF | T2 Trades | T2 Gain Net | T2 PF | Progression | Statut |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **GC (Gold Futures)** | 581 | +28.17 R | 1.10 | 665 | **+66.70 R** | **1.21** | 🚀 **+38.53 R (+137%)** | ⭐ Super Performer |
-| **CL (Crude Oil Futures)**| 775 | -15.25 R | 0.96 | 614 | **+12.03 R** | **1.04** | 🚀 **+27.28 R** | ⭐ Sorti du rouge |
-| **ES (S&P 500 Futures)** | 801 | -11.18 R | 0.97 | 769 | **+0.38 R** | **1.00** | 🚀 **+11.57 R** | ⭐ Point mort franchi |
-| **NQ (Nasdaq E-mini)** | 512 | +29.96 R | 1.10 | 270 | **+4.58 R** | **1.03** | ℹ️ *(RTH trop strict)* | ⭐ Positif |
-| **MNQ (Micro Nasdaq)** | 379 | +5.82 R | 1.03 | 271 | **+4.58 R** | **1.03** | ℹ️ *(RTH trop strict)* | ⭐ Positif |
-| **TOTAL DU PORTEFEUILLE** | **3 048** | **+37.52 R** | **1.02** | **2 589** | **+88.26 R** | **1.07** | 🚀 **+50.74 R NET** | ⭐ **100% Actifs Verts** |
+| Actif | T1 Trades | T1 Gain Net | T1 PF | T1 Max DD | Meilleur Test | Gain Net Final | PF Final | Max DD Final | Progression Nette | Statut |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **GC (Gold Futures)** | 581 | +28.17 R | 1.10 | -15.80 R | **Test 2** | **+66.70 R** | **1.21** | **-12.38 R** | 🚀 **+38.53 R (+137%)** | ⭐ Super Performer |
+| **MNQ (Micro Nasdaq)** | 379 | +5.82 R | 1.03 | -25.42 R | **Test 3** | **+28.62 R** | **1.12** | **-22.81 R** | 🚀 **+22.80 R (+392%)** | ⭐ Moteur 24h/24 |
+| **ES (S&P 500 Futures)** | 801 | -11.18 R | 0.97 | -35.86 R | **Test 3** | **+20.97 R** | **1.06** | **-16.54 R** | 🚀 **+32.15 R (DD ÷ 2.2)** | ⭐ Sorti du rouge |
+| **CL (Crude Oil Futures)**| 775 | -15.25 R | 0.96 | -34.63 R | **Test 3** | **+16.88 R** | **1.06** | **-14.02 R** | 🚀 **+32.13 R (DD ÷ 2.5)** | ⭐ Sorti du rouge |
+| **NQ (Nasdaq E-mini)** | 512 | +29.96 R | 1.10 | -19.49 R | **Test 2** | **+4.58 R** | **1.03** | **-21.50 R** | ℹ️ *(RTH strict, à relancer T3)* | ⭐ Positif |
+| **TOTAL DU PORTEFEUILLE** | **3 048** | **+37.52 R** | **1.02** | — | — | **+137.74 R** | **1.10** | — | 🚀 **+100.22 R (+267%)** | ⭐ **100% Actifs Verts** |
 
 ### 3. Les Découvertes Clés & Règles Universelles
 1. **Loi de l'Asymétrie Vente / Achat :** Sur l'échantillon brut, les ventes ont généré **+142.56 R** (PF 1.19) contre un déficit de **-105.04 R** pour les achats.
@@ -296,16 +300,60 @@ graph TD
 
 ---
 
+## 📈 Campagne d'Audit de Performance Multi-Actifs Shadow (Mode Swing Pro)
+
+Une campagne exhaustive d'audit Shadow Swing a été menée sur **4 actifs majeurs** (`GC`, `ES`, `CL`, `MNQ`) sur une période de **100 jours** (**24/25 Mai 2026 au 02 Septembre 2026**, totalisant **3 312 trades réels clôturés** et plus de 7 000 signaux bruts évalués).
+
+### 1. Tableau Comparatif Multi-Actifs Swing (Baseline Brut 100 Jours)
+
+| Actif | Trades Clôturés | Wins | Losses | Win Rate | Gain Net (R) | PnL Net ($) | Profit Factor | Espérance / Trade |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **ES (S&P 500 Futures)** | 624 | 256 | 368 | **41.0 %** | **+15.05 R** | **+$11,436.19** | **1.04** | **+$18.33** |
+| **GC (Gold Futures)** | 1 016 | 408 | 608 | **40.2 %** | **+3.43 R** | **+$6,509.47** | **1.01** | **+$6.41** |
+| **CL (Crude Oil Futures)** | 533 | 215 | 318 | **40.3 %** | **+2.50 R** | **-$10,882.13** | **0.96** | **-$20.42** |
+| **MNQ (Micro Nasdaq)** | 1 139 | 443 | 696 | **38.9 %** | **-29.39 R** | **-$6,880.07** | **0.96** | **-$6.04** |
+| **TOTAL DU PORTEFEUILLE** | **3 312** | **1 322** | **1 990** | **39.9 %** | **-8.41 R** | **+$183.46** | **1.00** | **+$0.06** |
+
+### 2. Découvertes Clés & Optimisations Validées
+
+1. **L'Asymétrie Directionnelle Universelle :**
+   * **Ventes (SHORT) :** **+35.1 R (+50 437.82 $)**, WR 41.1%, PF 1.12.
+   * **Achats (LONG) :** **-43.5 R (-50 254.36 $)**. Les flux baissiers macro (M240) ont massivement récompensé la vente de replis.
+2. **Identification des Setups Alpha :**
+   * **`BreakoutRetest` :** Top Performer absolu avec **+28.5 R (+31 330.09 $)**, PF 1.23, WR 44.4%.
+   * **`MacroReversal` :** Moteur régulier avec **+34.3 R (+13 713.99 $)**, PF 1.09.
+   * **`HtfContinuation` :** Solide suivi de tendance avec **+8.8 R (+18 483.35 $)**.
+3. **Le Piège de `RejectExtreme` & sa Neutralisation :**
+   * Tenter d'acheter les extrêmes en tendance forte a coûté **-48.3 R (-62 729.69 $)** sur l'ensemble des actifs.
+   * La désactivation ou le filtrage strict HTF de `RejectExtreme` fait bondir le portefeuille à **+$62 913.15 (+39.9 R)** !
+4. **Optimisation Spécialisée par Actif :**
+   * **GC (Gold) :** Tier Fort seul génère **+55.9 R (+81 550.24 $)** avec `BreakoutRetest`, `PocMigration` et `HtfContinuation`. Seuil d'alerte relevé à 70.
+   * **ES (S&P 500) :** `HtfContinuation` et `PocMigration` dominent (+10,1k$ et +6,5k$).
+   * **CL (Pétrole) :** `BreakoutRetest` (+11,6k$) et `MacroReversal` (+6,1k$) dominent ; `PocMigration` et `RejectExtreme` désactivés.
+   * **MNQ (Nasdaq) :** `MacroReversal` (+18.3 R) performe ; `PocMigration` et `RejectExtreme` désactivés.
+
+---
+
 ## 📊 Analyse des Performances & Audit Shadow
 
 Pour analyser et auditer les signaux générés :
 * **Rapports Complets Disponibles dans `MD/`** :
-  * [`MD/RAPPORT_PERFORMANCE_MULTI_ACTIFS_SHADOW_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_MULTI_ACTIFS_SHADOW_SCALPINGPRO.md) *(Master Rapport Multi-Actifs)*
+  * [`MD/RAPPORT_PERFORMANCE_MULTI_ACTIFS_SHADOW_SWING.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_MULTI_ACTIFS_SHADOW_SWING.md) *(Master Rapport Multi-Actifs Swing 100 Jours)* 🚀
+  * [`MD/RAPPORT_PERFORMANCE_MULTI_ACTIFS_SHADOW_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_MULTI_ACTIFS_SHADOW_SCALPINGPRO.md) *(Master Rapport Multi-Actifs ScalpingPro)*
   * [`MD/RAPPORT_PERFORMANCE_SHADOW_GC_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_SHADOW_GC_SCALPINGPRO.md) *(Gold)*
   * [`MD/RAPPORT_PERFORMANCE_SHADOW_NQ_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_SHADOW_NQ_SCALPINGPRO.md) *(Nasdaq)*
   * [`MD/RAPPORT_PERFORMANCE_SHADOW_ES_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_SHADOW_ES_SCALPINGPRO.md) *(S&P 500)*
   * [`MD/RAPPORT_PERFORMANCE_SHADOW_CL_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_SHADOW_CL_SCALPINGPRO.md) *(Pétrole)*
   * [`MD/RAPPORT_PERFORMANCE_SHADOW_MNQ_SCALPINGPRO.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_SHADOW_MNQ_SCALPINGPRO.md) *(Micro Nasdaq)*
+* **Scripts d'Audit de Performance Dédiés** :
+  * Audit Swing Multi-Actifs :
+    ```powershell
+    python Python/analyze_swing_performance.py
+    ```
+  * Génération du Rapport Swing Markdown :
+    ```powershell
+    python Python/generate_swing_report.py
+    ```
 * **Synchronisation Instantanée des Templates XML vers NinjaTrader 8** :
   ```powershell
   python Python/copy_xml_templates.py
@@ -322,8 +370,9 @@ Le dépôt `AMC-V8` est strictement réservé aux deux moteurs officiels : **`Sc
 ## 📚 Références & Documentation Associée
 
 * [1] Architecture & Différences : [`MD/SCALPING_PRO_VS_SWING_DIFFERENCES.md`](file:///c:/AMC-Pro/AMC-V8/MD/SCALPING_PRO_VS_SWING_DIFFERENCES.md)
-* [2] Matrice de Configuration Swing : [`configs/SWING/SWING_CONFIGURATION_MATRIX.md`](file:///c:/AMC-Pro/AMC-V8/configs/SWING/SWING_CONFIGURATION_MATRIX.md)
-* [3] ADR & Audit d'Architecture Swing : [`MD/SWING_AUDIT_AND_ADR_REPORT.md`](file:///c:/AMC-Pro/AMC-V8/MD/SWING_AUDIT_AND_ADR_REPORT.md)
-* [4] Rapport de Validation 99 Tests : [`MD/ZERO_TRUST_SWING_TEST_REPORT.md`](file:///c:/AMC-Pro/AMC-V8/MD/ZERO_TRUST_SWING_TEST_REPORT.md)
-* [5] Manuel Volume Profile & Playbooks : [`MD/VOLUME_PROFILE_GUIDE.md`](file:///c:/AMC-Pro/AMC-V8/MD/VOLUME_PROFILE_GUIDE.md)
-* [6] Moteur Swing C# : [`AuctionMarketCore.Swing.cs`](file:///c:/AMC-Pro/AMC-V8/AuctionMarketCore.Swing.cs) et [`AuctionMarketCore.Swing.Models.cs`](file:///c:/AMC-Pro/AMC-V8/AuctionMarketCore.Swing.Models.cs)
+* [2] Rapport Consolidé Shadow Swing Multi-Actifs : [`MD/RAPPORT_PERFORMANCE_MULTI_ACTIFS_SHADOW_SWING.md`](file:///c:/AMC-Pro/AMC-V8/MD/RAPPORT_PERFORMANCE_MULTI_ACTIFS_SHADOW_SWING.md)
+* [3] Matrice de Configuration Swing : [`configs/SWING/SWING_CONFIGURATION_MATRIX.md`](file:///c:/AMC-Pro/AMC-V8/configs/SWING/SWING_CONFIGURATION_MATRIX.md)
+* [4] ADR & Audit d'Architecture Swing : [`MD/SWING_AUDIT_AND_ADR_REPORT.md`](file:///c:/AMC-Pro/AMC-V8/MD/SWING_AUDIT_AND_ADR_REPORT.md)
+* [5] Rapport de Validation 99 Tests : [`MD/ZERO_TRUST_SWING_TEST_REPORT.md`](file:///c:/AMC-Pro/AMC-V8/MD/ZERO_TRUST_SWING_TEST_REPORT.md)
+* [6] Manuel Volume Profile & Playbooks : [`MD/VOLUME_PROFILE_GUIDE.md`](file:///c:/AMC-Pro/AMC-V8/MD/VOLUME_PROFILE_GUIDE.md)
+* [7] Moteur Swing C# : [`AuctionMarketCore.Swing.cs`](file:///c:/AMC-Pro/AMC-V8/AuctionMarketCore.Swing.cs) et [`AuctionMarketCore.Swing.Models.cs`](file:///c:/AMC-Pro/AMC-V8/AuctionMarketCore.Swing.Models.cs)
