@@ -1804,7 +1804,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                     {
                         if (!isBarClose)
                         {
-                            // Profil rafraichi pour le dashboard, aucune evaluation.
+                            // Court-circuit immédiat sur ticks intermédiaires :
+                            // En mode Swing (ou en historique/replay), aucun calcul de profil lourd n'est requis entre deux clôtures.
+                            if (IsSwing || State == State.Historical || !ShowDashboard) return;
+
+                            // Profil rafraichi pour le dashboard (temps réel ScalpingPro uniquement).
                             UpdateCurrentVwap(0);
                             UpdateHtfBias();
                             CalculateRollingVolumeProfile(barIdx, barsType);
@@ -1832,10 +1836,13 @@ namespace NinjaTrader.NinjaScript.Indicators
                         frozenVahPrice = vahPrice;
                         frozenValPrice = valPrice;
 
-                        // Profil complet (barre courante incluse) pour l'affichage dashboard.
-                        CalculateRollingVolumeProfile(barIdx, barsType);
-                        UpdateCurrentVwap(0);
-                        UpdateHtfBias();
+                        // Profil complet (barre courante incluse) pour l'affichage dashboard temps réel (ScalpingPro uniquement).
+                        if (State == State.Realtime && !IsSwing)
+                        {
+                            CalculateRollingVolumeProfile(barIdx, barsType);
+                            UpdateCurrentVwap(0);
+                            UpdateHtfBias();
+                        }
                     }
                     else
                     {
@@ -1867,12 +1874,16 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 if (BarsInProgress == 0)
                 {
-                    if (ShowDashboard && CurrentBars[0] >= 0)
+                    // En mode Swing, limiter le rendu visuel (dashboard et lignes) au premier tick de chaque barre
+                    // pour éviter d'inonder le moteur graphique DirectX avec 50 000 appels de dessin par bougie
+                    bool shouldRender = !IsSwing || IsFirstTickOfBar || State == State.Historical;
+
+                    if (ShowDashboard && CurrentBars[0] >= 0 && shouldRender)
                     {
                         UpdateDashboard();
                     }
 
-                    if (ShowLevelLines && CurrentBars[0] >= 0 && pocPrice != 0)
+                    if (ShowLevelLines && CurrentBars[0] >= 0 && pocPrice != 0 && shouldRender)
                     {
                         DrawLevelLines();
                     }
