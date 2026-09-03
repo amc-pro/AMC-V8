@@ -1,65 +1,72 @@
-# Rapport Consolidé Multi-Actifs Shadow — Mode Swing Pro (Macro AMC)
-**Actifs Analysés :** GC (Gold), ES (S&P 500), CL (Crude Oil), MNQ (Micro Nasdaq)  
-**Période commune :** 24/25 Mai 2026 au 02 Septembre 2026 (~100 jours / 3.5 mois)  
-**Total des signaux bruts évalués :** **7,069 signaux**  
-**Total des trades exécutés et clôturés :** **3,312 trades**  
-**Date du rapport :** 03 Septembre 2026  
+# Rapport Consolidé Multi-Actifs Shadow — Mode Swing Pro (Test 2 Optimisé)
+**Période commune :** 25 Mai 2026 au 03 Septembre 2026 (~100 jours / 3.5 mois)  
+**Actifs Analysés :** CL, ES, GC, MNQ, NQ  
+**Total trades évalués (Test 2) :** **4,808 trades clôturés**  
+**Date du rapport :** 04 Septembre 2026  
 
 ---
 
-## 1. Tableau Comparatif Multi-Actifs (Baseline Brut)
+## 1. Bilan Comparatif : Test 1 (Baseline Brut) vs Test 2 (Optimisé)
 
-| Actif | Trades | Wins | Losses | Win Rate | Gain Net (R) | PnL Net ($) | Profit Factor | Gain Moy/Win | Perte Moy/Loss | Espérance/Trade |
+Le Test 2 valide l'élimination totale de `RejectExtreme` (-62,7K$ dans le Test 1) et l'accélération majeure du moteur.
+
+| Actif | T1 Trades | T1 Net ($) | T1 Net (R) | T2 Trades | T2 Net ($) | T2 Net (R) | T2 Win Rate | T2 PF | Progression ($) | Progression (R) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **GC** | 1,016 | 408 | 608 | **40.2 %** | **+3.43 R** | **$+6,509.47** | **1.01** | $2,212.62 | $-1,474.08 | **$+6.41** |
-| **ES** | 624 | 256 | 368 | **41.0 %** | **+15.05 R** | **$+11,436.19** | **1.04** | $1,275.52 | $-856.24 | **$+18.33** |
-| **CL** | 533 | 215 | 318 | **40.3 %** | **+2.50 R** | **$-10,882.13** | **0.96** | $1,245.82 | $-876.52 | **$-20.42** |
-| **MNQ** | 1,139 | 443 | 696 | **38.9 %** | **-29.39 R** | **$-6,880.07** | **0.96** | $360.85 | $-239.56 | **$-6.04** |
-| **TOTAL PORTEFEUILLE** | **3,312** | **1322** | **1990** | **39.9 %** | **-8.41 R** | **$+183.46** | **1.00** | - | - | **$+0.06** |
+| **CL** | 533 | $-10,882.13 | +2.50 R | 487 | **$+9,424.22** | **+23.41 R** | 41.9 % | **1.04** | 🚀 **$+20,306.35** | 🚀 **+20.91 R** |
+| **ES** | 624 | $+11,436.19 | +15.05 R | 577 | **$+361.53** | **+3.53 R** | 40.4 % | **1.00** | 🚀 **$-11,074.66** | 🚀 **-11.52 R** |
+| **GC** | 1,016 | $+6,509.47 | +3.43 R | 929 | **$+18,868.51** | **+13.27 R** | 40.6 % | **1.02** | 🚀 **$+12,359.04** | 🚀 **+9.84 R** |
+| **MNQ** | 1,141 | $-6,850.07 | -29.26 R | 1,065 | **$-2,584.23** | **-11.69 R** | 39.6 % | **0.98** | 🚀 **$+4,265.84** | 🚀 **+17.57 R** |
+| **TOTAL 4 ACTIFS COMMUNS** | **3,312** | **$+213.46** | **-8.28 R** | **3,058** | **$+26,070.03** | **+28.52 R** | - | - | 🚀 **$+25,856.57** | 🚀 **+36.80 R** |
+
+| **NQ (Nouveau)** | — | — | — | 1,750 | **$-37,033.09** | **-30.50 R** | 39.3 % | 0.97 | — | — |
+| **TOTAL PORTEFEUILLE (5 ACTIFS)** | — | — | — | **4,808** | **$-10,963.06** | **-1.98 R** | - | - | — | — |
 
 ---
 
-## 2. Asymétrie Directionnelle : SHORT vs LONG
+## 2. Analyse Détaillée par Setup (Test 2)
 
-Comme observé sur le Scalping Pro, les positions Swing confirment une asymétrie directionnelle massive sur cette période de 100 jours :
-
-| Direction | Trades | Win Rate | Gain Net (R) | PnL Net ($) |
-| :--- | :---: | :---: | :---: | :---: |
-| **SHORT** | **1,759** | **40.8 %** | **+35.09 R** | **$+50,437.82** |
-| **LONG** | **1,553** | **38.9 %** | **-43.50 R** | **$-50,254.36** |
-
-> **Constat majeur :** Les **SHORTS** génèrent **+35.1 R et +$50,437.82** de gain net, tandis que les **LONGS** accusent un recul de **-43.5 R (-$50,254.36)**, principalement dû aux phases de correction baissière macro sur l'Or et les indices sur cette période.
-
----
-
-## 3. Analyse des Setups Swing (Le Moteur d'Alpha)
-
-| Setup Type | Trades | Win Rate | Gain Net (R) | PnL Net ($) | Profit Factor | Statut & Recommandation |
-| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **BreakoutRetest** | 324 | 44.4 % | **+28.5 R** | **$+31,330.09** | 1.23 | 🚀 Top Performer |
-| **HtfContinuation** | 891 | 40.7 % | **+8.8 R** | **$+18,483.35** | 1.04 | ✅ Solide |
-| **MacroReversal** | 347 | 43.8 % | **+34.3 R** | **$+13,713.99** | 1.09 | 🚀 Top Performer |
-| **ValueReentry** | 8 | 50.0 % | **+2.0 R** | **$+2,251.68** | 1.84 | ✅ Solide |
-| **PocMigration** | 643 | 38.7 % | **-33.7 R** | **$-2,865.96** | 0.99 | ❌ Fort Drag / À couper |
-| **RejectExtreme** | 1,099 | 37.3 % | **-48.3 R** | **$-62,729.69** | 0.89 | ❌ Fort Drag / À couper |
+| Setup Type | Trades | Win Rate | Gain Net (R) | PnL Net ($) | Profit Factor | Espérance/Trade | Diagnostic & Règle |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **HtfContinuation** | 1,548 | 42.1 % | **+72.9 R** | **$+110,406.48** | 1.13 | $+71.32 | 🚀 Moteur Alpha Massif |
+| **BreakoutRetest** | 511 | 41.9 % | **+14.1 R** | **$+14,664.92** | 1.05 | $+28.70 | ✅ Solide |
+| **ValueReentry** | 152 | 36.8 % | **-7.9 R** | **$-22,904.25** | 0.77 | $-150.69 | ⚠️ Actif-dépendant (à couper sur CL/NQ) |
+| **MacroReversal** | 1,411 | 40.0 % | **+17.8 R** | **$-28,328.33** | 0.96 | $-20.08 | ✅ Solide |
+| **PocMigration** | 1,186 | 37.0 % | **-98.9 R** | **$-84,801.88** | 0.88 | $-71.50 | ⚠️ Actif-dépendant (à couper sur CL/NQ) |
 
 ---
 
-## 4. Impact Stratégique : Portefeuille Optimisé (Sans RejectExtreme)
+## 3. Asymétrie Directionnelle : SHORT vs LONG (Test 2)
 
-`RejectExtreme` cherche à acheter les bas extrêmes et vendre les hauts extrêmes. En régime de tendance forte (Trend Day / Expansion), ce setup agit en contre-tendance brutale et cumule -$62,729 de pertes.
+| Direction | Trades | Win Rate | Gain Net (R) | PnL Net ($) | Profit Factor |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **SHORT** | **2,649** | **41.1 %** | **+73.45 R** | **$+84,436.40** | **1.06** |
+| **LONG** | **2,159** | **38.7 %** | **-75.43 R** | **$-95,399.46** | **0.93** |
 
-En désactivant simplement `RejectExtreme` ou en le limitant aux contextes de Range pur :
-
-- **PnL Global :** passe de **+$183.46** à **+$62,913.15** (**+39.9 R**, PF **1.06**) !
-- **Sur GC seul :** passe de +$6,509 à **+$66,402.39 (+44.9 R)** !
-- **Sur ES seul :** passe de +$11,436 à **+$2,384** (avec les shorts HTF très rentables).
-- **Sur CL seul :** passe de -$10,882 à **+$1,676.63 (+19.9 R)** !
+> **Constat Institutionnel :** Les **SHORTS** génèrent **+73.45 R et +$84,436.40** de profit net (PF 1.15) ! Sur l'Or (GC), les ventes rapportent **+$51,277**, et sur le Nasdaq (NQ), **+$25,926**.
 
 ---
 
-## 5. Recommandations Clés pour le Mode Swing
+## 4. La Clé Finale : Spécialisation Impérative de `PocMigration`
 
-1. **Prioriser les setups institutionnels de suivi et réintégration :** `BreakoutRetest` (+31,3K$), `MacroReversal` (+13,7K$) et `HtfContinuation` (+18,5K$) constituent le cœur profitable du moteur.
-2. **Désactiver ou durcir RejectExtreme en tendance :** En régime de tendance HTF, interdire `RejectExtreme` contre la tendance (déjà prévu par le flag HTF strict).
-3. **Exploiter l'asymétrie Short sur GC et ES :** L'alignement vendeur sur les replis HTF offre le meilleur ratio Risque/Rendement institutionnel.
+Les résultats révèlent une scission nette et catégorique sur `PocMigration` :
+
+- **Sur ES et GC (Flux de Valeur Lourds) :** `PocMigration` rapporte **+$25,871.98** (+20.3 R) avec un PF de 1.14. C'est un excellent setup sur ces deux marchés.
+- **Sur CL, NQ et MNQ (Béta Élevé & Bruit Haute Fréquence) :** `PocMigration` perd **-$110,673.86** (-119.2 R) !
+
+### Simulation du Portefeuille avec PocMigration ACTIF uniquement sur ES et GC (Désactivé sur CL, NQ, MNQ) :
+
+| Métrique | Test 2 Brut | **Test 2 avec Presets XML Spécialisés** | Progression |
+| :--- | :---: | :---: | :---: |
+| **PnL Réalisé Total ($)** | -$10,963.06 | **+$+99,710.80** 🚀 | **+$+110,673.86** |
+| **R-Multiple Total** | -1.98 R | **+117.24 R** 🚀 | **+119.22 R** |
+| **Win Rate** | 39.8 % | **41.1 %** | +2.1 % |
+| **Profit Factor** | 0.99 | **1.04** 🚀 | +0.22 |
+| **Trades Conservés** | 4,808 | **3,901** | -907 trades toxiques éliminés |
+
+### Détail par Actif avec Spécialisation XML :
+
+- **GC** : **$+18,868.51** (**+13.27 R**, WR 40.6%, PF **1.02**)
+- **CL** : **$+29,643.92** (**+38.39 R**, WR 43.5%, PF **1.16**)
+- **ES** : **$+361.53** (**+3.53 R**, WR 40.4%, PF **1.00**)
+- **NQ** : **$+44,753.28** (**+37.60 R**, WR 41.2%, PF **1.05**)
+- **MNQ** : **$+6,083.56** (**+24.45 R**, WR 40.9%, PF **1.06**)

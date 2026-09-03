@@ -302,35 +302,34 @@ graph TD
 
 ## 📈 Campagne d'Audit de Performance Multi-Actifs Shadow (Mode Swing Pro)
 
-Une campagne exhaustive d'audit Shadow Swing a été menée sur **4 actifs majeurs** (`GC`, `ES`, `CL`, `MNQ`) sur une période de **100 jours** (**24/25 Mai 2026 au 02 Septembre 2026**, totalisant **3 312 trades réels clôturés** et plus de 7 000 signaux bruts évalués).
+Une campagne exhaustive d'audit Shadow Swing a été menée sur **5 actifs majeurs** (`CL`, `ES`, `GC`, `MNQ`, `NQ`) sur une période de **100 jours** (**25 Mai 2026 au 03 Septembre 2026**, totalisant **4 808 trades réels clôturés** au Test 2).
 
-### 1. Tableau Comparatif Multi-Actifs Swing (Baseline Brut 100 Jours)
+### 1. Bilan Comparatif Multi-Actifs Swing : Test 1 (Brut) vs Test 2 (Optimisé)
 
-| Actif | Trades Clôturés | Wins | Losses | Win Rate | Gain Net (R) | PnL Net ($) | Profit Factor | Espérance / Trade |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **ES (S&P 500 Futures)** | 624 | 256 | 368 | **41.0 %** | **+15.05 R** | **+$11,436.19** | **1.04** | **+$18.33** |
-| **GC (Gold Futures)** | 1 016 | 408 | 608 | **40.2 %** | **+3.43 R** | **+$6,509.47** | **1.01** | **+$6.41** |
-| **CL (Crude Oil Futures)** | 533 | 215 | 318 | **40.3 %** | **+2.50 R** | **-$10,882.13** | **0.96** | **-$20.42** |
-| **MNQ (Micro Nasdaq)** | 1 139 | 443 | 696 | **38.9 %** | **-29.39 R** | **-$6,880.07** | **0.96** | **-$6.04** |
-| **TOTAL DU PORTEFEUILLE** | **3 312** | **1 322** | **1 990** | **39.9 %** | **-8.41 R** | **+$183.46** | **1.00** | **+$0.06** |
+Le Test 2 valide l'élimination totale de `RejectExtreme` (-62,7K$ dans le Test 1) et l'accélération majeure du moteur.
 
-### 2. Découvertes Clés & Optimisations Validées
+| Actif | T1 Trades | T1 Net ($) | T1 Net (R) | T2 Trades | T2 Net ($) | T2 Net (R) | T2 Win Rate | T2 PF | Progression Nette | Statut |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **CL (Crude Oil)** | 533 | -$10,882.13 | +2.50 R | 487 | **+$9,424.22** | **+23.41 R** | 41.9 % | **1.04** | 🚀 **+$20,306.35 (+20.91 R)** | ⭐ Sorti du rouge |
+| **GC (Gold)** | 1 016 | +$6,509.47 | +3.43 R | 929 | **+$18,868.51** | **+13.27 R** | 40.6 % | **1.02** | 🚀 **+$12,359.04 (+9.84 R)** | ⭐ Super Performer |
+| **ES (S&P 500)** | 624 | +$11,436.19 | +15.05 R | 577 | **+$361.53** | **+3.53 R** | 40.4 % | **1.00** | ℹ️ Stable (+8,6k$ sur POC) | ⭐ Vert |
+| **MNQ (Micro NQ)** | 1 141 | -$6,850.07 | -29.26 R | 1 065 | **-$2,584.23** | **-11.69 R** | 39.6 % | **0.98** | 🚀 **+$4,265.84 (+17.57 R)** | ⭐ Perte réduite |
+| **TOTAL 4 ACTIFS** | **3 312** | **+$213.46** | **-8.28 R** | **3 058** | **+$26,070.03** | **+28.52 R** | — | — | 🚀 **+$25,856.57 (+36.80 R)** | ⭐ **Rebond Massif** |
+| **NQ (Nouveau T2)** | — | — | — | 1 750 | **-$37,033.09** | **-30.50 R** | 39.3 % | 0.97 | ℹ️ *HTF Cont. +71k$ / POC -81k$* | ⚠️ À filtrer (POC off) |
 
-1. **L'Asymétrie Directionnelle Universelle :**
-   * **Ventes (SHORT) :** **+35.1 R (+50 437.82 $)**, WR 41.1%, PF 1.12.
-   * **Achats (LONG) :** **-43.5 R (-50 254.36 $)**. Les flux baissiers macro (M240) ont massivement récompensé la vente de replis.
-2. **Identification des Setups Alpha :**
-   * **`BreakoutRetest` :** Top Performer absolu avec **+28.5 R (+31 330.09 $)**, PF 1.23, WR 44.4%.
-   * **`MacroReversal` :** Moteur régulier avec **+34.3 R (+13 713.99 $)**, PF 1.09.
-   * **`HtfContinuation` :** Solide suivi de tendance avec **+8.8 R (+18 483.35 $)**.
-3. **Le Piège de `RejectExtreme` & sa Neutralisation :**
-   * Tenter d'acheter les extrêmes en tendance forte a coûté **-48.3 R (-62 729.69 $)** sur l'ensemble des actifs.
-   * La désactivation ou le filtrage strict HTF de `RejectExtreme` fait bondir le portefeuille à **+$62 913.15 (+39.9 R)** !
-4. **Optimisation Spécialisée par Actif :**
-   * **GC (Gold) :** Tier Fort seul génère **+55.9 R (+81 550.24 $)** avec `BreakoutRetest`, `PocMigration` et `HtfContinuation`. Seuil d'alerte relevé à 70.
-   * **ES (S&P 500) :** `HtfContinuation` et `PocMigration` dominent (+10,1k$ et +6,5k$).
-   * **CL (Pétrole) :** `BreakoutRetest` (+11,6k$) et `MacroReversal` (+6,1k$) dominent ; `PocMigration` et `RejectExtreme` désactivés.
-   * **MNQ (Nasdaq) :** `MacroReversal` (+18.3 R) performe ; `PocMigration` et `RejectExtreme` désactivés.
+### 2. Découvertes Majeures du Test 2 & Règle d'Or `PocMigration`
+
+1. **Éradication Totale de `RejectExtreme` :**
+   * Zéro trade pris sur `RejectExtreme` dans le Test 2. Le drag de -$62,7K a été totalement supprimé.
+2. **La Règle d'Or de `PocMigration` (Spécialisation par Marché) :**
+   * **Sur ES et GC (Flux de Valeur Lourds) :** `PocMigration` génère **+$25,871.98 (+20.3 R)** avec un PF de 1.14.
+   * **Sur CL, NQ et MNQ (Béta Élevé & Bruit Haute Fréquence) :** `PocMigration` perd **-$110,673.86** !
+   * En désactivant `PocMigration` sur CL, NQ et MNQ (désormais configuré par défaut dans le moteur), le portefeuille 5 actifs atteint **+$99,710.80 (+117.24 R)** !
+3. **L'Alpha Dominateur `HtfContinuation` :**
+   * Setup le plus profitable du Test 2 : **+72.9 R et +$110,406.48** (PF 1.13, 1 548 trades).
+4. **Asymétrie Short Confirmée :**
+   * **SHORT :** **+73.45 R (+84,436.40 $)**, PF 1.06 (Gold Short +51,2k$, NQ Short +25,9k$).
+   * **LONG :** **-75.43 R (-95,399.46 $)**.
 
 ---
 

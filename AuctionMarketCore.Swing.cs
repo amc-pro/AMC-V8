@@ -184,7 +184,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             NewsBlackoutMinutes = 15;
             NewsWindowPenalty = 20;
             NewsHardBlock = true;
-            EnablePocMigration = true;
+            EnablePocMigration = false; // Désactivé par défaut (actif uniquement sur GC et ES via XML)
             PocMigrationMinSessions = 3;
             PocMigrationLookbackSessions = 5;
             EnableMonthlyVwapRetest = true;
