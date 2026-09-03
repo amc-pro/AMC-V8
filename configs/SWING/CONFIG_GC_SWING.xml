@@ -169,7 +169,7 @@
       <JournalLiveOnly>false</JournalLiveOnly>
       <JournalShadowMode>true</JournalShadowMode>
       <EnableSwingEngine>true</EnableSwingEngine>
-      <SwingMinScoreToAlert>50</SwingMinScoreToAlert>
+      <SwingMinScoreToAlert>70</SwingMinScoreToAlert>
       <SwingTierSilverScore>50</SwingTierSilverScore>
       <SwingTierGoldScore>70</SwingTierGoldScore>
       <SwingTierTresFortScore>85</SwingTierTresFortScore>
@@ -177,6 +177,11 @@
       <SwingMaxActiveTrades>2</SwingMaxActiveTrades>
       <EnableNewsFilter>true</EnableNewsFilter>
       <EnableSwingTelegramAlerts>true</EnableSwingTelegramAlerts>
+      <EnableSwingRejectExtreme>false</EnableSwingRejectExtreme>
+      <EnableSwingBreakoutRetest>true</EnableSwingBreakoutRetest>
+      <EnableSwingMacroReversal>true</EnableSwingMacroReversal>
+      <EnableSwingHtfContinuation>true</EnableSwingHtfContinuation>
+      <EnableSwingValueReentry>true</EnableSwingValueReentry>
       <EnablePocMigration>true</EnablePocMigration>
       <PocMigrationMinSessions>3</PocMigrationMinSessions>
       <PocMigrationLookbackSessions>5</PocMigrationLookbackSessions>

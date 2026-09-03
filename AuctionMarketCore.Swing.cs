@@ -57,18 +57,33 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Activer Alertes Telegram Swing", Order = 13, GroupName = "Swing 03. Alertes")]
         public bool EnableSwingTelegramAlerts { get; set; }
 
-        [Display(Name = "Activer POC Migration", Order = 14, GroupName = "Swing 01. Moteur")]
+        [Display(Name = "Activer Reject Extreme", Order = 13, GroupName = "Swing 01. Moteur")]
+        public bool EnableSwingRejectExtreme { get; set; }
+
+        [Display(Name = "Activer Breakout Retest", Order = 14, GroupName = "Swing 01. Moteur")]
+        public bool EnableSwingBreakoutRetest { get; set; }
+
+        [Display(Name = "Activer Macro Reversal", Order = 15, GroupName = "Swing 01. Moteur")]
+        public bool EnableSwingMacroReversal { get; set; }
+
+        [Display(Name = "Activer HTF Continuation", Order = 16, GroupName = "Swing 01. Moteur")]
+        public bool EnableSwingHtfContinuation { get; set; }
+
+        [Display(Name = "Activer Value Reentry", Order = 17, GroupName = "Swing 01. Moteur")]
+        public bool EnableSwingValueReentry { get; set; }
+
+        [Display(Name = "Activer POC Migration", Order = 18, GroupName = "Swing 01. Moteur")]
         public bool EnablePocMigration { get; set; }
 
         [Range(2, 10)]
-        [Display(Name = "Sessions Min Migration POC", Order = 15, GroupName = "Swing 01. Moteur")]
+        [Display(Name = "Sessions Min Migration POC", Order = 19, GroupName = "Swing 01. Moteur")]
         public int PocMigrationMinSessions { get; set; }
 
         [Range(3, 20)]
-        [Display(Name = "Lookback Sessions Migration", Order = 16, GroupName = "Swing 01. Moteur")]
+        [Display(Name = "Lookback Sessions Migration", Order = 20, GroupName = "Swing 01. Moteur")]
         public int PocMigrationLookbackSessions { get; set; }
 
-        [Display(Name = "Activer Monthly VWAP Retest", Order = 17, GroupName = "Swing 01. Moteur")]
+        [Display(Name = "Activer Monthly VWAP Retest", Order = 21, GroupName = "Swing 01. Moteur")]
         public bool EnableMonthlyVwapRetest { get; set; }
 
         [Range(1, 30)]
@@ -184,6 +199,13 @@ namespace NinjaTrader.NinjaScript.Indicators
             MonthlyBandMinSlopeTicksPerHour = 2.0;
             MonthlyBandMinSlopeAtrNormalized = 0.10;
             MonthlyBandSlopeLookbackMinutes = 240;
+
+            // Familles de setups Swing (RejectExtreme désactivé par défaut suite audit 100j)
+            EnableSwingRejectExtreme = false;
+            EnableSwingBreakoutRetest = true;
+            EnableSwingMacroReversal = true;
+            EnableSwingHtfContinuation = true;
+            EnableSwingValueReentry = true;
 
             // Niveaux de score pour catégorisation des Tier
             SwingJournalFilePath = string.Empty;
@@ -777,18 +799,23 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (HasOpenTradeInDirection(dir)) return;
             if (openSwingTrades.Count >= SwingMaxActiveTrades) return;
 
-            var setupList = new List<SwingSetupType>
-            {
-                SwingSetupType.RejectExtreme,
-                SwingSetupType.ValueReentry,
-                SwingSetupType.BreakoutRetest,
-                SwingSetupType.MacroReversal,
-                SwingSetupType.HtfContinuation
-            };
+            var setupList = new List<SwingSetupType>();
+            if (EnableSwingBreakoutRetest)
+                setupList.Add(SwingSetupType.BreakoutRetest);
+            if (EnableSwingMacroReversal)
+                setupList.Add(SwingSetupType.MacroReversal);
+            if (EnableSwingHtfContinuation)
+                setupList.Add(SwingSetupType.HtfContinuation);
+            if (EnableSwingValueReentry)
+                setupList.Add(SwingSetupType.ValueReentry);
             if (EnablePocMigration)
                 setupList.Add(SwingSetupType.PocMigration);
             if (EnableMonthlyVwapRetest)
                 setupList.Add(SwingSetupType.MonthlyVwapBandRetest);
+            if (EnableSwingRejectExtreme)
+                setupList.Add(SwingSetupType.RejectExtreme);
+
+            if (setupList.Count == 0) return;
 
             var setupTypes = setupList.ToArray();
 

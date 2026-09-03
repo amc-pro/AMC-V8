@@ -177,7 +177,12 @@
       <SwingMaxActiveTrades>2</SwingMaxActiveTrades>
       <EnableNewsFilter>true</EnableNewsFilter>
       <EnableSwingTelegramAlerts>true</EnableSwingTelegramAlerts>
-      <EnablePocMigration>true</EnablePocMigration>
+      <EnableSwingRejectExtreme>false</EnableSwingRejectExtreme>
+      <EnableSwingBreakoutRetest>true</EnableSwingBreakoutRetest>
+      <EnableSwingMacroReversal>true</EnableSwingMacroReversal>
+      <EnableSwingHtfContinuation>true</EnableSwingHtfContinuation>
+      <EnableSwingValueReentry>true</EnableSwingValueReentry>
+      <EnablePocMigration>false</EnablePocMigration>
       <PocMigrationMinSessions>3</PocMigrationMinSessions>
       <PocMigrationLookbackSessions>5</PocMigrationLookbackSessions>
       <SniperRthOnly>false</SniperRthOnly>

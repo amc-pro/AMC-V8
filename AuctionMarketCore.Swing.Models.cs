@@ -442,15 +442,31 @@ namespace NinjaTrader.NinjaScript.Indicators
                 case SwingSetupType.RejectExtreme:
                     if (isLong)
                     {
+                        // Anti-couteau tombant : Pas d'achat aux extrêmes si tendance HTF baissière
+                        if (ctx.HtfTrendDirection < 0)
+                        { rejectionReason = "REJECT_EXTREME_COUNTER_HTF_BEARISH"; return false; }
+
                         bool testedExtreme = (ctx.Sd2Lower > 0 && ctx.Low <= ctx.Sd2Lower) || (ctx.DailyVal > 0 && ctx.Low <= ctx.DailyVal);
                         bool candleRejection = ctx.Close > ctx.Open && ctx.Close > ctx.Low;
                         if (!testedExtreme || !candleRejection) { rejectionReason = "NO_EXTREME_TEST_LONG"; return false; }
+
+                        // Confirmation Order Flow : pas d'achat si delta vendeur strict sans divergence ni absorption
+                        if (ctx.BarDelta < 0 && !ctx.HasDeltaDivergence && !ctx.HasAbsorptionEvidence)
+                        { rejectionReason = "REJECT_EXTREME_OPPOSING_DELTA"; return false; }
                     }
                     else
                     {
+                        // Pas de vente aux extrêmes si tendance HTF haussière
+                        if (ctx.HtfTrendDirection > 0)
+                        { rejectionReason = "REJECT_EXTREME_COUNTER_HTF_BULLISH"; return false; }
+
                         bool testedExtreme = (ctx.Sd2Upper > 0 && ctx.High >= ctx.Sd2Upper) || (ctx.DailyVah > 0 && ctx.High >= ctx.DailyVah);
                         bool candleRejection = ctx.Close < ctx.Open && ctx.Close < ctx.High;
                         if (!testedExtreme || !candleRejection) { rejectionReason = "NO_EXTREME_TEST_SHORT"; return false; }
+
+                        // Confirmation Order Flow : pas de vente si delta acheteur strict sans divergence ni absorption
+                        if (ctx.BarDelta > 0 && !ctx.HasDeltaDivergence && !ctx.HasAbsorptionEvidence)
+                        { rejectionReason = "REJECT_EXTREME_OPPOSING_DELTA"; return false; }
                     }
                     break;
 
