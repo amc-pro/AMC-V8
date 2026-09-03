@@ -1812,7 +1812,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                             // En mode ScalpingPro temps réel / replay : brider le recalcul du profil intermédiaire
                             // à au plus 2 fois par seconde (500 ms) pour éliminer l'étouffement CPU sur MNQ/NQ
-                            long nowTicks = Environment.TickCount64;
+                            long nowTicks = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
                             if (nowTicks - lastIntermediateProfileCalcTime < 500) return;
                             lastIntermediateProfileCalcTime = nowTicks;
 
@@ -1885,7 +1885,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     // Limiter le rendu visuel DirectX (dashboard et lignes) :
                     // - Toujours exécuté à l'ouverture de barre (IsFirstTickOfBar) ou lors du chargement historique
                     // - En temps réel / replay intermédiaire : bridé à 250ms (4 FPS max) pour éviter de saturer le thread UI DirectX
-                    long nowRender = Environment.TickCount64;
+                    long nowRender = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
                     bool shouldRender = State == State.Realtime 
                         ? (IsFirstTickOfBar || (nowRender - lastRenderWallTime >= 250)) 
                         : IsFirstTickOfBar;
