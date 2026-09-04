@@ -66,10 +66,11 @@ Dans `SwingRiskManager.CalculateTargets` :
   - **TP1 est calé précisément sur ce niveau adverse** (avec un buffer de ticks de sécurité).
   - Ce snapping garantit que TP1 est atteint avant le heurt d'un mur d'ordres institutionnels, sécurisant le win rate et activant la bascule du Stop à Break-Even.
 
-### 2.4. Hard Exit sur Changement de Régime (Option B) & Maintien de Position
+### 2.4. Hard Exit sur Changement de Régime & Maintien de Position
 Dans `AuctionMarketCore.Swing.cs` (`UpdateOpenSwingTrades`) :
-- **`ExitOnRegimeChange = true`** : Si le régime de marché HTF se retourne contre la position (ex: position Long et régime passant en `TrendDown`), la position est coupée immédiatement au marché avec le motif `REGIME_CHANGED`.
-- **`SwingMaxBarsInTrade = 0`** : Désactivation du minuteur de barres arbitraire. La position est conservée tant que le Stop, le TP ou le changement de régime ne l'invalident pas.
+- **`ExitOnRegimeChange = false` (Recommandé en Production)** : Le test d'audit OOS H1 2026 a prouvé que couper sur simple franchissement M5 de l'EMA HTF avortait prématurément 53.3% des trades (notamment les MacroReversals et pullbacks), détruisant -$66,6K$. La désactivation permet de laisser les positions atteindre leur cycle complet (SL / TP1 / TP2 / BE), débloquant **+$57 605 $ (+59,85 R, PF 1.23)** avec 100% des 5 actifs dans le vert.
+- **Garde-fous si activé** : Exige au minimum 12 barres de maturité (~1h) et exclut formellement les setups de mean-reversion (`MacroReversal`, `ValueReentry`).
+- **`SwingMaxBarsInTrade = 0`** : Désactivation du minuteur de barres arbitraire. La position est conservée tant que le Stop ou le TP ne l'invalident pas.
 
 ### 2.5. Spécialisation par Actif
 - **NQ & MNQ** : `EnableSwingBreakoutRetest` est fixé à `false` dans `CONFIG_NQ_SWING.xml` et `CONFIG_MNQ_SWING.xml`.
@@ -86,7 +87,7 @@ Les 8 fichiers de configuration dans `configs/SWING/` intègrent désormais la s
   <EnableOpportunityManager>true</EnableOpportunityManager>
   <SameCampaignLock>true</SameCampaignLock>
   <RequireNewStructureForReentry>true</RequireNewStructureForReentry>
-  <ExitOnRegimeChange>true</ExitOnRegimeChange>
+  <ExitOnRegimeChange>false</ExitOnRegimeChange>
   <SwingEntryCooldownBars>12</SwingEntryCooldownBars>
   <SwingMaxEntriesPerSession>2</SwingMaxEntriesPerSession>       <!-- 0 = Illimité, 1..10 = Plafond actif -->
   <SwingMaxLongEntriesPerSession>1</SwingMaxLongEntriesPerSession>   <!-- 0 = Illimité, 1..10 = Plafond actif -->

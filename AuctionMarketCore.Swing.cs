@@ -244,7 +244,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             EnableOpportunityManager = true;
             SameCampaignLock = true;
             RequireNewStructureForReentry = true;
-            ExitOnRegimeChange = true;
+            ExitOnRegimeChange = false;
             SwingEntryCooldownBars = 12;
             SwingMaxEntriesPerSession = 2;
             SwingMaxLongEntriesPerSession = 1;
@@ -1313,8 +1313,13 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 t.BarsElapsed++;
 
-                // 0. Vérification de rupture de régime HTF (Hard Exit on Regime Change - Option B validée)
-                if (ExitOnRegimeChange && htfEma != null && htfEma.IsValidDataPoint(0))
+                // 0. Vérification de rupture de régime HTF (Hard Exit on Regime Change - Option B)
+                // Garde-fous : Ne jamais appliquer aux setups de mean-reversion (MacroReversal, ValueReentry)
+                // et exiger une maturité minimale de 12 barres (~1h) pour éviter le bruit M5.
+                if (ExitOnRegimeChange && t.BarsElapsed >= 12 &&
+                    t.SetupType != SwingSetupType.MacroReversal &&
+                    t.SetupType != SwingSetupType.ValueReentry &&
+                    htfEma != null && htfEma.IsValidDataPoint(0))
                 {
                     bool regimeOpposed = (t.IsLong && close < htfEma[0]) || (!t.IsLong && close > htfEma[0]);
                     if (regimeOpposed)

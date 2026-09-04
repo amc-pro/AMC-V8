@@ -17,7 +17,7 @@ instruments_config = {
 opp_manager_xml = """      <EnableOpportunityManager>true</EnableOpportunityManager>
       <SameCampaignLock>true</SameCampaignLock>
       <RequireNewStructureForReentry>true</RequireNewStructureForReentry>
-      <ExitOnRegimeChange>true</ExitOnRegimeChange>
+      <ExitOnRegimeChange>false</ExitOnRegimeChange>
       <SwingEntryCooldownBars>12</SwingEntryCooldownBars>
       <SwingMaxEntriesPerSession>2</SwingMaxEntriesPerSession>
       <SwingMaxLongEntriesPerSession>1</SwingMaxLongEntriesPerSession>
@@ -34,6 +34,9 @@ for sym, cfg in instruments_config.items():
         
     with open(xml_path, "r", encoding="utf-8") as f:
         content = f.read()
+
+    # Mettre à jour ExitOnRegimeChange vers false
+    content = re.sub(r"<ExitOnRegimeChange>\w+</ExitOnRegimeChange>", "<ExitOnRegimeChange>false</ExitOnRegimeChange>", content)
 
     # Mettre à jour SwingMinScoreToAlert
     content = re.sub(r"<SwingMinScoreToAlert>\d+</SwingMinScoreToAlert>", f"<SwingMinScoreToAlert>{cfg['score']}</SwingMinScoreToAlert>", content)

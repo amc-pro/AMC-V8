@@ -185,7 +185,7 @@
       <EnableOpportunityManager>true</EnableOpportunityManager>
       <SameCampaignLock>true</SameCampaignLock>
       <RequireNewStructureForReentry>true</RequireNewStructureForReentry>
-      <ExitOnRegimeChange>true</ExitOnRegimeChange>
+      <ExitOnRegimeChange>false</ExitOnRegimeChange>
       <SwingEntryCooldownBars>12</SwingEntryCooldownBars>
       <SwingMaxEntriesPerSession>2</SwingMaxEntriesPerSession>
       <SwingMaxLongEntriesPerSession>1</SwingMaxLongEntriesPerSession>
