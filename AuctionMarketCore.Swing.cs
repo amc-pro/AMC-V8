@@ -146,16 +146,16 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Cooldown Entrées (Barres)", Order = 34, GroupName = "Swing 04. Opportunity Manager")]
         public int SwingEntryCooldownBars { get; set; }
 
-        [Range(1, 10)]
-        [Display(Name = "Max Entrées Par Session", Order = 35, GroupName = "Swing 04. Opportunity Manager")]
+        [Range(0, 10)]
+        [Display(Name = "Max Entrées Par Session (0 = Illimité)", Order = 35, GroupName = "Swing 04. Opportunity Manager")]
         public int SwingMaxEntriesPerSession { get; set; }
 
-        [Range(1, 10)]
-        [Display(Name = "Max Entrées Long Par Session", Order = 36, GroupName = "Swing 04. Opportunity Manager")]
+        [Range(0, 10)]
+        [Display(Name = "Max Entrées Long Par Session (0 = Illimité)", Order = 36, GroupName = "Swing 04. Opportunity Manager")]
         public int SwingMaxLongEntriesPerSession { get; set; }
 
-        [Range(1, 10)]
-        [Display(Name = "Max Entrées Short Par Session", Order = 37, GroupName = "Swing 04. Opportunity Manager")]
+        [Range(0, 10)]
+        [Display(Name = "Max Entrées Short Par Session (0 = Illimité)", Order = 37, GroupName = "Swing 04. Opportunity Manager")]
         public int SwingMaxShortEntriesPerSession { get; set; }
 
         [Range(0, 500)]
@@ -307,6 +307,17 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             if (pocMigrationAnalyzer == null)
                 pocMigrationAnalyzer = new PocMigrationAnalyzer();
+
+            if (opportunityManager == null)
+                opportunityManager = new SwingOpportunityManager();
+
+            opportunityManager.Enabled = EnableOpportunityManager;
+            opportunityManager.SameCampaignLock = SameCampaignLock;
+            opportunityManager.RequireNewStructureForReentry = RequireNewStructureForReentry;
+            opportunityManager.EntryCooldownBars = SwingEntryCooldownBars;
+            opportunityManager.MaxEntriesPerSession = SwingMaxEntriesPerSession;
+            opportunityManager.MaxLongEntriesPerSession = SwingMaxLongEntriesPerSession;
+            opportunityManager.MaxShortEntriesPerSession = SwingMaxShortEntriesPerSession;
 
             activeSwingSignals.Clear();
             openSwingTrades.Clear();
@@ -871,10 +882,21 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (ctx == null || dir == SwingDirection.None) return;
 
             // Synchronisation de session avec l'Opportunity Manager
-            if (opportunityManager != null && sessionStartBarIndex != lastSwingSessionStartBarIndex)
+            if (opportunityManager != null)
             {
-                opportunityManager.OnNewSession(sessionStartBarIndex);
-                lastSwingSessionStartBarIndex = sessionStartBarIndex;
+                opportunityManager.Enabled = EnableOpportunityManager;
+                opportunityManager.SameCampaignLock = SameCampaignLock;
+                opportunityManager.RequireNewStructureForReentry = RequireNewStructureForReentry;
+                opportunityManager.EntryCooldownBars = SwingEntryCooldownBars;
+                opportunityManager.MaxEntriesPerSession = SwingMaxEntriesPerSession;
+                opportunityManager.MaxLongEntriesPerSession = SwingMaxLongEntriesPerSession;
+                opportunityManager.MaxShortEntriesPerSession = SwingMaxShortEntriesPerSession;
+
+                if (sessionStartBarIndex != lastSwingSessionStartBarIndex)
+                {
+                    opportunityManager.OnNewSession(sessionStartBarIndex);
+                    lastSwingSessionStartBarIndex = sessionStartBarIndex;
+                }
             }
 
             // Filtre Anti-Stacking : Pas plus d'une position Swing active dans la même direction

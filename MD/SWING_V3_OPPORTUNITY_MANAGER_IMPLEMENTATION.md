@@ -88,13 +88,16 @@ Les 8 fichiers de configuration dans `configs/SWING/` intègrent désormais la s
   <RequireNewStructureForReentry>true</RequireNewStructureForReentry>
   <ExitOnRegimeChange>true</ExitOnRegimeChange>
   <SwingEntryCooldownBars>12</SwingEntryCooldownBars>
-  <SwingMaxEntriesPerSession>0</SwingMaxEntriesPerSession>
-  <SwingMaxLongEntriesPerSession>0</SwingMaxLongEntriesPerSession>
-  <SwingMaxShortEntriesPerSession>0</SwingMaxShortEntriesPerSession>
-  <SwingMaxBarsInTrade>0</SwingMaxBarsInTrade>
+  <SwingMaxEntriesPerSession>2</SwingMaxEntriesPerSession>       <!-- 0 = Illimité, 1..10 = Plafond actif -->
+  <SwingMaxLongEntriesPerSession>1</SwingMaxLongEntriesPerSession>   <!-- 0 = Illimité, 1..10 = Plafond actif -->
+  <SwingMaxShortEntriesPerSession>1</SwingMaxShortEntriesPerSession> <!-- 0 = Illimité, 1..10 = Plafond actif -->
+  <SwingMaxBarsInTrade>0</SwingMaxBarsInTrade>                     <!-- 0 = Infini (sortie sur SL/TP/Régime) -->
   <EnableLateEntryPenalty>true</EnableLateEntryPenalty>
   <EnableCandidateRanking>true</EnableCandidateRanking>
 ```
+
+> **Règle de Dimensionnement des Sessions (Option A) :**
+> Les attributs `[Range(0, 10)]` sur les propriétés C# permettent désormais de configurer explicitement `0` pour désactiver le plafond (mode illimité), tout en conservant les valeurs par défaut de production (`2` entrées max, `1` long, `1` short) pour prévenir le sur-trading.
 
 ---
 
