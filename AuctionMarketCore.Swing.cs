@@ -517,9 +517,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                 PrevCurrentMonthlySd1Lower = swingPrevMonthlySd1Lower
             };
 
-            double sesVwap = (currentVpContext != null && currentVpContext.Session != null && currentVpContext.Session.Valid)
-                ? currentVpContext.Session.Vwap
-                : (currentVpContext != null && currentVpContext.PrevDay != null && currentVpContext.PrevDay.Valid ? currentVpContext.PrevDay.Vwap : 0.0);
+            double sesVwap = 0.0;
+            if (ofVwap != null && ofVwap.VWAP != null && ofVwap.VWAP.IsValidDataPoint(0))
+                sesVwap = ofVwap.VWAP[0];
+            else if (currentVpContext != null && currentVpContext.PrevDay != null && currentVpContext.PrevDay.Valid)
+                sesVwap = currentVpContext.PrevDay.Vwap;
             ctx.SessionVwap = sesVwap;
             ctx.SwingAnchorPrice = isBuy ? snLow : snHigh;
 
