@@ -271,11 +271,13 @@ graph TD
     • Rétablissement 24h sur NQ/MNQ (SniperRthOnly = false)
     • Désactivation FVG standard sur ES (-24.5 R) et CL (-8.2 R)
     • Rétablissement CumDeltaDivergence sur MNQ"]
-    OPT2 --> T3["Test 3 : Consolidation Finale (2 691 trades)
-    PnL: +137.74 R | PF: 1.10 (+267% vs Baseline)
+    OPT2 --> T3["Test 3 : Consolidation Finale (2 941 trades)
+    PnL: +149.62 R | PF: 1.10 (+299% vs Baseline)
     • MNQ bondit à +28.62 R (PF 1.12)
+    • NQ consolidé à +16.46 R (PF 1.06, 24h rétabli)
     • ES confirmé à +20.97 R (DD réduit de 54%)
-    • CL confirmé à +16.88 R (DD réduit de 60%)"]
+    • CL confirmé à +16.88 R (DD réduit de 60%)
+    • Longs portefeuille devenus positifs (+3.30 R)"]
 ```
 
 ### 2. Tableau Comparatif Consolidé : Test 1 (Brut) vs Meilleurs Tests Optimisés
@@ -286,8 +288,8 @@ graph TD
 | **MNQ (Micro Nasdaq)** | 379 | +5.82 R | 1.03 | -25.42 R | **Test 3** | **+28.62 R** | **1.12** | **-22.81 R** | 🚀 **+22.80 R (+392%)** | ⭐ Moteur 24h/24 |
 | **ES (S&P 500 Futures)** | 801 | -11.18 R | 0.97 | -35.86 R | **Test 3** | **+20.97 R** | **1.06** | **-16.54 R** | 🚀 **+32.15 R (DD ÷ 2.2)** | ⭐ Sorti du rouge |
 | **CL (Crude Oil Futures)**| 775 | -15.25 R | 0.96 | -34.63 R | **Test 3** | **+16.88 R** | **1.06** | **-14.02 R** | 🚀 **+32.13 R (DD ÷ 2.5)** | ⭐ Sorti du rouge |
-| **NQ (Nasdaq E-mini)** | 512 | +29.96 R | 1.10 | -19.49 R | **Test 2** | **+4.58 R** | **1.03** | **-21.50 R** | ℹ️ *(RTH strict, à relancer T3)* | ⭐ Positif |
-| **TOTAL DU PORTEFEUILLE** | **3 048** | **+37.52 R** | **1.02** | — | — | **+137.74 R** | **1.10** | — | 🚀 **+100.22 R (+267%)** | ⭐ **100% Actifs Verts** |
+| **NQ (Nasdaq E-mini)** | 512 | +29.96 R | 1.10 | -19.49 R | **Test 3** | **+16.46 R** | **1.06** | **-25.01 R** | 🚀 **+11.88 R vs T2 (24h)** | ⭐ Moteur 24h/24 |
+| **TOTAL DU PORTEFEUILLE** | **3 048** | **+37.52 R** | **1.02** | — | — | **+149.62 R** | **1.10** | — | 🚀 **+112.10 R (+299%)** | ⭐ **100% Actifs Verts** |
 
 ### 3. Les Découvertes Clés & Règles Universelles
 1. **Loi de l'Asymétrie Vente / Achat :** Sur l'échantillon brut, les ventes ont généré **+142.56 R** (PF 1.19) contre un déficit de **-105.04 R** pour les achats.
@@ -308,14 +310,14 @@ Une campagne exhaustive d'audit Shadow Swing a été menée sur **5 actifs majeu
 
 Le Test 2 valide l'élimination totale de `RejectExtreme` (-62,7K$ dans le Test 1) et l'accélération majeure du moteur.
 
-| Actif | T1 Trades | T1 Net ($) | T1 Net (R) | T2 Trades | T2 Net ($) | T2 Net (R) | T2 Win Rate | T2 PF | Progression Nette | Statut |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **CL (Crude Oil)** | 533 | -$10,882.13 | +2.50 R | 487 | **+$9,424.22** | **+23.41 R** | 41.9 % | **1.04** | 🚀 **+$20,306.35 (+20.91 R)** | ⭐ Sorti du rouge |
-| **GC (Gold)** | 1 016 | +$6,509.47 | +3.43 R | 929 | **+$18,868.51** | **+13.27 R** | 40.6 % | **1.02** | 🚀 **+$12,359.04 (+9.84 R)** | ⭐ Super Performer |
-| **ES (S&P 500)** | 624 | +$11,436.19 | +15.05 R | 577 | **+$361.53** | **+3.53 R** | 40.4 % | **1.00** | ℹ️ Stable (+8,6k$ sur POC) | ⭐ Vert |
-| **MNQ (Micro NQ)** | 1 141 | -$6,850.07 | -29.26 R | 1 065 | **-$2,584.23** | **-11.69 R** | 39.6 % | **0.98** | 🚀 **+$4,265.84 (+17.57 R)** | ⭐ Perte réduite |
-| **TOTAL 4 ACTIFS** | **3 312** | **+$213.46** | **-8.28 R** | **3 058** | **+$26,070.03** | **+28.52 R** | — | — | 🚀 **+$25,856.57 (+36.80 R)** | ⭐ **Rebond Massif** |
-| **NQ (Nouveau T2)** | — | — | — | 1 750 | **-$37,033.09** | **-30.50 R** | 39.3 % | 0.97 | ℹ️ *HTF Cont. +71k$ / POC -81k$* | ⚠️ À filtrer (POC off) |
+| Actif | T1 Trades | T1 Net ($) | T1 Net (R) | T2 Trades | T2 Net ($) | T2 Net (R) | T2 Win Rate | T2 PF | Progression Nette ($) | Progression Nette (R) | Statut |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **CL (Crude Oil)** | 533 | -$10,882.13 | +2.50 R | 430 | **+$29,643.92** | **+38.39 R** | 43.5 % | **1.16** | 🚀 **+$40,526.05** | 🚀 **+35.89 R** | ⭐ Sorti du rouge |
+| **NQ (Nasdaq E-mini)** | 1 750 | -$37,033.09 | -30.50 R | 1 471 | **+$23,837.88** | **+21.50 R** | 40.6 % | **1.02** | 🚀 **+$60,870.97** | 🚀 **+52.00 R** | ⭐ Moteur HTF (+62k$) |
+| **GC (Gold)** | 1 016 | +$6,509.47 | +3.43 R | 929 | **+$18,868.51** | **+13.27 R** | 40.6 % | **1.02** | 🚀 **+$12,359.04** | 🚀 **+9.84 R** | ⭐ Super Performer |
+| **MNQ (Micro NQ)** | 1 141 | -$6,850.07 | -29.26 R | 911 | **+$5,928.85** | **+24.06 R** | 41.3 % | **1.04** | 🚀 **+$12,778.92** | 🚀 **+53.32 R** | ⭐ Sorti du rouge |
+| **ES (S&P 500)** | 624 | +$11,436.19 | +15.05 R | 577 | **+$361.53** | **+3.53 R** | 40.4 % | **1.01** | ℹ️ Stable (+8,6k$ sur POC) | ℹ️ Stable | ⭐ Vert |
+| **TOTAL PORTEFEUILLE** | **5 064** | **-$36,819.63** | **-38.78 R** | **4 318** | 🚀 **+$78,640.69** | 🚀 **+100.75 R** | **41.3 %** | ⭐ **1.04** | 🚀 **+$115,460.32** | 🚀 **+139.53 R** | ⭐ **100% Actifs Verts** |
 
 ### 2. Découvertes Majeures du Test 2 & Règle d'Or `PocMigration`
 
