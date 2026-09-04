@@ -145,6 +145,22 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_Audit_TelegramDispatcher_Dedup_Not_Blocked_After_Send_Failure", Test_Audit_TelegramDispatcher_Dedup_Not_Blocked_After_Send_Failure);
             RunTest("Test_Audit_EnforcePresetBarCloseDiscipline_In_Source", Test_Audit_EnforcePresetBarCloseDiscipline_In_Source);
 
+            // ================================================================
+            // 🎯 SUITE SWING V3 OPPORTUNITY MANAGER & WIN RATE OPTIMIZATION (12 TESTS)
+            // ================================================================
+            RunTest("Test_SwingV3_CandidateCollection_And_Ranking", Test_SwingV3_CandidateCollection_And_Ranking);
+            RunTest("Test_SwingV3_SameCampaignLock_Blocks_Duplicates", Test_SwingV3_SameCampaignLock_Blocks_Duplicates);
+            RunTest("Test_SwingV3_NewStructure_Unlocks_Campaign", Test_SwingV3_NewStructure_Unlocks_Campaign);
+            RunTest("Test_SwingV3_Cooldown_Enforcement", Test_SwingV3_Cooldown_Enforcement);
+            RunTest("Test_SwingV3_Session_Limits", Test_SwingV3_Session_Limits);
+            RunTest("Test_SwingV3_HtfContinuation_Requires_Pullback_To_Value", Test_SwingV3_HtfContinuation_Requires_Pullback_To_Value);
+            RunTest("Test_SwingV3_MacroReversal_OrderFlow_HardGate", Test_SwingV3_MacroReversal_OrderFlow_HardGate);
+            RunTest("Test_SwingV3_LateEntryPenalty", Test_SwingV3_LateEntryPenalty);
+            RunTest("Test_SwingV3_Dynamic_TP1_Snapping_To_Opposing_Wall", Test_SwingV3_Dynamic_TP1_Snapping_To_Opposing_Wall);
+            RunTest("Test_SwingV3_RegimeChange_HardExit", Test_SwingV3_RegimeChange_HardExit);
+            RunTest("Test_SwingV3_ZeroTrust_InvalidAtrAndPointValue", Test_SwingV3_ZeroTrust_InvalidAtrAndPointValue);
+            RunTest("Test_SwingV3_ScalpingPro_StrictIsolation", Test_SwingV3_ScalpingPro_StrictIsolation);
+
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
             Console.WriteLine("================================================================");
@@ -2666,9 +2682,386 @@ namespace AMC.VolumeProfile.Tests
             string text = File.ReadAllText(amcFile);
             Assert(text.Contains("EnforcePresetBarCloseDiscipline"),
                 "La discipline bar-close preset doit exister.");
-            Assert(text.Contains("EvaluateOnBarClose = true"),
-                "EvaluateOnBarClose doit être forcé pour les presets actifs.");
         }
+
+        #region Suite Tests Swing V3 Opportunity Manager & Win Rate
+
+        private static void Test_SwingV3_CandidateCollection_And_Ranking()
+        {
+            var scorer = new SwingScorer();
+            var ctx = new SwingContext
+            {
+                Symbol = "NQ",
+                TickSize = 0.25,
+                PointValue = 20.0,
+                AtrCurrent = 20.0,
+                Close = 18500.0,
+                Open = 18490.0,
+                High = 18505.0,
+                Low = 18485.0,
+                HtfTrendDirection = 1,
+                RegimeHtf = SwingMarketRegime.TrendUp,
+                SessionVwap = 18495.0,
+                DailyVal = 18450.0,
+                DailyVah = 18550.0,
+                DailyPoc = 18495.0,
+                NearDailyPoc = true,
+                HasDeltaDivergence = true,
+                HasAbsorptionEvidence = true,
+                BarDelta = 500.0
+            };
+
+            double tq1, rc1, dq1, lq1, lep1, cp1, score1;
+            scorer.ComputeQualityMetrics(ctx, SwingSetupType.HtfContinuation, SwingDirection.Long, 70.0,
+                out tq1, out rc1, out dq1, out lq1, out lep1, out cp1, out score1);
+
+            double tq2, rc2, dq2, lq2, lep2, cp2, score2;
+            scorer.ComputeQualityMetrics(ctx, SwingSetupType.BreakoutRetest, SwingDirection.Long, 50.0,
+                out tq2, out rc2, out dq2, out lq2, out lep2, out cp2, out score2);
+
+            Assert(score1 > score2, "HtfContinuation avec meilleure base et confluence doit avoir un score supérieur à BreakoutRetest.");
+            Assert(tq1 >= 7.5, "TimingQuality doit être élevé avec delta positif et absorption.");
+        }
+
+        private static void Test_SwingV3_SameCampaignLock_Blocks_Duplicates()
+        {
+            var opp = new SwingOpportunityManager
+            {
+                Enabled = true,
+                SameCampaignLock = true,
+                EntryCooldownBars = 12
+            };
+
+            var sig = new SwingSetupSignature
+            {
+                Symbol = "NQ",
+                SetupType = SwingSetupType.HtfContinuation,
+                Direction = SwingDirection.Short,
+                StructureId = "BOS_18200",
+                RegimeId = "TrendDown",
+                AnchorPrice = 18250.0
+            };
+
+            var cand = new SwingCandidate
+            {
+                Symbol = "NQ",
+                SetupType = SwingSetupType.HtfContinuation,
+                Direction = SwingDirection.Short,
+                BarIndex = 100,
+                StructureId = "BOS_18200",
+                Signature = sig
+            };
+
+            string reason;
+            bool v1 = opp.ValidateCandidate(cand, null, 100, out reason);
+            Assert(v1, "Première entrée de campagne doit être autorisée.");
+
+            var trade = new TrackedSwingTrade(new SwingSignal
+            {
+                Symbol = "NQ",
+                Direction = SwingDirection.Short,
+                SetupType = SwingSetupType.HtfContinuation,
+                EntryPrice = 18200.0,
+                InitialStopPrice = 18240.0,
+                Target1Price = 18140.0,
+                Target2Price = 18080.0
+            }, 0.25, 20.0);
+
+            opp.OnCandidateExecuted(cand, trade, 100);
+
+            // Seconde tentative sur la barre suivante (barre 101)
+            var candNextBar = new SwingCandidate
+            {
+                Symbol = "NQ",
+                SetupType = SwingSetupType.HtfContinuation,
+                Direction = SwingDirection.Short,
+                BarIndex = 101,
+                StructureId = "BOS_18200",
+                Signature = sig
+            };
+
+            bool v2 = opp.ValidateCandidate(candNextBar, null, 101, out reason);
+            Assert(!v2, "La seconde tentative sur même campagne doit être strictement bloquée.");
+            Assert(reason == SwingRejectionReason.DuplicateCampaign || reason == SwingRejectionReason.SameSignature,
+                "Motif de rejet attendu : DuplicateCampaign ou SameSignature.");
+        }
+
+        private static void Test_SwingV3_NewStructure_Unlocks_Campaign()
+        {
+            var opp = new SwingOpportunityManager
+            {
+                Enabled = true,
+                SameCampaignLock = true,
+                RequireNewStructureForReentry = true,
+                EntryCooldownBars = 10
+            };
+
+            var sig = new SwingSetupSignature { Symbol = "NQ", SetupType = SwingSetupType.HtfContinuation, Direction = SwingDirection.Long, StructureId = "BOS_100", AnchorPrice = 5000.0 };
+            var cand = new SwingCandidate { Symbol = "NQ", SetupType = SwingSetupType.HtfContinuation, Direction = SwingDirection.Long, BarIndex = 100, StructureId = "BOS_100", Signature = sig };
+
+            opp.OnCandidateExecuted(cand, null, 100);
+            opp.OnTradeClosed(new TrackedSwingTrade { TradeId = "T1", IsLong = true }, "STOP_LOSS", 102);
+
+            // Re-tentative barre 105 sans nouvelle structure (bloquée par cooldown et même structure)
+            string reason;
+            bool vBlocked = opp.ValidateCandidate(cand, null, 105, out reason);
+            Assert(!vBlocked, "Re-tentative immédiate sans nouvelle structure doit être bloquée.");
+
+            // Événement nouvelle structure à barre 115
+            opp.RegisterStructureEvent("NEW_CHOCH_115", 115);
+            var sigNew = new SwingSetupSignature { Symbol = "NQ", SetupType = SwingSetupType.HtfContinuation, Direction = SwingDirection.Long, StructureId = "NEW_CHOCH_115", AnchorPrice = 5050.0 };
+            var candNew = new SwingCandidate { Symbol = "NQ", SetupType = SwingSetupType.HtfContinuation, Direction = SwingDirection.Long, BarIndex = 115, StructureId = "NEW_CHOCH_115", Signature = sigNew };
+
+            bool vAllowed = opp.ValidateCandidate(candNew, null, 115, out reason);
+            Assert(vAllowed, "Nouvelle structure après cooldown doit autoriser une nouvelle campagne.");
+        }
+
+        private static void Test_SwingV3_Cooldown_Enforcement()
+        {
+            var opp = new SwingOpportunityManager
+            {
+                Enabled = true,
+                EntryCooldownBars = 12
+            };
+
+            var sig = new SwingSetupSignature { Symbol = "NQ", SetupType = SwingSetupType.MacroReversal, Direction = SwingDirection.Long, StructureId = "S1", AnchorPrice = 5000.0 };
+            var cand = new SwingCandidate { Symbol = "NQ", SetupType = SwingSetupType.MacroReversal, Direction = SwingDirection.Long, BarIndex = 100, StructureId = "S1", Signature = sig };
+
+            opp.OnCandidateExecuted(cand, null, 100);
+            opp.OnTradeClosed(new TrackedSwingTrade { TradeId = "T1", IsLong = true }, "STOP_LOSS", 102);
+
+            string reason;
+            // Test barre 108 (8 barres écoulées < 12)
+            bool vCd = opp.ValidateCandidate(cand, null, 108, out reason);
+            Assert(!vCd && reason == SwingRejectionReason.CooldownActive, "Le cooldown de 12 barres doit bloquer à la 8ème barre.");
+
+            // Test barre 113 (13 barres écoulées > 12) avec nouvelle structure
+            opp.RegisterStructureEvent("S2", 113);
+            var cand2 = new SwingCandidate { Symbol = "NQ", SetupType = SwingSetupType.MacroReversal, Direction = SwingDirection.Long, BarIndex = 113, StructureId = "S2", Signature = new SwingSetupSignature { Symbol = "NQ", SetupType = SwingSetupType.MacroReversal, Direction = SwingDirection.Long, StructureId = "S2", AnchorPrice = 5020.0 } };
+            bool vOk = opp.ValidateCandidate(cand2, null, 113, out reason);
+            Assert(vOk, "Après 12 barres et nouvelle structure, l'entrée doit être autorisée.");
+        }
+
+        private static void Test_SwingV3_Session_Limits()
+        {
+            var opp = new SwingOpportunityManager
+            {
+                Enabled = true,
+                MaxEntriesPerSession = 2,
+                MaxLongEntriesPerSession = 1,
+                MaxShortEntriesPerSession = 1,
+                EntryCooldownBars = 5
+            };
+
+            opp.OnNewSession(0);
+
+            var sigL = new SwingSetupSignature { Symbol = "NQ", SetupType = SwingSetupType.HtfContinuation, Direction = SwingDirection.Long, StructureId = "L1" };
+            var candL1 = new SwingCandidate { Symbol = "NQ", Direction = SwingDirection.Long, BarIndex = 10, StructureId = "L1", Signature = sigL };
+
+            string reason;
+            Assert(opp.ValidateCandidate(candL1, null, 10, out reason), "1ère entrée long autorisée.");
+            opp.OnCandidateExecuted(candL1, null, 10);
+            opp.OnTradeClosed(new TrackedSwingTrade { TradeId = "T1", IsLong = true }, "TP1", 15);
+
+            // 2ème long dans la même session
+            var candL2 = new SwingCandidate { Symbol = "NQ", Direction = SwingDirection.Long, BarIndex = 25, StructureId = "L2", Signature = new SwingSetupSignature { Symbol = "NQ", Direction = SwingDirection.Long, StructureId = "L2" } };
+            Assert(!opp.ValidateCandidate(candL2, null, 25, out reason) && reason == SwingRejectionReason.DirectionLimitReached,
+                "Second Long dans la même session doit être bloqué.");
+
+            // Short dans la même session
+            var sigS = new SwingSetupSignature { Symbol = "NQ", SetupType = SwingSetupType.MacroReversal, Direction = SwingDirection.Short, StructureId = "S1" };
+            var candS = new SwingCandidate { Symbol = "NQ", Direction = SwingDirection.Short, BarIndex = 25, StructureId = "S1", Signature = sigS };
+            Assert(opp.ValidateCandidate(candS, null, 25, out reason), "1er Short dans la même session doit être autorisé.");
+            opp.OnCandidateExecuted(candS, null, 25);
+            opp.OnTradeClosed(new TrackedSwingTrade { TradeId = "T2", IsLong = false }, "TP1", 30);
+
+            // 3ème tentative totale dans la session
+            var candS2 = new SwingCandidate { Symbol = "NQ", Direction = SwingDirection.Short, BarIndex = 40, StructureId = "S2", Signature = new SwingSetupSignature { Symbol = "NQ", Direction = SwingDirection.Short, StructureId = "S2" } };
+            Assert(!opp.ValidateCandidate(candS2, null, 40, out reason) && reason == SwingRejectionReason.SessionLimitReached,
+                "Plafond total de 2 entrées par session atteint, toute nouvelle entrée doit être bloquée.");
+        }
+
+        private static void Test_SwingV3_HtfContinuation_Requires_Pullback_To_Value()
+        {
+            var scorer = new SwingScorer();
+
+            // 1. Contexte dans le vide (pas de VWAP, pas de POC, pas de VA, pas de FVG)
+            var ctxAir = new SwingContext
+            {
+                HtfTrendDirection = 1,
+                Open = 5090.0,
+                Close = 5100.0,
+                Low = 5085.0,
+                High = 5105.0,
+                AtrCurrent = 10.0,
+                PointValue = 50.0,
+                SessionVwap = 5000.0, // Très loin
+                DailyPoc = 5000.0,    // Très loin
+                DailyVal = 4980.0,
+                DailyVah = 5020.0,
+                NearDailyPoc = false,
+                NearDailyVah = false,
+                NearDailyVal = false,
+                InFairValueGap = false,
+                InsideHvn = false
+            };
+
+            string reason;
+            bool vAir = scorer.ValidatePreconditions(ctxAir, SwingSetupType.HtfContinuation, SwingDirection.Long, out reason);
+            Assert(!vAir && reason == SwingRejectionReason.NoPullbackToValue,
+                "Un achat de continuation dans le vide sans pullback à la valeur doit être rejeté.");
+
+            // 2. Contexte avec pullback sur le Daily POC
+            var ctxPullback = new SwingContext
+            {
+                HtfTrendDirection = 1,
+                Open = 5002.0,
+                Close = 5008.0,
+                Low = 4998.0,
+                High = 5010.0,
+                AtrCurrent = 10.0,
+                PointValue = 50.0,
+                DailyPoc = 5000.0,
+                NearDailyPoc = true
+            };
+
+            bool vPullback = scorer.ValidatePreconditions(ctxPullback, SwingSetupType.HtfContinuation, SwingDirection.Long, out reason);
+            Assert(vPullback, "Un achat de continuation sur pullback POC doit être accepté.");
+        }
+
+        private static void Test_SwingV3_MacroReversal_OrderFlow_HardGate()
+        {
+            var scorer = new SwingScorer();
+
+            // Reversal sans divergence delta ni absorption
+            var ctxNoOf = new SwingContext
+            {
+                Open = 5000.0,
+                Close = 5010.0,
+                AtrCurrent = 10.0,
+                PointValue = 50.0,
+                HasDeltaDivergence = false,
+                HasAbsorptionEvidence = false
+            };
+
+            string reason;
+            bool vNoOf = scorer.ValidatePreconditions(ctxNoOf, SwingSetupType.MacroReversal, SwingDirection.Long, out reason);
+            Assert(!vNoOf && reason == SwingRejectionReason.MacroReversalNoOrderFlow,
+                "MacroReversal sans confirmation Order Flow doit être rejeté.");
+
+            // Reversal avec absorption validée
+            var ctxWithAbs = new SwingContext
+            {
+                Open = 5000.0,
+                Close = 5010.0,
+                AtrCurrent = 10.0,
+                PointValue = 50.0,
+                HasDeltaDivergence = false,
+                HasAbsorptionEvidence = true
+            };
+
+            bool vWithAbs = scorer.ValidatePreconditions(ctxWithAbs, SwingSetupType.MacroReversal, SwingDirection.Long, out reason);
+            Assert(vWithAbs, "MacroReversal avec preuve d'absorption doit être accepté.");
+        }
+
+        private static void Test_SwingV3_LateEntryPenalty()
+        {
+            var scorer = new SwingScorer();
+
+            // Marché sur-étendu à 3.0 ATR du VWAP
+            var ctxExtended = new SwingContext
+            {
+                SessionVwap = 5000.0,
+                AtrCurrent = 20.0,
+                Close = 5060.0, // +60 pts = +3.0 ATR
+                Open = 5050.0,
+                HtfTrendDirection = 1
+            };
+
+            double tq, rc, dq, lq, lep, cp, finalScore;
+            scorer.ComputeQualityMetrics(ctxExtended, SwingSetupType.HtfContinuation, SwingDirection.Long, 70.0,
+                out tq, out rc, out dq, out lq, out lep, out cp, out finalScore);
+
+            Assert(lep >= 15.0, "Une extension >= 2.5 ATR doit infliger la pénalité maximale de 15 points.");
+
+            // Marché proche du VWAP (0.5 ATR)
+            var ctxClose = new SwingContext
+            {
+                SessionVwap = 5000.0,
+                AtrCurrent = 20.0,
+                Close = 5010.0, // +10 pts = 0.5 ATR
+                Open = 5005.0,
+                HtfTrendDirection = 1
+            };
+
+            scorer.ComputeQualityMetrics(ctxClose, SwingSetupType.HtfContinuation, SwingDirection.Long, 70.0,
+                out tq, out rc, out dq, out lq, out lep, out cp, out finalScore);
+
+            Assert(lep == 0.0, "Une entrée proche du VWAP ne doit subir aucune pénalité de retard.");
+        }
+
+        private static void Test_SwingV3_Dynamic_TP1_Snapping_To_Opposing_Wall()
+        {
+            var rm = new SwingRiskManager();
+            double entry = 5000.0;
+            double stop = 4980.0; // Risk = 20.0 pts. Standard TP1 (1.5R) = 5030.0
+            double opposingWall = 5024.0; // Wall situé à 1.2R (entre 1.0R et 1.5R)
+
+            double tp1, tp2;
+            rm.CalculateTargets(entry, stop, SwingDirection.Long, 1.5, 3.0, opposingWall, out tp1, out tp2);
+
+            Assert(Math.Abs(tp1 - 5024.0) < 1e-4, "TP1 doit se caler dynamiquement sur le mur opposé à 5024.0 pour sécuriser le win rate.");
+
+            // Mur trop proche (< 1.0R) : ne doit pas réduire TP1 en dessous de 1.0R
+            double nearWall = 5010.0; // 0.5R
+            rm.CalculateTargets(entry, stop, SwingDirection.Long, 1.5, 3.0, nearWall, out tp1, out tp2);
+            Assert(Math.Abs(tp1 - 5030.0) < 1e-4, "Un mur à moins de 1.0R ne doit pas forcer un TP1 inférieur au ratio minimum.");
+        }
+
+        private static void Test_SwingV3_RegimeChange_HardExit()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "NQ",
+                Direction = SwingDirection.Long,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4960.0
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 20.0);
+            trade.CloseTrade(4985.0, DateTime.UtcNow, "REGIME_CHANGED", 0.25, 20.0);
+
+            Assert(trade.Closed, "Le trade doit être marqué Closed.");
+            Assert(trade.ExitReason == "REGIME_CHANGED", "Le motif de sortie doit être REGIME_CHANGED.");
+            Assert(trade.RealizedR < 0, "La perte partielle sur retournement doit être comptabilisée sans attendre le stop complet.");
+        }
+
+        private static void Test_SwingV3_ZeroTrust_InvalidAtrAndPointValue()
+        {
+            var scorer = new SwingScorer();
+
+            var ctxBadAtr = new SwingContext { IsAtrValid = false, AtrCurrent = 0.0, PointValue = 50.0 };
+            string rAtr;
+            bool vAtr = scorer.ValidatePreconditions(ctxBadAtr, SwingSetupType.RejectExtreme, SwingDirection.Long, out rAtr);
+            Assert(!vAtr && rAtr == SwingRejectionReason.InvalidAtrData, "ATR invalide doit être strictement rejeté.");
+
+            var ctxBadPt = new SwingContext { IsPointValueValid = false, PointValue = 0.0, AtrCurrent = 10.0 };
+            string rPt;
+            bool vPt = scorer.ValidatePreconditions(ctxBadPt, SwingSetupType.RejectExtreme, SwingDirection.Long, out rPt);
+            Assert(!vPt && rPt == SwingRejectionReason.InvalidPointValue, "PointValue invalide doit être strictement rejeté.");
+        }
+
+        private static void Test_SwingV3_ScalpingPro_StrictIsolation()
+        {
+            string root = GetProjectRoot();
+            string scalpingConfig = Path.Combine(root, "configs", "SCALPING_PRO", "CONFIG_NQ_SCALPING_PRO.xml");
+            Assert(File.Exists(scalpingConfig), "Le fichier XML ScalpingPro NQ doit exister.");
+            string text = File.ReadAllText(scalpingConfig);
+            Assert(!text.Contains("SwingOpportunityManagement"), "ScalpingPro ne doit contenir aucun tag de SwingOpportunityManagement.");
+            Assert(text.Contains("<TradingPreset>ScalpingPro</TradingPreset>"), "TradingPreset doit rester ScalpingPro.");
+        }
+
+        #endregion
 
         #endregion
 

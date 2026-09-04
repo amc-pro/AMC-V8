@@ -182,6 +182,17 @@
       <EnableSwingMacroReversal>true</EnableSwingMacroReversal>
       <EnableSwingHtfContinuation>true</EnableSwingHtfContinuation>
       <EnableSwingValueReentry>true</EnableSwingValueReentry>
+      <EnableOpportunityManager>true</EnableOpportunityManager>
+      <SameCampaignLock>true</SameCampaignLock>
+      <RequireNewStructureForReentry>true</RequireNewStructureForReentry>
+      <ExitOnRegimeChange>true</ExitOnRegimeChange>
+      <SwingEntryCooldownBars>12</SwingEntryCooldownBars>
+      <SwingMaxEntriesPerSession>2</SwingMaxEntriesPerSession>
+      <SwingMaxLongEntriesPerSession>1</SwingMaxLongEntriesPerSession>
+      <SwingMaxShortEntriesPerSession>1</SwingMaxShortEntriesPerSession>
+      <SwingMaxBarsInTrade>0</SwingMaxBarsInTrade>
+      <EnableLateEntryPenalty>true</EnableLateEntryPenalty>
+      <EnableCandidateRanking>true</EnableCandidateRanking>
       <EnablePocMigration>true</EnablePocMigration>
       <PocMigrationMinSessions>3</PocMigrationMinSessions>
       <PocMigrationLookbackSessions>5</PocMigrationLookbackSessions>

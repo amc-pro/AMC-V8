@@ -77,6 +77,210 @@ namespace NinjaTrader.NinjaScript.Indicators
         Short = -1
     }
 
+    /// <summary>
+    /// Cycle de vie d'une campagne Swing institutionnelle complète.
+    /// </summary>
+    public enum SwingCampaignState
+    {
+        Idle = 0,
+        Armed = 1,
+        Candidate = 2,
+        Validated = 3,
+        Entered = 4,
+        Active = 5,
+        Tp1Hit = 6,
+        BreakEven = 7,
+        Runner = 8,
+        Completed = 9,
+        Invalidated = 10,
+        Timeout = 11,
+        RegimeChanged = 12,
+        Cooldown = 13
+    }
+
+    #endregion
+
+    #region Modèles d'Opportunité & Campagne Swing V3
+
+    /// <summary>
+    /// Motifs structurés et déterministes de rejet pour l'audit d'opportunités Swing.
+    /// </summary>
+    public static class SwingRejectionReason
+    {
+        public const string None = "NONE";
+        public const string ContextNull = "CONTEXT_NULL";
+        public const string HighSeverityNewsBlock = "HIGH_SEVERITY_NEWS_BLOCK";
+        public const string DuplicateCampaign = "DUPLICATE_CAMPAIGN";
+        public const string SameSignature = "SAME_SIGNATURE";
+        public const string CooldownActive = "COOLDOWN_ACTIVE";
+        public const string SessionLimitReached = "SESSION_LIMIT_REACHED";
+        public const string DirectionLimitReached = "DIRECTION_LIMIT_REACHED";
+        public const string RegimeConflict = "REGIME_CONFLICT";
+        public const string HtfConflict = "HTF_CONFLICT";
+        public const string LateEntryExtended = "LATE_ENTRY_EXTENDED";
+        public const string LowTimingQuality = "LOW_TIMING_QUALITY";
+        public const string LowFinalScore = "LOW_FINAL_SCORE";
+        public const string NoPullbackToValue = "NO_PULLBACK_TO_VALUE";
+        public const string MacroReversalNoOrderFlow = "MACRO_REVERSAL_NO_ORDER_FLOW";
+        public const string RiskRewardInsufficient = "RISK_REWARD_INSUFFICIENT";
+        public const string PositionSizingFailed = "POSITION_SIZING_FAILED";
+        public const string InvalidAtrData = "INVALID_ATR_DATA";
+        public const string InvalidPointValue = "INVALID_POINT_VALUE";
+    }
+
+    /// <summary>
+    /// Signature déterministe d'une opportunité Swing pour déduplication et même campagne.
+    /// </summary>
+    public sealed class SwingSetupSignature : IEquatable<SwingSetupSignature>
+    {
+        public string Symbol { get; set; }
+        public SwingSetupType SetupType { get; set; }
+        public SwingDirection Direction { get; set; }
+        public string StructureId { get; set; }
+        public string RegimeId { get; set; }
+        public double AnchorPrice { get; set; }
+
+        public SwingSetupSignature()
+        {
+            Symbol = string.Empty;
+            StructureId = string.Empty;
+            RegimeId = string.Empty;
+        }
+
+        public string FormattedKey
+        {
+            get
+            {
+                return string.Format(CultureInfo.InvariantCulture,
+                    "{0}|{1}|{2}|{3}|{4}|{5:F2}",
+                    Symbol ?? "SYM", SetupType, Direction,
+                    string.IsNullOrEmpty(StructureId) ? "NO_STRUCT" : StructureId,
+                    string.IsNullOrEmpty(RegimeId) ? "NO_REGIME" : RegimeId,
+                    AnchorPrice);
+            }
+        }
+
+        public bool Equals(SwingSetupSignature other)
+        {
+            if (ReferenceEquals(null, other)) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return string.Equals(FormattedKey, other.FormattedKey, StringComparison.Ordinal);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return Equals(obj as SwingSetupSignature);
+        }
+
+        public override int GetHashCode()
+        {
+            return FormattedKey != null ? FormattedKey.GetHashCode() : 0;
+        }
+
+        public override string ToString()
+        {
+            return FormattedKey;
+        }
+    }
+
+    /// <summary>
+    /// Candidat d'opportunité Swing avant sélection finale par ranking multi-critères.
+    /// </summary>
+    public sealed class SwingCandidate
+    {
+        public string Id { get; set; }
+        public string Symbol { get; set; }
+        public SwingDirection Direction { get; set; }
+        public SwingSetupType SetupType { get; set; }
+        public int BarIndex { get; set; }
+        public DateTime TimeUtc { get; set; }
+        public string StructureId { get; set; }
+        public string RegimeId { get; set; }
+        public SwingSetupSignature Signature { get; set; }
+
+        // Décomposition des scores et pénalités
+        public double BaseScore { get; set; }
+        public double TimingQuality { get; set; }         // 0..10
+        public double RegimeCompatibility { get; set; }   // 0..10
+        public double DirectionalQuality { get; set; }    // 0..10
+        public double LocationQuality { get; set; }       // 0..10
+        public double LateEntryPenalty { get; set; }      // 0..15
+        public double ConflictPenalty { get; set; }       // 0..15
+        public double FinalQualityScore { get; set; }     // Score consolidé pondéré
+
+        // Gestion du risque & niveaux
+        public double EntryPrice { get; set; }
+        public double StopPrice { get; set; }
+        public double StructuralStopPrice { get; set; }
+        public double AtrStopPrice { get; set; }
+        public double Target1Price { get; set; }
+        public double Target2Price { get; set; }
+        public double StopDistanceTicks { get; set; }
+        public double Target1DistanceTicks { get; set; }
+        public double Target2DistanceTicks { get; set; }
+        public double RiskRewardRatio1 { get; set; }
+        public double RiskRewardRatio2 { get; set; }
+        public int PositionSizeContracts { get; set; }
+        public double EstimatedRiskCurrency { get; set; }
+
+        // Détails et statut
+        public SwingWeightedScore ScoreDetails { get; set; }
+        public SwingTier Tier { get; set; }
+        public string RejectionReason { get; set; }
+        public bool IsValid { get; set; }
+        public string ExecutionNotes { get; set; }
+
+        public SwingCandidate()
+        {
+            Id = Guid.NewGuid().ToString("N");
+            Symbol = "SYM";
+            Direction = SwingDirection.None;
+            SetupType = SwingSetupType.RejectExtreme;
+            TimeUtc = DateTime.UtcNow;
+            StructureId = string.Empty;
+            RegimeId = string.Empty;
+            Signature = new SwingSetupSignature();
+            RejectionReason = SwingRejectionReason.None;
+            IsValid = true;
+            ExecutionNotes = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Représentation d'une Campagne Swing active regroupant une ou plusieurs phases sur la même opportunité.
+    /// </summary>
+    public sealed class SwingCampaign
+    {
+        public string CampaignId { get; set; }
+        public string Symbol { get; set; }
+        public SwingDirection Direction { get; set; }
+        public SwingSetupType SetupType { get; set; }
+        public SwingSetupSignature Signature { get; set; }
+        public SwingCampaignState State { get; set; }
+        public int InitialEntryBarIndex { get; set; }
+        public DateTime InitialEntryTimeUtc { get; set; }
+        public int LastActionBarIndex { get; set; }
+        public DateTime LastActionTimeUtc { get; set; }
+        public int TradesCount { get; set; }
+        public double TotalRealizedR { get; set; }
+        public double TotalRealizedCurrency { get; set; }
+        public string InitialStructureId { get; set; }
+        public string CurrentStructureId { get; set; }
+
+        public SwingCampaign()
+        {
+            CampaignId = Guid.NewGuid().ToString("N");
+            Symbol = "SYM";
+            Direction = SwingDirection.None;
+            State = SwingCampaignState.Idle;
+            Signature = new SwingSetupSignature();
+            InitialEntryTimeUtc = DateTime.UtcNow;
+            LastActionTimeUtc = DateTime.UtcNow;
+            InitialStructureId = string.Empty;
+            CurrentStructureId = string.Empty;
+        }
+    }
+
     #endregion
 
     #region Modèles d'Epoch & Identité de Bandes Mobiles
@@ -284,6 +488,14 @@ namespace NinjaTrader.NinjaScript.Indicators
         public double PocMigrationAvgDriftPerSession { get; set; }
         public double PocMigrationNormalizedDrift { get; set; }
 
+        // Zero-Trust Data Integrity & Clés de Structure V3
+        public bool IsAtrValid { get; set; }
+        public bool IsPointValueValid { get; set; }
+        public double SessionVwap { get; set; }
+        public double SwingAnchorPrice { get; set; }
+        public string ActiveStructureId { get; set; }
+        public string ActiveRegimeId { get; set; }
+
         public SwingContext()
         {
             Symbol = "UNKNOWN";
@@ -303,6 +515,14 @@ namespace NinjaTrader.NinjaScript.Indicators
             MonthlyBandMinSlopeTicksPerHourConfig = 2.0;
             MonthlyBandMinSlopeAtrNormalizedConfig = 0.0;
             RetestCountCurrentLevel = 0;
+
+            IsAtrValid = true;
+            IsPointValueValid = true;
+            AtrCurrent = 10.0;
+            SessionVwap = 0.0;
+            SwingAnchorPrice = 0.0;
+            ActiveStructureId = string.Empty;
+            ActiveRegimeId = string.Empty;
         }
     }
 
@@ -399,6 +619,18 @@ namespace NinjaTrader.NinjaScript.Indicators
         SwingWeightedScore ComputeScore(SwingContext ctx, SwingSetupType setup, SwingDirection dir);
         SwingWeightedScore ComputeScore(SwingContext ctx, SwingSetupType setup, SwingDirection dir, double riskRewardRatio);
         SwingTier ResolveTier(double totalScore, double thresholdMoyen, double thresholdFort, double thresholdTresFort);
+        void ComputeQualityMetrics(
+            SwingContext ctx,
+            SwingSetupType setup,
+            SwingDirection dir,
+            double baseScore,
+            out double timingQuality,
+            out double regimeCompatibility,
+            out double directionalQuality,
+            out double locationQuality,
+            out double lateEntryPenalty,
+            out double conflictPenalty,
+            out double finalQualityScore);
     }
 
     /// <summary>
@@ -425,13 +657,25 @@ namespace NinjaTrader.NinjaScript.Indicators
             rejectionReason = string.Empty;
             if (ctx == null || dir == SwingDirection.None)
             {
-                rejectionReason = "CONTEXT_NULL";
+                rejectionReason = SwingRejectionReason.ContextNull;
                 return false;
             }
 
             if (ctx.InNewsWindow && ctx.NewsSeverity >= 2)
             {
                 rejectionReason = "HIGH_SEVERITY_NEWS_BLOCK";
+                return false;
+            }
+
+            if (!ctx.IsAtrValid || ctx.AtrCurrent <= 0)
+            {
+                rejectionReason = SwingRejectionReason.InvalidAtrData;
+                return false;
+            }
+
+            if (!ctx.IsPointValueValid || ctx.PointValue <= 0)
+            {
+                rejectionReason = SwingRejectionReason.InvalidPointValue;
                 return false;
             }
 
@@ -497,17 +741,61 @@ namespace NinjaTrader.NinjaScript.Indicators
                     break;
 
                 case SwingSetupType.MacroReversal:
-                    if (isLong && (!ctx.HasDeltaDivergence || ctx.Close <= ctx.Open))
-                    { rejectionReason = "NO_MACRO_REVERSAL_LONG"; return false; }
-                    if (!isLong && (!ctx.HasDeltaDivergence || ctx.Close >= ctx.Open))
-                    { rejectionReason = "NO_MACRO_REVERSAL_SHORT"; return false; }
+                    if (isLong)
+                    {
+                        if (ctx.Close <= ctx.Open)
+                        { rejectionReason = "NO_MACRO_REVERSAL_LONG"; return false; }
+                        if (!ctx.HasDeltaDivergence && !ctx.HasAbsorptionEvidence)
+                        { rejectionReason = SwingRejectionReason.MacroReversalNoOrderFlow; return false; }
+                    }
+                    else
+                    {
+                        if (ctx.Close >= ctx.Open)
+                        { rejectionReason = "NO_MACRO_REVERSAL_SHORT"; return false; }
+                        if (!ctx.HasDeltaDivergence && !ctx.HasAbsorptionEvidence)
+                        { rejectionReason = SwingRejectionReason.MacroReversalNoOrderFlow; return false; }
+                    }
                     break;
 
                 case SwingSetupType.HtfContinuation:
-                    if (isLong && (ctx.HtfTrendDirection <= 0 || ctx.Close <= ctx.Open))
-                    { rejectionReason = "NO_HTF_CONTINUATION_LONG"; return false; }
-                    if (!isLong && (ctx.HtfTrendDirection >= 0 || ctx.Close >= ctx.Open))
-                    { rejectionReason = "NO_HTF_CONTINUATION_SHORT"; return false; }
+                    if (isLong)
+                    {
+                        if (ctx.HtfTrendDirection <= 0 || ctx.Close <= ctx.Open)
+                        { rejectionReason = "NO_HTF_CONTINUATION_LONG"; return false; }
+
+                        // Pullback à la valeur obligatoire (anti-chase) : test requis d'une zone institutionnelle
+                        bool hasValuePullback = ctx.InFairValueGap
+                            || ctx.NearDailyPoc || ctx.NearWeeklyPoc
+                            || ctx.NearDailyVah || ctx.NearDailyVal
+                            || ctx.InsideHvn
+                            || (ctx.DailyPoc > 0 && Math.Abs(ctx.Low - ctx.DailyPoc) <= (ctx.AtrCurrent * 1.5))
+                            || (ctx.ClosedVwap > 0 && Math.Abs(ctx.Low - ctx.ClosedVwap) <= (ctx.AtrCurrent * 1.5))
+                            || (ctx.SessionVwap > 0 && Math.Abs(ctx.Low - ctx.SessionVwap) <= (ctx.AtrCurrent * 1.5))
+                            || (ctx.CurrentMonthlyVwap > 0 && Math.Abs(ctx.Low - ctx.CurrentMonthlyVwap) <= (ctx.AtrCurrent * 1.5))
+                            || (ctx.DailyVal > 0 && ctx.Low <= ctx.DailyVah && ctx.Low >= ctx.DailyVal);
+
+                        if (!hasValuePullback)
+                        { rejectionReason = SwingRejectionReason.NoPullbackToValue; return false; }
+                    }
+                    else
+                    {
+                        if (ctx.HtfTrendDirection >= 0 || ctx.Close >= ctx.Open)
+                        { rejectionReason = "NO_HTF_CONTINUATION_SHORT"; return false; }
+
+                        // Pullback à la valeur obligatoire (anti-chase) : test requis d'une zone institutionnelle
+                        bool hasValuePullback = ctx.InFairValueGap
+                            || ctx.NearDailyPoc || ctx.NearWeeklyPoc
+                            || ctx.NearDailyVah || ctx.NearDailyVal
+                            || ctx.InsideHvn
+                            || (ctx.DailyPoc > 0 && Math.Abs(ctx.High - ctx.DailyPoc) <= (ctx.AtrCurrent * 1.5))
+                            || (ctx.ClosedVwap > 0 && Math.Abs(ctx.High - ctx.ClosedVwap) <= (ctx.AtrCurrent * 1.5))
+                            || (ctx.SessionVwap > 0 && Math.Abs(ctx.High - ctx.SessionVwap) <= (ctx.AtrCurrent * 1.5))
+                            || (ctx.CurrentMonthlyVwap > 0 && Math.Abs(ctx.High - ctx.CurrentMonthlyVwap) <= (ctx.AtrCurrent * 1.5))
+                            || (ctx.DailyVah > 0 && ctx.High >= ctx.DailyVal && ctx.High <= ctx.DailyVah);
+
+                        if (!hasValuePullback)
+                        { rejectionReason = SwingRejectionReason.NoPullbackToValue; return false; }
+                    }
                     break;
 
                 case SwingSetupType.PocMigration:
@@ -775,6 +1063,106 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (totalScore >= thresholdMoyen) return SwingTier.Moyen;
             return SwingTier.Aucun;
         }
+
+        public void ComputeQualityMetrics(
+            SwingContext ctx,
+            SwingSetupType setup,
+            SwingDirection dir,
+            double baseScore,
+            out double timingQuality,
+            out double regimeCompatibility,
+            out double directionalQuality,
+            out double locationQuality,
+            out double lateEntryPenalty,
+            out double conflictPenalty,
+            out double finalQualityScore)
+        {
+            timingQuality = 5.0;
+            regimeCompatibility = 5.0;
+            directionalQuality = 5.0;
+            locationQuality = 5.0;
+            lateEntryPenalty = 0.0;
+            conflictPenalty = 0.0;
+
+            if (ctx == null)
+            {
+                finalQualityScore = baseScore;
+                return;
+            }
+
+            bool isLong = dir == SwingDirection.Long;
+
+            // 1. Timing Quality (0..10) : Qualité d'exécution micro-structurelle
+            double tq = 5.0;
+            if ((isLong && ctx.BarDelta > 0) || (!isLong && ctx.BarDelta < 0)) tq += 2.5;
+            if (ctx.HasDeltaDivergence) tq += 2.5;
+            if (ctx.HasAbsorptionEvidence) tq += 2.0;
+            timingQuality = Math.Max(0.0, Math.Min(10.0, tq));
+
+            // 2. Regime Compatibility (0..10)
+            double rc = 5.0;
+            bool trendMatchesDir = (isLong && ctx.RegimeHtf == SwingMarketRegime.TrendUp) || (!isLong && ctx.RegimeHtf == SwingMarketRegime.TrendDown);
+            if (trendMatchesDir)
+            {
+                if (setup == SwingSetupType.HtfContinuation || setup == SwingSetupType.BreakoutRetest || setup == SwingSetupType.MonthlyVwapBandRetest)
+                    rc += 5.0;
+                else if (setup == SwingSetupType.MacroReversal)
+                    rc -= 2.0;
+            }
+            else if (ctx.RegimeHtf == SwingMarketRegime.Balance)
+            {
+                if (setup == SwingSetupType.ValueReentry || setup == SwingSetupType.RejectExtreme)
+                    rc += 5.0;
+                else if (setup == SwingSetupType.BreakoutRetest)
+                    rc -= 2.0;
+            }
+            regimeCompatibility = Math.Max(0.0, Math.Min(10.0, rc));
+
+            // 3. Directional Quality (0..10) : Alignement HTF
+            if ((isLong && ctx.HtfTrendDirection > 0) || (!isLong && ctx.HtfTrendDirection < 0))
+                directionalQuality = 10.0;
+            else if (ctx.HtfTrendDirection == 0)
+                directionalQuality = 5.0;
+            else
+                directionalQuality = 1.0;
+
+            // 4. Location Quality (0..10) : Proximité avec niveaux institutionnels
+            double lq = 4.0;
+            if (ctx.NearDailyPoc || ctx.NearWeeklyPoc || (ctx.SessionVwap > 0 && Math.Abs(ctx.Close - ctx.SessionVwap) <= ctx.AtrCurrent * 0.75))
+                lq += 3.0;
+            if (ctx.NearDailyVah || ctx.NearDailyVal || ctx.InFairValueGap)
+                lq += 3.0;
+            locationQuality = Math.Max(0.0, Math.Min(10.0, lq));
+
+            // 5. Late Entry Penalty (0..15) : Pénalise les entrées chassant un marché étendu
+            double meanPrice = ctx.SessionVwap > 0 ? ctx.SessionVwap : (ctx.ClosedVwap > 0 ? ctx.ClosedVwap : ctx.DailyPoc);
+            if (meanPrice > 0 && ctx.AtrCurrent > 0)
+            {
+                double distAtr = Math.Abs(ctx.Close - meanPrice) / ctx.AtrCurrent;
+                if (distAtr >= 2.5)
+                    lateEntryPenalty = 15.0;
+                else if (distAtr >= 1.8)
+                    lateEntryPenalty = 10.0;
+                else if (distAtr >= 1.2)
+                    lateEntryPenalty = 5.0;
+            }
+
+            // 6. Conflict Penalty (0..15) : Pénalise les conflits majeurs d'Order Flow ou News
+            if (ctx.InNewsWindow) conflictPenalty += 10.0;
+            if ((isLong && ctx.BarDelta < 0 && !ctx.HasDeltaDivergence && !ctx.HasAbsorptionEvidence) ||
+                (!isLong && ctx.BarDelta > 0 && !ctx.HasDeltaDivergence && !ctx.HasAbsorptionEvidence))
+            {
+                conflictPenalty += 5.0;
+            }
+            conflictPenalty = Math.Min(15.0, conflictPenalty);
+
+            // Calcul du FinalQualityScore
+            double rawFinal = baseScore + timingQuality + regimeCompatibility + directionalQuality + locationQuality - lateEntryPenalty - conflictPenalty;
+            if (double.IsNaN(rawFinal) || double.IsInfinity(rawFinal))
+                finalQualityScore = 0.0;
+            else
+                finalQualityScore = Math.Max(0.0, Math.Min(150.0, rawFinal));
+        }
     }
 
     /// <summary>
@@ -821,12 +1209,26 @@ namespace NinjaTrader.NinjaScript.Indicators
             tp2 = isLong ? entryPrice + target2Dist : entryPrice - target2Dist;
 
             // Ajustement si un mur opposé est détecté
-            if (keyOpposingLevel > 0)
+            if (keyOpposingLevel > 0 && riskDist > 0)
             {
-                if (isLong && keyOpposingLevel > entryPrice && keyOpposingLevel < tp2)
+                double distToWall = Math.Abs(keyOpposingLevel - entryPrice);
+                double min1R = riskDist * 1.0;
+                // Si un mur institutionnel opposé est détecté entre 1.0R et TP1, on cale TP1 dessus pour maximiser le win rate
+                if (distToWall >= min1R && distToWall < target1Dist)
+                {
+                    if (isLong && keyOpposingLevel > entryPrice)
+                        tp1 = keyOpposingLevel;
+                    else if (!isLong && keyOpposingLevel < entryPrice)
+                        tp1 = keyOpposingLevel;
+                }
+                else if (isLong && keyOpposingLevel > entryPrice && keyOpposingLevel < tp2)
+                {
                     tp2 = keyOpposingLevel;
+                }
                 else if (!isLong && keyOpposingLevel < entryPrice && keyOpposingLevel > tp2)
+                {
                     tp2 = keyOpposingLevel;
+                }
             }
         }
     }
@@ -1255,6 +1657,227 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             result.InvalidationReason = "NO_VALID_DIRECTIONAL_SEQUENCE";
             return result;
+        }
+    }
+
+    #endregion
+
+    #region Swing Opportunity Manager & Campaign Engine V3
+
+    /// <summary>
+    /// Gestionnaire institutionnel d'opportunités Swing V3.
+    /// Empêche le sur-trading, verrouille les campagnes redondantes (SameCampaignLock),
+    /// contrôle le cooldown et les plafonds d'exposition par session.
+    /// </summary>
+    public sealed class SwingOpportunityManager
+    {
+        public bool Enabled { get; set; }
+        public bool SameCampaignLock { get; set; }
+        public bool RequireNewStructureForReentry { get; set; }
+        public int EntryCooldownBars { get; set; }
+        public int MaxEntriesPerSession { get; set; }
+        public int MaxLongEntriesPerSession { get; set; }
+        public int MaxShortEntriesPerSession { get; set; }
+
+        public SwingCampaign ActiveLongCampaign { get; set; }
+        public SwingCampaign ActiveShortCampaign { get; set; }
+        public Dictionary<string, int> RecentSignatures { get; private set; }
+
+        public int LastEntryBarLong { get; set; }
+        public int LastEntryBarShort { get; set; }
+        public int SessionEntryCount { get; set; }
+        public int SessionLongCount { get; set; }
+        public int SessionShortCount { get; set; }
+        public int LastSessionStartBar { get; set; }
+        public string LastStructureEvent { get; set; }
+        public int LastStructureEventBar { get; set; }
+
+        public SwingOpportunityManager()
+        {
+            Enabled = true;
+            SameCampaignLock = true;
+            RequireNewStructureForReentry = true;
+            EntryCooldownBars = 12;
+            MaxEntriesPerSession = 0;
+            MaxLongEntriesPerSession = 0;
+            MaxShortEntriesPerSession = 0;
+
+            RecentSignatures = new Dictionary<string, int>(StringComparer.Ordinal);
+            LastEntryBarLong = -1;
+            LastEntryBarShort = -1;
+            LastSessionStartBar = -1;
+            LastStructureEvent = string.Empty;
+            LastStructureEventBar = -1;
+        }
+
+        public void OnNewSession(int sessionStartBar)
+        {
+            SessionEntryCount = 0;
+            SessionLongCount = 0;
+            SessionShortCount = 0;
+            LastSessionStartBar = sessionStartBar;
+        }
+
+        public void RegisterStructureEvent(string structureId, int barIndex)
+        {
+            LastStructureEvent = structureId;
+            LastStructureEventBar = barIndex;
+        }
+
+        public bool ValidateCandidate(SwingCandidate candidate, SwingContext ctx, int currentBar, out string rejectionReason)
+        {
+            rejectionReason = SwingRejectionReason.None;
+            if (!Enabled || candidate == null) return true;
+
+            bool isLong = candidate.Direction == SwingDirection.Long;
+
+            // 1. Verrouillage de la même campagne active (SameCampaignLock)
+            SwingCampaign activeCampaign = isLong ? ActiveLongCampaign : ActiveShortCampaign;
+            if (activeCampaign != null && activeCampaign.State == SwingCampaignState.Active)
+            {
+                if (SameCampaignLock)
+                {
+                    rejectionReason = SwingRejectionReason.DuplicateCampaign;
+                    return false;
+                }
+
+                if (candidate.Signature != null && activeCampaign.Signature != null &&
+                    string.Equals(candidate.Signature.FormattedKey, activeCampaign.Signature.FormattedKey, StringComparison.Ordinal))
+                {
+                    rejectionReason = SwingRejectionReason.SameSignature;
+                    return false;
+                }
+            }
+
+            // 2. Cooldown d'entrée directionnel
+            int lastEntryBar = isLong ? LastEntryBarLong : LastEntryBarShort;
+            if (EntryCooldownBars > 0 && lastEntryBar >= 0 && (currentBar - lastEntryBar) < EntryCooldownBars)
+            {
+                rejectionReason = SwingRejectionReason.CooldownActive;
+                return false;
+            }
+
+            // 3. Exigence de nouvelle structure après clôture d'une campagne
+            if (RequireNewStructureForReentry && lastEntryBar >= 0)
+            {
+                bool hasNewStructure = (ctx != null && (ctx.HasBos || ctx.HasChoch)) || (LastStructureEventBar > lastEntryBar);
+                int cdStructure = EntryCooldownBars > 0 ? EntryCooldownBars * 2 : 24;
+                if (!hasNewStructure && (currentBar - lastEntryBar) < cdStructure)
+                {
+                    rejectionReason = SwingRejectionReason.DuplicateCampaign;
+                    return false;
+                }
+            }
+
+            // 4. Déduplication par signature récente sur la même structure
+            if (candidate.Signature != null)
+            {
+                int priorBar;
+                if (RecentSignatures.TryGetValue(candidate.Signature.FormattedKey, out priorBar))
+                {
+                    int cd = EntryCooldownBars > 0 ? EntryCooldownBars : 12;
+                    if (currentBar - priorBar < cd)
+                    {
+                        rejectionReason = SwingRejectionReason.SameSignature;
+                        return false;
+                    }
+                }
+            }
+
+            // 5. Limites de session
+            if (MaxEntriesPerSession > 0 && SessionEntryCount >= MaxEntriesPerSession)
+            {
+                rejectionReason = SwingRejectionReason.SessionLimitReached;
+                return false;
+            }
+
+            if (isLong && MaxLongEntriesPerSession > 0 && SessionLongCount >= MaxLongEntriesPerSession)
+            {
+                rejectionReason = SwingRejectionReason.DirectionLimitReached;
+                return false;
+            }
+
+            if (!isLong && MaxShortEntriesPerSession > 0 && SessionShortCount >= MaxShortEntriesPerSession)
+            {
+                rejectionReason = SwingRejectionReason.DirectionLimitReached;
+                return false;
+            }
+
+            return true;
+        }
+
+        public void OnCandidateExecuted(SwingCandidate candidate, TrackedSwingTrade trade, int currentBar)
+        {
+            if (candidate == null) return;
+
+            bool isLong = candidate.Direction == SwingDirection.Long;
+            SessionEntryCount++;
+
+            if (isLong)
+            {
+                SessionLongCount++;
+                LastEntryBarLong = currentBar;
+            }
+            else
+            {
+                SessionShortCount++;
+                LastEntryBarShort = currentBar;
+            }
+
+            var campaign = new SwingCampaign
+            {
+                CampaignId = trade != null ? trade.TradeId : Guid.NewGuid().ToString("N"),
+                Symbol = candidate.Symbol,
+                Direction = candidate.Direction,
+                SetupType = candidate.SetupType,
+                Signature = candidate.Signature,
+                State = SwingCampaignState.Active,
+                InitialEntryBarIndex = currentBar,
+                InitialEntryTimeUtc = candidate.TimeUtc,
+                LastActionBarIndex = currentBar,
+                LastActionTimeUtc = candidate.TimeUtc,
+                TradesCount = 1,
+                InitialStructureId = candidate.StructureId,
+                CurrentStructureId = candidate.StructureId
+            };
+
+            if (isLong)
+                ActiveLongCampaign = campaign;
+            else
+                ActiveShortCampaign = campaign;
+
+            if (candidate.Signature != null)
+            {
+                RecentSignatures[candidate.Signature.FormattedKey] = currentBar;
+            }
+        }
+
+        public void OnTradeClosed(TrackedSwingTrade trade, string exitReason, int currentBar)
+        {
+            if (trade == null) return;
+
+            if (trade.IsLong)
+            {
+                if (ActiveLongCampaign != null)
+                {
+                    ActiveLongCampaign.State = exitReason == "REGIME_CHANGED"
+                        ? SwingCampaignState.RegimeChanged
+                        : SwingCampaignState.Completed;
+                    ActiveLongCampaign.LastActionBarIndex = currentBar;
+                    ActiveLongCampaign = null;
+                }
+            }
+            else
+            {
+                if (ActiveShortCampaign != null)
+                {
+                    ActiveShortCampaign.State = exitReason == "REGIME_CHANGED"
+                        ? SwingCampaignState.RegimeChanged
+                        : SwingCampaignState.Completed;
+                    ActiveShortCampaign.LastActionBarIndex = currentBar;
+                    ActiveShortCampaign = null;
+                }
+            }
         }
     }
 

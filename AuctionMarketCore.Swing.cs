@@ -130,6 +130,44 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Lookback Pente VWAP (Minutes)", Order = 28, GroupName = "Swing 01. Moteur")]
         public int MonthlyBandSlopeLookbackMinutes { get; set; }
 
+        [Display(Name = "Activer Opportunity Manager", Order = 30, GroupName = "Swing 04. Opportunity Manager")]
+        public bool EnableOpportunityManager { get; set; }
+
+        [Display(Name = "Verrouillage Même Campagne (SameCampaignLock)", Order = 31, GroupName = "Swing 04. Opportunity Manager")]
+        public bool SameCampaignLock { get; set; }
+
+        [Display(Name = "Nouvelle Structure Requise Pour Re-entry", Order = 32, GroupName = "Swing 04. Opportunity Manager")]
+        public bool RequireNewStructureForReentry { get; set; }
+
+        [Display(Name = "Sortie Immédiate Rupture Régime (Hard Exit)", Order = 33, GroupName = "Swing 04. Opportunity Manager")]
+        public bool ExitOnRegimeChange { get; set; }
+
+        [Range(0, 100)]
+        [Display(Name = "Cooldown Entrées (Barres)", Order = 34, GroupName = "Swing 04. Opportunity Manager")]
+        public int SwingEntryCooldownBars { get; set; }
+
+        [Range(1, 10)]
+        [Display(Name = "Max Entrées Par Session", Order = 35, GroupName = "Swing 04. Opportunity Manager")]
+        public int SwingMaxEntriesPerSession { get; set; }
+
+        [Range(1, 10)]
+        [Display(Name = "Max Entrées Long Par Session", Order = 36, GroupName = "Swing 04. Opportunity Manager")]
+        public int SwingMaxLongEntriesPerSession { get; set; }
+
+        [Range(1, 10)]
+        [Display(Name = "Max Entrées Short Par Session", Order = 37, GroupName = "Swing 04. Opportunity Manager")]
+        public int SwingMaxShortEntriesPerSession { get; set; }
+
+        [Range(0, 500)]
+        [Display(Name = "Max Barres En Position (0 = Infini/SL/TP)", Order = 38, GroupName = "Swing 04. Opportunity Manager")]
+        public int SwingMaxBarsInTrade { get; set; }
+
+        [Display(Name = "Activer Pénalité Entrée Tardive", Order = 39, GroupName = "Swing 04. Opportunity Manager")]
+        public bool EnableLateEntryPenalty { get; set; }
+
+        [Display(Name = "Activer Sélecteur de Candidats (Ranking)", Order = 40, GroupName = "Swing 04. Opportunity Manager")]
+        public bool EnableCandidateRanking { get; set; }
+
         #endregion
 
         #region État Interne Swing
@@ -149,6 +187,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         private ISwingScorer swingScorer = new SwingScorer();
         private ISwingRiskManager swingRiskManager = new SwingRiskManager();
         private PocMigrationAnalyzer pocMigrationAnalyzer = new PocMigrationAnalyzer();
+        private SwingOpportunityManager opportunityManager = new SwingOpportunityManager();
+        private int lastSwingSessionStartBarIndex = -1;
         private readonly List<SwingSignal> activeSwingSignals = new List<SwingSignal>();
         private readonly List<TrackedSwingTrade> openSwingTrades = new List<TrackedSwingTrade>();
         private readonly List<TrackedSwingTrade> closedSwingTrades = new List<TrackedSwingTrade>();
@@ -199,6 +239,19 @@ namespace NinjaTrader.NinjaScript.Indicators
             MonthlyBandMinSlopeTicksPerHour = 2.0;
             MonthlyBandMinSlopeAtrNormalized = 0.10;
             MonthlyBandSlopeLookbackMinutes = 240;
+
+            // Paramètres Opportunity Manager & Anti-Overtrading V3
+            EnableOpportunityManager = true;
+            SameCampaignLock = true;
+            RequireNewStructureForReentry = true;
+            ExitOnRegimeChange = true;
+            SwingEntryCooldownBars = 12;
+            SwingMaxEntriesPerSession = 2;
+            SwingMaxLongEntriesPerSession = 1;
+            SwingMaxShortEntriesPerSession = 1;
+            SwingMaxBarsInTrade = 0;
+            EnableLateEntryPenalty = true;
+            EnableCandidateRanking = true;
 
             // Familles de setups Swing (RejectExtreme désactivé par défaut suite audit 100j)
             EnableSwingRejectExtreme = false;
@@ -362,8 +415,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 RegisterRuntimeError("ResolvePointValue", ex);
             }
             if (EnableDebugMode)
-                Print("VP_Swing: PointValue indisponible, fallback 50.0");
-            return 50.0;
+                Print("VP_Swing: PointValue indisponible, fallback 0.0");
+            return 0.0;
         }
 
         #endregion
@@ -427,6 +480,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                 ? (rawBarTime.Kind == DateTimeKind.Utc ? rawBarTime : rawBarTime.ToUniversalTime())
                 : DateTime.UtcNow;
 
+            bool isAtrValid = riskAtr != null && riskAtr.IsValidDataPoint(0) && riskAtr[0] > 0;
+            double curAtr = isAtrValid ? riskAtr[0] : 0.0;
+            double resolvedPtVal = ResolvePointValue();
+            bool isPtValValid = resolvedPtVal > 0;
+
             var ctx = new SwingContext
             {
                 Symbol = Instrument != null && Instrument.MasterInstrument != null ? Instrument.MasterInstrument.Name : "SYM",
@@ -438,9 +496,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Close = snClose,
                 Volume = snVolume,
                 TickSize = TickSize,
-                PointValue = ResolvePointValue(),
-                AtrCurrent = riskAtr != null && riskAtr.IsValidDataPoint(0) ? riskAtr[0] : TickSize * 10,
-                AtrDaily = regimeAtr != null && regimeAtr.IsValidDataPoint(0) ? regimeAtr[0] : TickSize * 40,
+                PointValue = resolvedPtVal,
+                IsPointValueValid = isPtValValid,
+                AtrCurrent = curAtr,
+                IsAtrValid = isAtrValid,
+                AtrDaily = regimeAtr != null && regimeAtr.IsValidDataPoint(0) ? regimeAtr[0] : (curAtr > 0 ? curAtr * 4 : 0.0),
                 RiskPerTradeCurrency = RiskPerTradeCurrency,
                 HtfTrendDirection = htfEma != null && htfEma.IsValidDataPoint(0) ? (snClose > htfEma[0] ? 1 : -1) : 0,
                 HtfEma = htfEma != null && htfEma.IsValidDataPoint(0) ? htfEma[0] : 0.0,
@@ -448,7 +508,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     snClose,
                     htfEma != null && htfEma.IsValidDataPoint(0) ? htfEma[0] : 0.0,
                     htfEma != null && htfEma.IsValidDataPoint(0) ? (snClose > htfEma[0] ? 1 : -1) : 0,
-                    regimeAtr != null && regimeAtr.IsValidDataPoint(0) ? regimeAtr[0] : TickSize * 40),
+                    regimeAtr != null && regimeAtr.IsValidDataPoint(0) ? regimeAtr[0] : (curAtr > 0 ? curAtr * 4 : 0.0)),
                 IsOvernightHoldAllowed = SwingAllowOvernightHold,
                 InNewsWindow = inNewsWindow,
                 NewsSeverity = newsSeverity,
@@ -456,6 +516,19 @@ namespace NinjaTrader.NinjaScript.Indicators
                 PrevCurrentMonthlySd1Upper = swingPrevMonthlySd1Upper,
                 PrevCurrentMonthlySd1Lower = swingPrevMonthlySd1Lower
             };
+
+            double sesVwap = (currentVpContext != null && currentVpContext.Session != null && currentVpContext.Session.Valid)
+                ? currentVpContext.Session.Vwap
+                : (currentVpContext != null && currentVpContext.PrevDay != null && currentVpContext.PrevDay.Valid ? currentVpContext.PrevDay.Vwap : 0.0);
+            ctx.SessionVwap = sesVwap;
+            ctx.SwingAnchorPrice = isBuy ? snLow : snHigh;
+
+            string structId = "ANCHOR_" + (int)(isBuy ? snLow : snHigh);
+            if (HasRecentBos(isBuy)) structId = "BOS_" + (int)(isBuy ? snLow : snHigh);
+            else if (HasRecentChoch(isBuy)) structId = "CHOCH_" + (int)(isBuy ? snLow : snHigh);
+            else if (IsInActiveFvg(snClose, isBuy)) structId = "FVG_" + (int)(isBuy ? snLow : snHigh);
+            ctx.ActiveStructureId = structId;
+            ctx.ActiveRegimeId = ctx.RegimeHtf.ToString();
 
             // Ingestion des données Volume Profile V2 Clôturées
             if (currentVpContext != null)
@@ -795,6 +868,13 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (ctx == null || dir == SwingDirection.None) return;
 
+            // Synchronisation de session avec l'Opportunity Manager
+            if (opportunityManager != null && sessionStartBarIndex != lastSwingSessionStartBarIndex)
+            {
+                opportunityManager.OnNewSession(sessionStartBarIndex);
+                lastSwingSessionStartBarIndex = sessionStartBarIndex;
+            }
+
             // Filtre Anti-Stacking : Pas plus d'une position Swing active dans la même direction
             if (HasOpenTradeInDirection(dir)) return;
             if (openSwingTrades.Count >= SwingMaxActiveTrades) return;
@@ -817,29 +897,114 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             if (setupList.Count == 0) return;
 
-            var setupTypes = setupList.ToArray();
+            var validCandidates = new List<SwingCandidate>();
 
-            foreach (var setup in setupTypes)
+            foreach (var setup in setupList)
             {
                 string rejectionReason;
                 if (!swingScorer.ValidatePreconditions(ctx, setup, dir, out rejectionReason))
+                {
+                    LogSwingCandidateRejection(setup, dir, rejectionReason, 0.0);
                     continue;
+                }
 
                 SwingSignal signal = BuildAndSizeSignal(ctx, setup, dir, null, SwingTier.Aucun);
                 if (signal == null)
+                {
+                    LogSwingCandidateRejection(setup, dir, SwingRejectionReason.PositionSizingFailed, 0.0);
                     continue;
+                }
 
                 SwingWeightedScore score = swingScorer.ComputeScore(ctx, setup, dir, signal.RiskRewardRatio1);
                 SwingTier tier = swingScorer.ResolveTier(score.Total, SwingTierSilverScore, SwingTierGoldScore, SwingTierTresFortScore);
 
                 if (tier == SwingTier.Aucun || score.Total < SwingMinScoreToAlert)
+                {
+                    LogSwingCandidateRejection(setup, dir, SwingRejectionReason.LowFinalScore, score.Total);
                     continue;
+                }
 
-                signal.Score = score;
-                signal.Tier = tier;
-                signal.ExecutionNotes = string.Format(CultureInfo.InvariantCulture, "{0} | {1} | Score={2:F1}", setup, tier, score.Total);
-                ExecuteSwingSignal(signal);
-                break; // Un seul setup prioritaire par barre
+                double tq, rc, dq, lq, lep, cp, finalScore;
+                swingScorer.ComputeQualityMetrics(ctx, setup, dir, score.Total, out tq, out rc, out dq, out lq, out lep, out cp, out finalScore);
+
+                var signature = new SwingSetupSignature
+                {
+                    Symbol = ctx.Symbol,
+                    SetupType = setup,
+                    Direction = dir,
+                    StructureId = ctx.ActiveStructureId,
+                    RegimeId = ctx.ActiveRegimeId,
+                    AnchorPrice = ctx.SwingAnchorPrice
+                };
+
+                var candidate = new SwingCandidate
+                {
+                    Symbol = ctx.Symbol,
+                    Direction = dir,
+                    SetupType = setup,
+                    BarIndex = ctx.BarIndex,
+                    TimeUtc = ctx.TimeUtc,
+                    StructureId = ctx.ActiveStructureId,
+                    RegimeId = ctx.ActiveRegimeId,
+                    Signature = signature,
+                    BaseScore = score.Total,
+                    TimingQuality = tq,
+                    RegimeCompatibility = rc,
+                    DirectionalQuality = dq,
+                    LocationQuality = lq,
+                    LateEntryPenalty = EnableLateEntryPenalty ? lep : 0.0,
+                    ConflictPenalty = cp,
+                    FinalQualityScore = EnableLateEntryPenalty ? finalScore : (finalScore + lep),
+                    EntryPrice = signal.EntryPrice,
+                    StopPrice = signal.InitialStopPrice,
+                    StructuralStopPrice = signal.StructuralStopPrice,
+                    AtrStopPrice = signal.AtrStopPrice,
+                    Target1Price = signal.Target1Price,
+                    Target2Price = signal.Target2Price,
+                    StopDistanceTicks = signal.StopDistanceTicks,
+                    Target1DistanceTicks = signal.Target1DistanceTicks,
+                    Target2DistanceTicks = signal.Target2DistanceTicks,
+                    RiskRewardRatio1 = signal.RiskRewardRatio1,
+                    RiskRewardRatio2 = signal.RiskRewardRatio2,
+                    PositionSizeContracts = signal.PositionSizeContracts,
+                    EstimatedRiskCurrency = signal.EstimatedRiskCurrency,
+                    ScoreDetails = score,
+                    Tier = tier,
+                    ExecutionNotes = string.Format(CultureInfo.InvariantCulture, "{0} | {1} | Base={2:F1} Final={3:F1} TQ={4:F1}", setup, tier, score.Total, finalScore, tq)
+                };
+
+                if (EnableOpportunityManager && opportunityManager != null)
+                {
+                    string oppRejection;
+                    if (!opportunityManager.ValidateCandidate(candidate, ctx, evalBarIndex, out oppRejection))
+                    {
+                        candidate.IsValid = false;
+                        candidate.RejectionReason = oppRejection;
+                        LogSwingCandidateRejection(setup, dir, oppRejection, candidate.FinalQualityScore);
+                        continue;
+                    }
+                }
+
+                validCandidates.Add(candidate);
+            }
+
+            if (validCandidates.Count == 0) return;
+
+            // Classement des candidats par FinalQualityScore décroissant
+            if (EnableCandidateRanking && validCandidates.Count > 1)
+            {
+                validCandidates.Sort((a, b) => b.FinalQualityScore.CompareTo(a.FinalQualityScore));
+            }
+
+            // Exécution du meilleur candidat uniquement
+            var bestCandidate = validCandidates[0];
+            SwingSignal bestSignal = BuildAndSizeSignal(ctx, bestCandidate.SetupType, bestCandidate.Direction, bestCandidate.ScoreDetails, bestCandidate.Tier);
+            if (bestSignal != null)
+            {
+                bestSignal.Score = bestCandidate.ScoreDetails;
+                bestSignal.Tier = bestCandidate.Tier;
+                bestSignal.ExecutionNotes = bestCandidate.ExecutionNotes;
+                ExecuteSwingSignal(bestSignal, bestCandidate);
             }
         }
 
@@ -961,11 +1126,45 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private void ExecuteSwingSignal(SwingSignal sig)
         {
+            ExecuteSwingSignal(sig, null);
+        }
+
+        private void ExecuteSwingSignal(SwingSignal sig, SwingCandidate candidate)
+        {
             if (sig == null) return;
 
             var trade = new TrackedSwingTrade(sig, TickSize > 0 ? TickSize : 0.25, ResolvePointValue());
             if (openSwingTrades != null) openSwingTrades.Add(trade);
             if (activeSwingSignals != null) activeSwingSignals.Add(sig);
+
+            if (opportunityManager != null)
+            {
+                if (candidate != null)
+                {
+                    opportunityManager.OnCandidateExecuted(candidate, trade, evalBarIndex);
+                }
+                else
+                {
+                    var fallbackCand = new SwingCandidate
+                    {
+                        Symbol = sig.Symbol,
+                        Direction = sig.Direction,
+                        SetupType = sig.SetupType,
+                        BarIndex = evalBarIndex,
+                        TimeUtc = sig.GeneratedTimeUtc,
+                        Signature = new SwingSetupSignature
+                        {
+                            Symbol = sig.Symbol,
+                            SetupType = sig.SetupType,
+                            Direction = sig.Direction,
+                            StructureId = "SIG_" + evalBarIndex,
+                            RegimeId = "ACTIVE",
+                            AnchorPrice = sig.EntryPrice
+                        }
+                    };
+                    opportunityManager.OnCandidateExecuted(fallbackCand, trade, evalBarIndex);
+                }
+            }
 
             if (sig.SetupType == SwingSetupType.MonthlyVwapBandRetest)
             {
@@ -1087,6 +1286,42 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 t.BarsElapsed++;
 
+                // 0. Vérification de rupture de régime HTF (Hard Exit on Regime Change - Option B validée)
+                if (ExitOnRegimeChange && htfEma != null && htfEma.IsValidDataPoint(0))
+                {
+                    bool regimeOpposed = (t.IsLong && close < htfEma[0]) || (!t.IsLong && close > htfEma[0]);
+                    if (regimeOpposed)
+                    {
+                        t.CloseTrade(close, nowUtc, "REGIME_CHANGED", tick, ptVal);
+                        if (volumeProfileManager != null && volumeProfileManager.Repository != null)
+                        {
+                            try { volumeProfileManager.Repository.UpsertSwingTrade(t); } catch { }
+                        }
+                        LogSwingTrade(t);
+                        RecordSwingOutcome(t);
+                        if (opportunityManager != null) opportunityManager.OnTradeClosed(t, "REGIME_CHANGED", evalBarIndex);
+                        if (closedSwingTrades != null) closedSwingTrades.Add(t);
+                        openSwingTrades.RemoveAt(i);
+                        continue;
+                    }
+                }
+
+                // 0b. Vérification de durée maximale de détention (si SwingMaxBarsInTrade > 0)
+                if (SwingMaxBarsInTrade > 0 && t.BarsElapsed >= SwingMaxBarsInTrade)
+                {
+                    t.CloseTrade(close, nowUtc, "TIMEOUT", tick, ptVal);
+                    if (volumeProfileManager != null && volumeProfileManager.Repository != null)
+                    {
+                        try { volumeProfileManager.Repository.UpsertSwingTrade(t); } catch { }
+                    }
+                    LogSwingTrade(t);
+                    RecordSwingOutcome(t);
+                    if (opportunityManager != null) opportunityManager.OnTradeClosed(t, "TIMEOUT", evalBarIndex);
+                    if (closedSwingTrades != null) closedSwingTrades.Add(t);
+                    openSwingTrades.RemoveAt(i);
+                    continue;
+                }
+
                 // 1. Vérification du Stop Loss
                 bool stopTriggered = (t.IsLong && low <= t.CurrentStopPrice) || (!t.IsLong && high >= t.CurrentStopPrice);
                 if (stopTriggered)
@@ -1099,6 +1334,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     }
                     LogSwingTrade(t);
                     RecordSwingOutcome(t);
+                    if (opportunityManager != null) opportunityManager.OnTradeClosed(t, "STOP_LOSS", evalBarIndex);
                     if (closedSwingTrades != null) closedSwingTrades.Add(t);
                     openSwingTrades.RemoveAt(i);
                     continue;
@@ -1123,6 +1359,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         if (t.Closed)
                         {
                             RecordSwingOutcome(t);
+                            if (opportunityManager != null) opportunityManager.OnTradeClosed(t, "TAKE_PROFIT_1", evalBarIndex);
                             if (closedSwingTrades != null) closedSwingTrades.Add(t);
                             openSwingTrades.RemoveAt(i);
                             continue;
@@ -1144,6 +1381,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         }
                         LogSwingTrade(t);
                         RecordSwingOutcome(t);
+                        if (opportunityManager != null) opportunityManager.OnTradeClosed(t, "TAKE_PROFIT_2", evalBarIndex);
                         if (closedSwingTrades != null) closedSwingTrades.Add(t);
                         openSwingTrades.RemoveAt(i);
                         continue;
@@ -1316,6 +1554,16 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
             return isBuy ? snClose > prevBarPocPrice && snOpen < prevBarPocPrice
                          : snClose < prevBarPocPrice && snOpen > prevBarPocPrice;
+        }
+
+        private void LogSwingCandidateRejection(SwingSetupType setup, SwingDirection dir, string reason, double score)
+        {
+            if (EnableDebugMode)
+            {
+                Print(string.Format(CultureInfo.InvariantCulture,
+                    "SWING_CANDIDATE_REJECTED | Setup={0} | Dir={1} | Reason={2} | Score={3:F1}",
+                    setup, dir, reason, score));
+            }
         }
 
         #endregion
