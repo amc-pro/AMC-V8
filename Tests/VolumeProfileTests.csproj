@@ -13,6 +13,8 @@
     <Compile Include="..\VolumeProfile\VolumeProfileAnalyzer.cs" Link="VolumeProfileAnalyzer.cs" />
     <Compile Include="..\VolumeProfile\VolumeProfileManager.cs" Link="VolumeProfileManager.cs" />
     <Compile Include="..\MarketIntelligence\MarketState.cs" Link="MarketState.cs" />
+    <Compile Include="..\MarketIntelligence\TelegramDispatcher.cs" Link="TelegramDispatcher.cs" />
+    <Compile Include="..\AuctionMarketCore.Swing.Models.cs" Link="AuctionMarketCore.Swing.Models.cs" />
   </ItemGroup>
 
   <ItemGroup>
