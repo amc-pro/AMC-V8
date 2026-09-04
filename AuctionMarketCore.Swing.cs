@@ -1096,7 +1096,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             double rr1 = stopDistTicks > 0 ? tp1DistTicks / stopDistTicks : 0.0;
             double rr2 = stopDistTicks > 0 ? tp2DistTicks / stopDistTicks : 0.0;
 
-            if (rr1 < MinRiskReward) return null;
+            // Si TP1 a été ajusté dynamiquement sur un mur institutionnel adverse (snapping 1.0R - 1.5R),
+            // on autorise le trade si rr1 >= 1.0R, tout en conservant MinRiskReward pour les setups non snappés.
+            double effectiveMinRr = (opposingLevel > 0 && rr1 >= 1.0) ? 1.0 : MinRiskReward;
+            if (rr1 < effectiveMinRr) return null;
 
             // Dimensionnement exact de la position selon la valeur du tick
             double ptVal = ctx.PointValue > 0 ? ctx.PointValue : ResolvePointValue();
