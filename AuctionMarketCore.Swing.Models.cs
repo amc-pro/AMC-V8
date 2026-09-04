@@ -44,6 +44,26 @@ namespace NinjaTrader.NinjaScript.Indicators
     }
 
     /// <summary>
+    /// Santé du régime de marché par rapport à la direction d'un trade Swing (Architecture V2).
+    /// </summary>
+    public enum SwingRegimeHealth
+    {
+        Aligned = 0,       // Régime favorable au trade
+        Neutral = 1,       // Balance ou transition tolérée
+        Deteriorated = 2   // Régime franchement adverse persistant
+    }
+
+    /// <summary>
+    /// Décision d'arbitrage de régime basée sur la confirmation structurelle (Architecture V2 Structure-First).
+    /// </summary>
+    public enum SwingRegimeDecision
+    {
+        Hold = 0,              // Maintenir sans altération
+        ProtectBreakeven = 1,  // Sécuriser le profit (resserrement du stop à BE si en gain)
+        StructuralExit = 2     // Sortie autorisée uniquement si la structure est invalidée avec confirmation
+    }
+
+    /// <summary>
     /// Statut du cycle de vie d'un signal Swing.
     /// </summary>
     public enum SwingSignalStatus
@@ -1268,7 +1288,11 @@ namespace NinjaTrader.NinjaScript.Indicators
         public double RealizedR { get; set; }
         public double RealizedPnlCurrency { get; set; }
         public int BarsElapsed { get; set; }
+        public int ConsecutiveAdverseBars { get; set; }
         public string ExecutionNotes { get; set; }
+
+        public double StructuralStopPrice => Signal != null ? Signal.StructuralStopPrice : InitialStopPrice;
+        public SwingSetupType SetupType => Signal != null ? Signal.SetupType : SwingSetupType.RejectExtreme;
 
         public TrackedSwingTrade()
         {
@@ -1278,6 +1302,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             ExitReason = "ACTIVE";
             EntryTimeUtc = DateTime.UtcNow;
             ExecutionNotes = string.Empty;
+            ConsecutiveAdverseBars = 0;
         }
 
         public TrackedSwingTrade(SwingSignal sig, double tickSize, double pointValue)
@@ -1299,7 +1324,101 @@ namespace NinjaTrader.NinjaScript.Indicators
             RealizedR = 0.0;
             RealizedPnlCurrency = 0.0;
             BarsElapsed = 0;
+            ConsecutiveAdverseBars = 0;
             ExecutionNotes = sig != null ? sig.ExecutionNotes : string.Empty;
+        }
+
+        /// <summary>
+        /// Évalue la santé du régime et détermine si une action de protection ou d'invalidation structurelle est requise (Architecture V2).
+        /// Principe : Régime = Contexte, Structure = Validation, Risk Management = Protection.
+        /// </summary>
+        public SwingRegimeDecision EvaluateRegimeDecision(
+            SwingMarketRegime currentRegime,
+            double close,
+            double htfEma,
+            double atrDaily,
+            int confirmationBarsRequired,
+            bool enableSoftProtection)
+        {
+            if (Closed) return SwingRegimeDecision.Hold;
+
+            // 1. RÈGLE CRITIQUE POUR MACROREVERSAL (Rule 5) :
+            // Un setup de mean-reversion entre volontairement contre l'EMA HTF précédente.
+            // Être sous l'EMA pour un Long ou au-dessus pour un Short est NORMAL et attendu.
+            // On n'évalue la détérioration pour MacroReversal que si une cassure d'extrême se produit.
+            bool isMacroReversal = SetupType == SwingSetupType.MacroReversal;
+
+            // 2. Évaluation de la santé du régime (SwingRegimeHealth)
+            SwingRegimeHealth health = SwingRegimeHealth.Neutral;
+            if (isMacroReversal)
+            {
+                // MacroReversal n'est pas pénalisé par la position du prix par rapport à l'EMA HTF
+                health = SwingRegimeHealth.Neutral;
+            }
+            else
+            {
+                if (IsLong)
+                {
+                    if (currentRegime == SwingMarketRegime.TrendUp || currentRegime == SwingMarketRegime.Expansion)
+                        health = SwingRegimeHealth.Aligned;
+                    else if (currentRegime == SwingMarketRegime.TrendDown)
+                        health = SwingRegimeHealth.Deteriorated;
+                    else
+                        health = SwingRegimeHealth.Neutral;
+                }
+                else
+                {
+                    if (currentRegime == SwingMarketRegime.TrendDown || currentRegime == SwingMarketRegime.Compression)
+                        health = SwingRegimeHealth.Aligned;
+                    else if (currentRegime == SwingMarketRegime.TrendUp)
+                        health = SwingRegimeHealth.Deteriorated;
+                    else
+                        health = SwingRegimeHealth.Neutral;
+                }
+            }
+
+            // 3. Suivi de la persistance (Hystérésis)
+            if (health == SwingRegimeHealth.Deteriorated)
+            {
+                ConsecutiveAdverseBars++;
+            }
+            else
+            {
+                if (ConsecutiveAdverseBars > 0)
+                    ConsecutiveAdverseBars = Math.Max(0, ConsecutiveAdverseBars - 1);
+            }
+
+            // 4. Test de confirmation temporelle (multibarres)
+            int minBars = Math.Max(1, confirmationBarsRequired);
+            bool isDeteriorationConfirmed = ConsecutiveAdverseBars >= minBars;
+
+            // 5. Test d'invalidation structurelle (Structure-First)
+            double structLevel = StructuralStopPrice;
+            bool isStructureInvalidated = false;
+            if (structLevel > 0)
+            {
+                isStructureInvalidated = IsLong ? (close < structLevel) : (close > structLevel);
+            }
+
+            // 6. Prise de décision
+            // Cas A : Invalidation structurelle confirmée sous régime adverse persistant -> EXIT
+            if (isDeteriorationConfirmed && isStructureInvalidated)
+            {
+                return SwingRegimeDecision.StructuralExit;
+            }
+
+            // Cas B : Détérioration persistante MAIS structure intacte -> Protection Break-Even (si en profit)
+            if (isDeteriorationConfirmed && enableSoftProtection && !isStructureInvalidated)
+            {
+                bool inProfit = IsLong ? (close > EntryPrice) : (close < EntryPrice);
+                if (inProfit || Tp1Hit)
+                {
+                    return SwingRegimeDecision.ProtectBreakeven;
+                }
+            }
+
+            // Cas C : Par défaut, le trade reste géré par son Stop Loss et ses cibles naturelles
+            return SwingRegimeDecision.Hold;
         }
 
         /// <summary>
@@ -1856,11 +1975,13 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (trade == null) return;
 
+            bool isRegimeExit = exitReason == "REGIME_CHANGED" || exitReason == "STRUCTURAL_REGIME_INVALIDATION";
+
             if (trade.IsLong)
             {
                 if (ActiveLongCampaign != null)
                 {
-                    ActiveLongCampaign.State = exitReason == "REGIME_CHANGED"
+                    ActiveLongCampaign.State = isRegimeExit
                         ? SwingCampaignState.RegimeChanged
                         : SwingCampaignState.Completed;
                     ActiveLongCampaign.LastActionBarIndex = currentBar;
@@ -1871,7 +1992,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 if (ActiveShortCampaign != null)
                 {
-                    ActiveShortCampaign.State = exitReason == "REGIME_CHANGED"
+                    ActiveShortCampaign.State = isRegimeExit
                         ? SwingCampaignState.RegimeChanged
                         : SwingCampaignState.Completed;
                     ActiveShortCampaign.LastActionBarIndex = currentBar;

@@ -186,6 +186,9 @@
       <SameCampaignLock>true</SameCampaignLock>
       <RequireNewStructureForReentry>true</RequireNewStructureForReentry>
       <ExitOnRegimeChange>false</ExitOnRegimeChange>
+      <EnableSwingRegimeInvalidation>false</EnableSwingRegimeInvalidation>
+      <RegimeConfirmationBars>3</RegimeConfirmationBars>
+      <EnableRegimeSoftProtection>true</EnableRegimeSoftProtection>
       <SwingEntryCooldownBars>12</SwingEntryCooldownBars>
       <SwingMaxEntriesPerSession>2</SwingMaxEntriesPerSession>
       <SwingMaxLongEntriesPerSession>1</SwingMaxLongEntriesPerSession>

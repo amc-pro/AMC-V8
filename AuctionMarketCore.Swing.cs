@@ -139,8 +139,18 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Nouvelle Structure Requise Pour Re-entry", Order = 32, GroupName = "Swing 04. Opportunity Manager")]
         public bool RequireNewStructureForReentry { get; set; }
 
-        [Display(Name = "Sortie Immédiate Rupture Régime (Hard Exit)", Order = 33, GroupName = "Swing 04. Opportunity Manager")]
+        [Display(Name = "Sortie Immédiate Rupture Régime (Hard Exit Legacy)", Order = 33, GroupName = "Swing 04. Opportunity Manager")]
         public bool ExitOnRegimeChange { get; set; }
+
+        [Display(Name = "Activer Invalidation Structurelle Régime V2", Order = 331, GroupName = "Swing 04. Opportunity Manager")]
+        public bool EnableSwingRegimeInvalidation { get; set; }
+
+        [Range(1, 20)]
+        [Display(Name = "Barres Confirmation Invalidation Régime", Order = 332, GroupName = "Swing 04. Opportunity Manager")]
+        public int RegimeConfirmationBars { get; set; }
+
+        [Display(Name = "Activer Protection Douce Régime (BE)", Order = 333, GroupName = "Swing 04. Opportunity Manager")]
+        public bool EnableRegimeSoftProtection { get; set; }
 
         [Range(0, 100)]
         [Display(Name = "Cooldown Entrées (Barres)", Order = 34, GroupName = "Swing 04. Opportunity Manager")]
@@ -245,6 +255,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             SameCampaignLock = true;
             RequireNewStructureForReentry = true;
             ExitOnRegimeChange = false;
+            EnableSwingRegimeInvalidation = false;
+            RegimeConfirmationBars = 3;
+            EnableRegimeSoftProtection = true;
             SwingEntryCooldownBars = 12;
             SwingMaxEntriesPerSession = 2;
             SwingMaxLongEntriesPerSession = 1;
@@ -1302,6 +1315,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             double tick = TickSize > 0 ? TickSize : 0.25;
             double ptVal = ResolvePointValue();
 
+            double htfEmaVal = (htfEma != null && htfEma.IsValidDataPoint(0)) ? htfEma[0] : 0.0;
+            int htfTrendDir = htfEmaVal > 0 ? (close > htfEmaVal ? 1 : -1) : 0;
+            double curAtr = (atr != null && atr.IsValidDataPoint(0)) ? atr[0] : 0.0;
+            double atrDaily = (regimeAtr != null && regimeAtr.IsValidDataPoint(0)) ? regimeAtr[0] : (curAtr > 0 ? curAtr * 4 : 0.0);
+            SwingMarketRegime currentRegime = ResolveSwingRegimeHtf(close, htfEmaVal, htfTrendDir, atrDaily);
+
             for (int i = openSwingTrades.Count - 1; i >= 0; i--)
             {
                 TrackedSwingTrade t = openSwingTrades[i];
@@ -1313,48 +1332,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 t.BarsElapsed++;
 
-                // 0. Vérification de rupture de régime HTF (Hard Exit on Regime Change - Option B)
-                // Garde-fous : Ne jamais appliquer aux setups de mean-reversion (MacroReversal, ValueReentry)
-                // et exiger une maturité minimale de 12 barres (~1h) pour éviter le bruit M5.
-                if (ExitOnRegimeChange && t.BarsElapsed >= 12 &&
-                    t.SetupType != SwingSetupType.MacroReversal &&
-                    t.SetupType != SwingSetupType.ValueReentry &&
-                    htfEma != null && htfEma.IsValidDataPoint(0))
-                {
-                    bool regimeOpposed = (t.IsLong && close < htfEma[0]) || (!t.IsLong && close > htfEma[0]);
-                    if (regimeOpposed)
-                    {
-                        t.CloseTrade(close, nowUtc, "REGIME_CHANGED", tick, ptVal);
-                        if (volumeProfileManager != null && volumeProfileManager.Repository != null)
-                        {
-                            try { volumeProfileManager.Repository.UpsertSwingTrade(t); } catch { }
-                        }
-                        LogSwingTrade(t);
-                        RecordSwingOutcome(t);
-                        if (opportunityManager != null) opportunityManager.OnTradeClosed(t, "REGIME_CHANGED", evalBarIndex);
-                        if (closedSwingTrades != null) closedSwingTrades.Add(t);
-                        openSwingTrades.RemoveAt(i);
-                        continue;
-                    }
-                }
-
-                // 0b. Vérification de durée maximale de détention (si SwingMaxBarsInTrade > 0)
-                if (SwingMaxBarsInTrade > 0 && t.BarsElapsed >= SwingMaxBarsInTrade)
-                {
-                    t.CloseTrade(close, nowUtc, "TIMEOUT", tick, ptVal);
-                    if (volumeProfileManager != null && volumeProfileManager.Repository != null)
-                    {
-                        try { volumeProfileManager.Repository.UpsertSwingTrade(t); } catch { }
-                    }
-                    LogSwingTrade(t);
-                    RecordSwingOutcome(t);
-                    if (opportunityManager != null) opportunityManager.OnTradeClosed(t, "TIMEOUT", evalBarIndex);
-                    if (closedSwingTrades != null) closedSwingTrades.Add(t);
-                    openSwingTrades.RemoveAt(i);
-                    continue;
-                }
-
-                // 1. Vérification du Stop Loss
+                // 1. Vérification du Stop Loss (Priorité absolue de protection du capital)
                 bool stopTriggered = (t.IsLong && low <= t.CurrentStopPrice) || (!t.IsLong && high >= t.CurrentStopPrice);
                 if (stopTriggered)
                 {
@@ -1417,6 +1395,86 @@ namespace NinjaTrader.NinjaScript.Indicators
                         if (closedSwingTrades != null) closedSwingTrades.Add(t);
                         openSwingTrades.RemoveAt(i);
                         continue;
+                    }
+                }
+
+                // 4. Vérification de durée maximale de détention (si SwingMaxBarsInTrade > 0)
+                if (SwingMaxBarsInTrade > 0 && t.BarsElapsed >= SwingMaxBarsInTrade)
+                {
+                    t.CloseTrade(close, nowUtc, "TIMEOUT", tick, ptVal);
+                    if (volumeProfileManager != null && volumeProfileManager.Repository != null)
+                    {
+                        try { volumeProfileManager.Repository.UpsertSwingTrade(t); } catch { }
+                    }
+                    LogSwingTrade(t);
+                    RecordSwingOutcome(t);
+                    if (opportunityManager != null) opportunityManager.OnTradeClosed(t, "TIMEOUT", evalBarIndex);
+                    if (closedSwingTrades != null) closedSwingTrades.Add(t);
+                    openSwingTrades.RemoveAt(i);
+                    continue;
+                }
+
+                // 5. Rupture de régime HTF Legacy (Option B - Hard Exit désactivé par défaut)
+                // Garde-fous : Ne jamais appliquer aux setups de mean-reversion (MacroReversal, ValueReentry)
+                // et exiger une maturité minimale de 12 barres (~1h) pour éviter le bruit M5.
+                if (ExitOnRegimeChange && t.BarsElapsed >= 12 &&
+                    t.SetupType != SwingSetupType.MacroReversal &&
+                    t.SetupType != SwingSetupType.ValueReentry &&
+                    htfEmaVal > 0)
+                {
+                    bool regimeOpposed = (t.IsLong && close < htfEmaVal) || (!t.IsLong && close > htfEmaVal);
+                    if (regimeOpposed)
+                    {
+                        t.CloseTrade(close, nowUtc, "REGIME_CHANGED", tick, ptVal);
+                        if (volumeProfileManager != null && volumeProfileManager.Repository != null)
+                        {
+                            try { volumeProfileManager.Repository.UpsertSwingTrade(t); } catch { }
+                        }
+                        LogSwingTrade(t);
+                        RecordSwingOutcome(t);
+                        if (opportunityManager != null) opportunityManager.OnTradeClosed(t, "REGIME_CHANGED", evalBarIndex);
+                        if (closedSwingTrades != null) closedSwingTrades.Add(t);
+                        openSwingTrades.RemoveAt(i);
+                        continue;
+                    }
+                }
+
+                // 6. Invalidation structurelle de régime V2 (Architecture Structure-First)
+                if (EnableSwingRegimeInvalidation)
+                {
+                    SwingRegimeDecision decision = t.EvaluateRegimeDecision(
+                        currentRegime,
+                        close,
+                        htfEmaVal,
+                        atrDaily,
+                        RegimeConfirmationBars,
+                        EnableRegimeSoftProtection);
+
+                    if (decision == SwingRegimeDecision.StructuralExit)
+                    {
+                        t.CloseTrade(close, nowUtc, "STRUCTURAL_REGIME_INVALIDATION", tick, ptVal);
+                        t.ExecutionNotes += string.Format(CultureInfo.InvariantCulture, " [STRUCTURAL_REGIME_INVALIDATION (Regime={0}, Struct={1:F2})]", currentRegime, t.StructuralStopPrice);
+                        if (volumeProfileManager != null && volumeProfileManager.Repository != null)
+                        {
+                            try { volumeProfileManager.Repository.UpsertSwingTrade(t); } catch { }
+                        }
+                        LogSwingTrade(t);
+                        RecordSwingOutcome(t);
+                        if (opportunityManager != null) opportunityManager.OnTradeClosed(t, "STRUCTURAL_REGIME_INVALIDATION", evalBarIndex);
+                        if (closedSwingTrades != null) closedSwingTrades.Add(t);
+                        openSwingTrades.RemoveAt(i);
+                        continue;
+                    }
+                    else if (decision == SwingRegimeDecision.ProtectBreakeven)
+                    {
+                        double bePrice = t.IsLong ? (t.EntryPrice + tick) : (t.EntryPrice - tick);
+                        bool tighter = t.IsLong ? (bePrice > t.CurrentStopPrice) : (bePrice < t.CurrentStopPrice);
+                        if (tighter)
+                        {
+                            t.CurrentStopPrice = bePrice;
+                            t.ExecutionNotes += " [REGIME_PROTECT_BE]";
+                            LogSwingTrade(t);
+                        }
                     }
                 }
             }

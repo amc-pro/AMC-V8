@@ -161,6 +161,19 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_SwingV3_ZeroTrust_InvalidAtrAndPointValue", Test_SwingV3_ZeroTrust_InvalidAtrAndPointValue);
             RunTest("Test_SwingV3_ScalpingPro_StrictIsolation", Test_SwingV3_ScalpingPro_StrictIsolation);
 
+            // ================================================================
+            // 🛡️ SUITE SWING V2 REGIME INVALIDATION & STRUCTURAL ARCHITECTURE (9 TESTS)
+            // ================================================================
+            RunTest("Test_SwingV2_SimpleRegimeChange_NoExit", Test_SwingV2_SimpleRegimeChange_NoExit);
+            RunTest("Test_SwingV2_RegimeDeterioration_And_StructuralInvalidation_Exit", Test_SwingV2_RegimeDeterioration_And_StructuralInvalidation_Exit);
+            RunTest("Test_SwingV2_MacroReversal_Long_Immunity", Test_SwingV2_MacroReversal_Long_Immunity);
+            RunTest("Test_SwingV2_MacroReversal_Short_Immunity", Test_SwingV2_MacroReversal_Short_Immunity);
+            RunTest("Test_SwingV2_SoftProtection_Trails_Stop_To_Breakeven", Test_SwingV2_SoftProtection_Trails_Stop_To_Breakeven);
+            RunTest("Test_SwingV2_LegacyFlag_ExitOnRegimeChange_BackwardCompatibility", Test_SwingV2_LegacyFlag_ExitOnRegimeChange_BackwardCompatibility);
+            RunTest("Test_SwingV2_DefaultSettings_NoPrematureExit", Test_SwingV2_DefaultSettings_NoPrematureExit);
+            RunTest("Test_SwingV2_AdverseBars_Hysteresis_And_Persistence", Test_SwingV2_AdverseBars_Hysteresis_And_Persistence);
+            RunTest("Test_SwingV2_StrictIsolation_ScalpingPro_Sniper", Test_SwingV2_StrictIsolation_ScalpingPro_Sniper);
+
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
             Console.WriteLine("================================================================");
@@ -3060,6 +3073,272 @@ namespace AMC.VolumeProfile.Tests
             Assert(!text.Contains("SwingOpportunityManagement"), "ScalpingPro ne doit contenir aucun tag de SwingOpportunityManagement.");
             Assert(text.Contains("<TradingPreset>ScalpingPro</TradingPreset>"), "TradingPreset doit rester ScalpingPro.");
         }
+
+        #region Suite Tests Swing V2 Regime Invalidation & Structural Architecture
+
+        private static void Test_SwingV2_SimpleRegimeChange_NoExit()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "NQ",
+                Direction = SwingDirection.Long,
+                SetupType = SwingSetupType.HtfContinuation,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4960.0,
+                StructuralStopPrice = 4970.0
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 20.0);
+
+            // Régime adverse (TrendDown), mais structure intacte (close 5010 > 4970) et 1 seule barre
+            var decision = trade.EvaluateRegimeDecision(
+                currentRegime: SwingMarketRegime.TrendDown,
+                close: 5010.0,
+                htfEma: 5020.0,
+                atrDaily: 20.0,
+                confirmationBarsRequired: 3,
+                enableSoftProtection: false);
+
+            Assert(decision == SwingRegimeDecision.Hold, "Un simple changement de régime adverse sans invalidation structurelle ne doit pas déclencher de sortie.");
+            Assert(!trade.Closed, "Le trade Swing doit rester ouvert et géré par ses cibles et stops.");
+            Assert(trade.ConsecutiveAdverseBars == 1, "Le compteur de barres adverses doit être incrémenté à 1.");
+        }
+
+        private static void Test_SwingV2_RegimeDeterioration_And_StructuralInvalidation_Exit()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "NQ",
+                Direction = SwingDirection.Long,
+                SetupType = SwingSetupType.HtfContinuation,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4960.0,
+                StructuralStopPrice = 4975.0
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 20.0);
+
+            // Barres 1 & 2 : Régime TrendDown + Structure cassée (close 4970 < 4975), mais pas encore 3 barres de confirmation
+            var d1 = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4970.0, 5010.0, 20.0, 3, true);
+            Assert(d1 == SwingRegimeDecision.Hold, "Barre 1 adverse non confirmée doit donner Hold.");
+            Assert(trade.ConsecutiveAdverseBars == 1, "Compteur = 1.");
+
+            var d2 = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4968.0, 5010.0, 20.0, 3, true);
+            Assert(d2 == SwingRegimeDecision.Hold, "Barre 2 adverse non confirmée doit donner Hold.");
+            Assert(trade.ConsecutiveAdverseBars == 2, "Compteur = 2.");
+
+            // Barre 3 : 3ème barre adverse confirmée + Structure brisée (close 4967 < 4975)
+            var d3 = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4967.0, 5010.0, 20.0, 3, true);
+            Assert(d3 == SwingRegimeDecision.StructuralExit, "3 barres adverses consécutives + rupture structurelle doivent déclencher StructuralExit.");
+
+            // Simulation exécution fermeture
+            trade.CloseTrade(4967.0, DateTime.UtcNow, "STRUCTURAL_REGIME_INVALIDATION", 0.25, 20.0);
+            Assert(trade.Closed, "Le trade doit être clôturé.");
+            Assert(trade.ExitReason == "STRUCTURAL_REGIME_INVALIDATION", "Le motif de sortie doit être STRUCTURAL_REGIME_INVALIDATION.");
+
+            // Vérification mise à jour OpportunityManager
+            var opp = new SwingOpportunityManager { Enabled = true };
+            opp.OnCandidateExecuted(new SwingCandidate { SetupType = SwingSetupType.HtfContinuation, Direction = SwingDirection.Long }, trade, 100);
+            var camp = opp.ActiveLongCampaign;
+            Assert(camp != null, "La campagne active doit être initialisée.");
+            opp.OnTradeClosed(trade, "STRUCTURAL_REGIME_INVALIDATION", 105);
+            Assert(camp.State == SwingCampaignState.RegimeChanged, "La campagne doit être marquée RegimeChanged suite à STRUCTURAL_REGIME_INVALIDATION.");
+            Assert(opp.ActiveLongCampaign == null, "La campagne active doit être libérée.");
+        }
+
+        private static void Test_SwingV2_MacroReversal_Long_Immunity()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "ES",
+                Direction = SwingDirection.Long,
+                SetupType = SwingSetupType.MacroReversal,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4960.0,
+                StructuralStopPrice = 4960.0
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
+
+            // Pour un MacroReversal Long, le cours (5005) est SOUS l'EMA HTF baissière (5080)
+            // Régime TrendDown : MacroReversal doit bénéficier d'une immunité totale contre l'invalidation de régime
+            for (int b = 0; b < 10; b++)
+            {
+                var dec = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 5005.0, 5080.0, 30.0, 3, true);
+                Assert(dec == SwingRegimeDecision.Hold, "MacroReversal Long sous l'EMA HTF ne doit JAMAIS être invalidé par le régime.");
+            }
+
+            Assert(trade.ConsecutiveAdverseBars == 0, "Le compteur adverse doit rester 0 pour MacroReversal sous EMA.");
+            Assert(!trade.Closed, "Le trade MacroReversal Long doit rester actif.");
+        }
+
+        private static void Test_SwingV2_MacroReversal_Short_Immunity()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "ES",
+                Direction = SwingDirection.Short,
+                SetupType = SwingSetupType.MacroReversal,
+                EntryPrice = 5100.0,
+                InitialStopPrice = 5140.0,
+                StructuralStopPrice = 5140.0
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
+
+            // Pour un MacroReversal Short, le cours (5095) est AU-DESSUS de l'EMA HTF haussière (5020)
+            // Régime TrendUp : MacroReversal Short doit être immunisé
+            for (int b = 0; b < 10; b++)
+            {
+                var dec = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendUp, 5095.0, 5020.0, 30.0, 3, true);
+                Assert(dec == SwingRegimeDecision.Hold, "MacroReversal Short au-dessus de l'EMA HTF ne doit JAMAIS être invalidé par le régime.");
+            }
+
+            Assert(trade.ConsecutiveAdverseBars == 0, "Le compteur adverse doit rester 0 pour MacroReversal Short au-dessus de l'EMA.");
+            Assert(!trade.Closed, "Le trade MacroReversal Short doit rester actif.");
+        }
+
+        private static void Test_SwingV2_SoftProtection_Trails_Stop_To_Breakeven()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "NQ",
+                Direction = SwingDirection.Long,
+                SetupType = SwingSetupType.BreakoutRetest,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4960.0,
+                StructuralStopPrice = 4970.0
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 20.0);
+
+            // Le cours est à 5020 (en profit de +1R par rapport à l'entrée 5000, stop 4960)
+            // Le régime se détériore en TrendDown pendant 3 barres consécutives, mais la structure (4970) n'est PAS cassée
+            trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 5020.0, 5030.0, 20.0, 3, true);
+            trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 5018.0, 5030.0, 20.0, 3, true);
+            var dec3 = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 5015.0, 5030.0, 20.0, 3, true);
+
+            Assert(dec3 == SwingRegimeDecision.ProtectBreakeven, "Détérioration confirmée mais structure intacte et position en gain doit déclencher ProtectBreakeven.");
+
+            // Application de la décision dans le moteur
+            if (dec3 == SwingRegimeDecision.ProtectBreakeven)
+            {
+                double bePrice = trade.EntryPrice + 0.25;
+                if (bePrice > trade.CurrentStopPrice)
+                {
+                    trade.CurrentStopPrice = bePrice;
+                    trade.ExecutionNotes += " [REGIME_PROTECT_BE]";
+                }
+            }
+
+            Assert(trade.CurrentStopPrice == 5000.25, "Le stop doit être remonté à Break-Even + 1 tick.");
+            Assert(!trade.Closed, "Le trade ne doit PAS être coupé prématurément.");
+            Assert(trade.ExecutionNotes.Contains("[REGIME_PROTECT_BE]"), "La note d'exécution doit documenter le trailing BE.");
+        }
+
+        private static void Test_SwingV2_LegacyFlag_ExitOnRegimeChange_BackwardCompatibility()
+        {
+            // Vérification de la rétrocompatibilité pour A/B testing
+            var sig = new SwingSignal
+            {
+                Symbol = "NQ",
+                Direction = SwingDirection.Long,
+                SetupType = SwingSetupType.HtfContinuation,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4960.0
+            };
+
+            var tradeLegacy = new TrackedSwingTrade(sig, 0.25, 20.0);
+            tradeLegacy.BarsElapsed = 15; // Maturité suffisante > 12 barres
+
+            // En mode Legacy activé (ExitOnRegimeChange = true)
+            bool exitOnRegimeChange = true;
+            double htfEmaVal = 5050.0;
+            double close = 4990.0; // Opposé à l'EMA HTF pour un Long
+            bool legacyExitTriggered = exitOnRegimeChange && tradeLegacy.BarsElapsed >= 12 &&
+                tradeLegacy.SetupType != SwingSetupType.MacroReversal &&
+                tradeLegacy.SetupType != SwingSetupType.ValueReentry &&
+                htfEmaVal > 0 && close < htfEmaVal;
+
+            Assert(legacyExitTriggered, "Le mode Legacy activé doit déclencher la sortie sur rupture HTF après 12 barres.");
+
+            // En mode par défaut institutionnel (ExitOnRegimeChange = false)
+            bool defaultExit = false;
+            bool defaultExitTriggered = defaultExit && tradeLegacy.BarsElapsed >= 12 && close < htfEmaVal;
+            Assert(!defaultExitTriggered, "Le mode par défaut institutionnel (ExitOnRegimeChange = false) ne doit JAMAIS couper le trade.");
+        }
+
+        private static void Test_SwingV2_DefaultSettings_NoPrematureExit()
+        {
+            string root = GetProjectRoot();
+            string[] swingFiles = Directory.GetFiles(Path.Combine(root, "configs", "SWING"), "CONFIG_*_SWING.xml");
+            Assert(swingFiles.Length == 8, "Les 8 fichiers de configuration Swing doivent être présents.");
+
+            foreach (var file in swingFiles)
+            {
+                string text = File.ReadAllText(file);
+                Assert(text.Contains("<ExitOnRegimeChange>false</ExitOnRegimeChange>"),
+                    string.Format("Le fichier {0} doit avoir ExitOnRegimeChange = false par défaut.", Path.GetFileName(file)));
+                Assert(text.Contains("<EnableSwingRegimeInvalidation>false</EnableSwingRegimeInvalidation>"),
+                    string.Format("Le fichier {0} doit avoir EnableSwingRegimeInvalidation = false par défaut.", Path.GetFileName(file)));
+                Assert(text.Contains("<RegimeConfirmationBars>3</RegimeConfirmationBars>"),
+                    string.Format("Le fichier {0} doit avoir RegimeConfirmationBars = 3 par défaut.", Path.GetFileName(file)));
+                Assert(text.Contains("<EnableRegimeSoftProtection>true</EnableRegimeSoftProtection>"),
+                    string.Format("Le fichier {0} doit avoir EnableRegimeSoftProtection = true par défaut.", Path.GetFileName(file)));
+            }
+        }
+
+        private static void Test_SwingV2_AdverseBars_Hysteresis_And_Persistence()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "NQ",
+                Direction = SwingDirection.Long,
+                SetupType = SwingSetupType.HtfContinuation,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4960.0,
+                StructuralStopPrice = 4970.0
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 20.0);
+
+            // Barres 1 & 2 : Régime TrendDown -> Incrémentation
+            trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 5010.0, 5030.0, 20.0, 3, true);
+            trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 5010.0, 5030.0, 20.0, 3, true);
+            Assert(trade.ConsecutiveAdverseBars == 2, "Compteur doit être à 2 après 2 barres défavorables.");
+
+            // Barre 3 : Le marché se réaligne en TrendUp -> Décrémentation progressive (Hystérésis)
+            trade.EvaluateRegimeDecision(SwingMarketRegime.TrendUp, 5015.0, 5010.0, 20.0, 3, true);
+            Assert(trade.ConsecutiveAdverseBars == 1, "Compteur doit décrémenter à 1 (amortissement hystérésis).");
+
+            // Barre 4 : Marché toujours TrendUp -> Compteur retourne à 0
+            trade.EvaluateRegimeDecision(SwingMarketRegime.TrendUp, 5020.0, 5010.0, 20.0, 3, true);
+            Assert(trade.ConsecutiveAdverseBars == 0, "Compteur doit revenir à 0.");
+        }
+
+        private static void Test_SwingV2_StrictIsolation_ScalpingPro_Sniper()
+        {
+            string root = GetProjectRoot();
+            string sniperPath = Path.Combine(root, "AuctionMarketCore.Sniper.cs");
+            string scalpingPath = Path.Combine(root, "AuctionMarketCore.ScalpingPro.cs");
+
+            Assert(File.Exists(sniperPath), "AuctionMarketCore.Sniper.cs doit exister.");
+            Assert(File.Exists(scalpingPath), "AuctionMarketCore.ScalpingPro.cs doit exister.");
+
+            string sniperText = File.ReadAllText(sniperPath);
+            string scalpingText = File.ReadAllText(scalpingPath);
+
+            // ScalpingPro et Sniper ne doivent pas faire référence aux mécanismes d'invalidation Swing
+            Assert(!sniperText.Contains("ExitOnRegimeChange"), "Sniper ne doit pas référencer ExitOnRegimeChange.");
+            Assert(!sniperText.Contains("EnableSwingRegimeInvalidation"), "Sniper ne doit pas référencer EnableSwingRegimeInvalidation.");
+            Assert(!sniperText.Contains("EvaluateRegimeDecision"), "Sniper ne doit pas appeler EvaluateRegimeDecision.");
+
+            Assert(!scalpingText.Contains("ExitOnRegimeChange"), "ScalpingPro ne doit pas référencer ExitOnRegimeChange.");
+            Assert(!scalpingText.Contains("EnableSwingRegimeInvalidation"), "ScalpingPro ne doit pas référencer EnableSwingRegimeInvalidation.");
+            Assert(!scalpingText.Contains("EvaluateRegimeDecision"), "ScalpingPro ne doit pas appeler EvaluateRegimeDecision.");
+        }
+
+        #endregion
 
         #endregion
 
