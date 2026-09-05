@@ -1317,7 +1317,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             double htfEmaVal = (htfEma != null && htfEma.IsValidDataPoint(0)) ? htfEma[0] : 0.0;
             int htfTrendDir = htfEmaVal > 0 ? (close > htfEmaVal ? 1 : -1) : 0;
-            double curAtr = (atr != null && atr.IsValidDataPoint(0)) ? atr[0] : 0.0;
+            double curAtr = (riskAtr != null && riskAtr.IsValidDataPoint(0)) ? riskAtr[0] : 0.0;
             double atrDaily = (regimeAtr != null && regimeAtr.IsValidDataPoint(0)) ? regimeAtr[0] : (curAtr > 0 ? curAtr * 4 : 0.0);
             SwingMarketRegime currentRegime = ResolveSwingRegimeHtf(close, htfEmaVal, htfTrendDir, atrDaily);
 
