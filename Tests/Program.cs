@@ -162,7 +162,7 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_SwingV3_ScalpingPro_StrictIsolation", Test_SwingV3_ScalpingPro_StrictIsolation);
 
             // ================================================================
-            // 🛡️ SUITE SWING V2 REGIME INVALIDATION & STRUCTURAL ARCHITECTURE (9 TESTS)
+            // 🛡️ SUITE SWING V2 REGIME INVALIDATION & STRUCTURAL ARCHITECTURE (11 TESTS)
             // ================================================================
             RunTest("Test_SwingV2_SimpleRegimeChange_NoExit", Test_SwingV2_SimpleRegimeChange_NoExit);
             RunTest("Test_SwingV2_RegimeDeterioration_And_StructuralInvalidation_Exit", Test_SwingV2_RegimeDeterioration_And_StructuralInvalidation_Exit);
@@ -173,6 +173,8 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_SwingV2_DefaultSettings_NoPrematureExit", Test_SwingV2_DefaultSettings_NoPrematureExit);
             RunTest("Test_SwingV2_AdverseBars_Hysteresis_And_Persistence", Test_SwingV2_AdverseBars_Hysteresis_And_Persistence);
             RunTest("Test_SwingV2_StrictIsolation_ScalpingPro_Sniper", Test_SwingV2_StrictIsolation_ScalpingPro_Sniper);
+            RunTest("Test_SwingV2_DynamicStructuralPrice_Trailing_And_Tp1", Test_SwingV2_DynamicStructuralPrice_Trailing_And_Tp1);
+            RunTest("Test_SwingV2_AtrToleranceBuffer_FiltersMicroWicks", Test_SwingV2_AtrToleranceBuffer_FiltersMicroWicks);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
@@ -3160,16 +3162,23 @@ namespace AMC.VolumeProfile.Tests
 
             var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
 
-            // Pour un MacroReversal Long, le cours (5005) est SOUS l'EMA HTF baissière (5080)
-            // Régime TrendDown : MacroReversal doit bénéficier d'une immunité totale contre l'invalidation de régime
+            // Phase 1 : Le cours (5005) est SOUS l'EMA HTF baissière (5080)
+            // Régime TrendDown : MacroReversal ignore l'opposition EMA tant que le support d'ancrage (4960) tient
             for (int b = 0; b < 10; b++)
             {
                 var dec = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 5005.0, 5080.0, 30.0, 3, true);
-                Assert(dec == SwingRegimeDecision.Hold, "MacroReversal Long sous l'EMA HTF ne doit JAMAIS être invalidé par le régime.");
+                Assert(dec == SwingRegimeDecision.Hold, "MacroReversal Long sous l'EMA HTF avec structure intacte ne doit JAMAIS être invalidé par l'EMA.");
             }
-
-            Assert(trade.ConsecutiveAdverseBars == 0, "Le compteur adverse doit rester 0 pour MacroReversal sous EMA.");
+            Assert(trade.ConsecutiveAdverseBars == 0, "Le compteur adverse doit rester 0 tant que la structure tient.");
             Assert(!trade.Closed, "Le trade MacroReversal Long doit rester actif.");
+
+            // Phase 2 (Bloquant 1) : Si la structure casse réellement (cours = 4950 < 4960)
+            // Le trade ne doit PAS être aveuglément immunisé : après confirmation de 3 barres, il doit sortir !
+            trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4950.0, 5080.0, 30.0, 3, true);
+            trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4948.0, 5080.0, 30.0, 3, true);
+            var decBreak = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4947.0, 5080.0, 30.0, 3, true);
+
+            Assert(decBreak == SwingRegimeDecision.StructuralExit, "MacroReversal dont la structure d'ancrage casse doit être invalidé (StructuralExit).");
         }
 
         private static void Test_SwingV2_MacroReversal_Short_Immunity()
@@ -3186,16 +3195,22 @@ namespace AMC.VolumeProfile.Tests
 
             var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
 
-            // Pour un MacroReversal Short, le cours (5095) est AU-DESSUS de l'EMA HTF haussière (5020)
-            // Régime TrendUp : MacroReversal Short doit être immunisé
+            // Phase 1 : Le cours (5095) est AU-DESSUS de l'EMA HTF haussière (5020)
+            // Régime TrendUp : MacroReversal Short ignore l'opposition EMA tant que le sommet d'ancrage (5140) tient
             for (int b = 0; b < 10; b++)
             {
                 var dec = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendUp, 5095.0, 5020.0, 30.0, 3, true);
-                Assert(dec == SwingRegimeDecision.Hold, "MacroReversal Short au-dessus de l'EMA HTF ne doit JAMAIS être invalidé par le régime.");
+                Assert(dec == SwingRegimeDecision.Hold, "MacroReversal Short au-dessus de l'EMA HTF avec structure intacte doit être immunisé.");
             }
-
-            Assert(trade.ConsecutiveAdverseBars == 0, "Le compteur adverse doit rester 0 pour MacroReversal Short au-dessus de l'EMA.");
+            Assert(trade.ConsecutiveAdverseBars == 0, "Le compteur adverse doit rester 0 tant que la structure tient.");
             Assert(!trade.Closed, "Le trade MacroReversal Short doit rester actif.");
+
+            // Phase 2 (Bloquant 1) : Si la structure casse (cours monte à 5155 > 5140)
+            trade.EvaluateRegimeDecision(SwingMarketRegime.TrendUp, 5155.0, 5020.0, 30.0, 3, true);
+            trade.EvaluateRegimeDecision(SwingMarketRegime.TrendUp, 5158.0, 5020.0, 30.0, 3, true);
+            var decBreak = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendUp, 5160.0, 5020.0, 30.0, 3, true);
+
+            Assert(decBreak == SwingRegimeDecision.StructuralExit, "MacroReversal Short dont la structure d'ancrage casse doit être invalidé (StructuralExit).");
         }
 
         private static void Test_SwingV2_SoftProtection_Trails_Stop_To_Breakeven()
@@ -3336,6 +3351,96 @@ namespace AMC.VolumeProfile.Tests
             Assert(!scalpingText.Contains("ExitOnRegimeChange"), "ScalpingPro ne doit pas référencer ExitOnRegimeChange.");
             Assert(!scalpingText.Contains("EnableSwingRegimeInvalidation"), "ScalpingPro ne doit pas référencer EnableSwingRegimeInvalidation.");
             Assert(!scalpingText.Contains("EvaluateRegimeDecision"), "ScalpingPro ne doit pas appeler EvaluateRegimeDecision.");
+        }
+
+        private static void Test_SwingV2_DynamicStructuralPrice_Trailing_And_Tp1()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "ES",
+                Direction = SwingDirection.Long,
+                SetupType = SwingSetupType.BreakoutRetest,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4960.0,
+                StructuralStopPrice = 4970.0,
+                Target1Price = 5030.0,
+                PositionSizeContracts = 2
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
+            Assert(trade.DynamicStructuralPrice == 4970.0, "DynamicStructuralPrice initialisé au StructuralStopPrice.");
+
+            // Trailing dynamique à la hausse (nouveau pivot à 4985)
+            trade.UpdateDynamicStructure(4985.0);
+            Assert(trade.DynamicStructuralPrice == 4985.0, "DynamicStructuralPrice doit monter au nouveau pivot 4985.0.");
+
+            // Tentative de régression (niveau inférieur à 4975) -> ignorée
+            trade.UpdateDynamicStructure(4975.0);
+            Assert(trade.DynamicStructuralPrice == 4985.0, "DynamicStructuralPrice ne doit JAMAIS régresser.");
+
+            // Exécution de TP1 -> le stop passe à BE (5000.25) et la structure dynamique monte à BE
+            trade.ExecutePartialExitTp1(5030.0, DateTime.UtcNow, 0.25, 50.0);
+            Assert(trade.Tp1Hit, "TP1 doit être marqué touché.");
+            Assert(trade.DynamicStructuralPrice == 5000.25, "DynamicStructuralPrice doit être relevé au moins à Break-Even lors de TP1.");
+
+            // Même logique pour un trade Short
+            var sigShort = new SwingSignal
+            {
+                Symbol = "ES",
+                Direction = SwingDirection.Short,
+                SetupType = SwingSetupType.BreakoutRetest,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 5040.0,
+                StructuralStopPrice = 5030.0,
+                Target1Price = 4970.0,
+                PositionSizeContracts = 2
+            };
+
+            var tradeShort = new TrackedSwingTrade(sigShort, 0.25, 50.0);
+            Assert(tradeShort.DynamicStructuralPrice == 5030.0, "DynamicStructuralPrice initialisé au StructuralStopPrice pour Short.");
+
+            // Trailing dynamique à la baisse (nouveau pivot à 5015)
+            tradeShort.UpdateDynamicStructure(5015.0);
+            Assert(tradeShort.DynamicStructuralPrice == 5015.0, "DynamicStructuralPrice doit descendre au nouveau pivot 5015.0.");
+
+            // Tentative de régression vers le haut -> ignorée
+            tradeShort.UpdateDynamicStructure(5025.0);
+            Assert(tradeShort.DynamicStructuralPrice == 5015.0, "DynamicStructuralPrice Short ne doit jamais remonter.");
+
+            // TP1 Short -> le stop passe à BE (4999.75) et DynamicStructuralPrice descend à BE
+            tradeShort.ExecutePartialExitTp1(4970.0, DateTime.UtcNow, 0.25, 50.0);
+            Assert(tradeShort.DynamicStructuralPrice == 4999.75, "DynamicStructuralPrice Short doit être abaissé au niveau BE lors de TP1.");
+        }
+
+        private static void Test_SwingV2_AtrToleranceBuffer_FiltersMicroWicks()
+        {
+            var sig = new SwingSignal
+            {
+                Symbol = "ES",
+                Direction = SwingDirection.Long,
+                SetupType = SwingSetupType.HtfContinuation,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4960.0,
+                StructuralStopPrice = 4980.0
+            };
+
+            var trade = new TrackedSwingTrade(sig, 0.25, 50.0);
+            double atrDaily = 40.0;
+            // Tolérance ATR = 40.0 * 0.05 = 2.0 pts
+            // Niveau de rupture Long : 4980.0 - 2.0 = 4978.0
+
+            // Mèche de 1 pt sous le stop structurel (close = 4979.0 > 4978.0)
+            // Régime TrendUp : doit être filtré par le buffer et ne pas être considéré comme invalidé
+            var decMeche = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendUp, 4979.0, 4980.0, false, atrDaily, 3, true);
+            Assert(decMeche == SwingRegimeDecision.Hold, "Une micro-mèche dans la zone de tolérance ATR (0.05 ATR) ne doit pas invalider la position.");
+            Assert(trade.ConsecutiveAdverseBars == 0, "Le compteur adverse doit rester à 0 sous régime haussier avec mèche filtrée.");
+
+            // Rupture confirmée au-delà du buffer ATR (close = 4977.0 < 4978.0)
+            // Régime TrendDown
+            trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4977.0, 4980.0, false, atrDaily, 3, true);
+            trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4976.0, 4980.0, false, atrDaily, 3, true);
+            var decBreak = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4975.0, 4980.0, false, atrDaily, 3, true);
+            Assert(decBreak == SwingRegimeDecision.StructuralExit, "Une rupture franche dépassant le buffer ATR de 0.05 confirmée sur 3 barres doit déclencher StructuralExit.");
         }
 
         #endregion

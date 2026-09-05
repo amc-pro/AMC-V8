@@ -1294,6 +1294,28 @@ namespace NinjaTrader.NinjaScript.Indicators
         public double StructuralStopPrice => Signal != null ? Signal.StructuralStopPrice : InitialStopPrice;
         public SwingSetupType SetupType => Signal != null ? Signal.SetupType : SwingSetupType.RejectExtreme;
 
+        private double dynamicStructuralPrice;
+        public double DynamicStructuralPrice
+        {
+            get => dynamicStructuralPrice > 0 ? dynamicStructuralPrice : StructuralStopPrice;
+            set => dynamicStructuralPrice = value;
+        }
+
+        public void UpdateDynamicStructure(double newLevel)
+        {
+            if (newLevel <= 0) return;
+            if (IsLong)
+            {
+                if (newLevel > DynamicStructuralPrice)
+                    DynamicStructuralPrice = newLevel;
+            }
+            else
+            {
+                if (newLevel < DynamicStructuralPrice)
+                    DynamicStructuralPrice = newLevel;
+            }
+        }
+
         public TrackedSwingTrade()
         {
             TradeId = Guid.NewGuid().ToString("N").Substring(0, 12);
@@ -1303,6 +1325,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             EntryTimeUtc = DateTime.UtcNow;
             ExecutionNotes = string.Empty;
             ConsecutiveAdverseBars = 0;
+            dynamicStructuralPrice = 0.0;
         }
 
         public TrackedSwingTrade(SwingSignal sig, double tickSize, double pointValue)
@@ -1326,11 +1349,11 @@ namespace NinjaTrader.NinjaScript.Indicators
             BarsElapsed = 0;
             ConsecutiveAdverseBars = 0;
             ExecutionNotes = sig != null ? sig.ExecutionNotes : string.Empty;
+            dynamicStructuralPrice = sig != null ? sig.StructuralStopPrice : 0.0;
         }
 
         /// <summary>
-        /// Évalue la santé du régime et détermine si une action de protection ou d'invalidation structurelle est requise (Architecture V2).
-        /// Principe : Régime = Contexte, Structure = Validation, Risk Management = Protection.
+        /// Surcharge de compatibilité pour l'évaluation de régime Swing V2.
         /// </summary>
         public SwingRegimeDecision EvaluateRegimeDecision(
             SwingMarketRegime currentRegime,
@@ -1340,44 +1363,77 @@ namespace NinjaTrader.NinjaScript.Indicators
             int confirmationBarsRequired,
             bool enableSoftProtection)
         {
+            return EvaluateRegimeDecision(
+                currentRegime,
+                close,
+                DynamicStructuralPrice,
+                false,
+                atrDaily,
+                confirmationBarsRequired,
+                enableSoftProtection);
+        }
+
+        /// <summary>
+        /// Évalue la santé du régime et détermine si une action de protection ou d'invalidation structurelle dynamique est requise (Architecture V2).
+        /// Principe : Régime = Contexte, Structure = Validation, Risk Management = Protection.
+        /// </summary>
+        public SwingRegimeDecision EvaluateRegimeDecision(
+            SwingMarketRegime currentRegime,
+            double close,
+            double dynamicStructurePrice,
+            bool hasOpposingChoch,
+            double atrDaily,
+            int confirmationBarsRequired,
+            bool enableSoftProtection)
+        {
             if (Closed) return SwingRegimeDecision.Hold;
 
-            // 1. RÈGLE CRITIQUE POUR MACROREVERSAL (Rule 5) :
+            double structLevel = dynamicStructurePrice > 0 ? dynamicStructurePrice : DynamicStructuralPrice;
+            double tol = atrDaily > 0 ? atrDaily * 0.05 : 0.0;
+            bool isStructureBreached = structLevel > 0
+                ? (IsLong ? (close < structLevel - tol) : (close > structLevel + tol))
+                : false;
+
+            bool isStructureInvalidated = isStructureBreached || hasOpposingChoch;
+
+            // 1. RÈGLE CRITIQUE POUR MACROREVERSAL (Résolution Bloquant 1) :
             // Un setup de mean-reversion entre volontairement contre l'EMA HTF précédente.
-            // Être sous l'EMA pour un Long ou au-dessus pour un Short est NORMAL et attendu.
-            // On n'évalue la détérioration pour MacroReversal que si une cassure d'extrême se produit.
+            // L'opposition avec l'EMA HTF est IGNORE (ne compte pas comme détérioration tant que l'ancrage tient).
+            // En revanche, si la structure d'ancrage est brisée (isStructureInvalidated), la tentative de retournement
+            // a échoué et passe en état Deteriorated pour permettre la confirmation et la sortie en StructuralExit !
             bool isMacroReversal = SetupType == SwingSetupType.MacroReversal;
 
-            // 2. Évaluation de la santé du régime (SwingRegimeHealth)
             SwingRegimeHealth health = SwingRegimeHealth.Neutral;
             if (isMacroReversal)
             {
-                // MacroReversal n'est pas pénalisé par la position du prix par rapport à l'EMA HTF
-                health = SwingRegimeHealth.Neutral;
+                if (isStructureInvalidated)
+                    health = SwingRegimeHealth.Deteriorated;
+                else
+                    health = SwingRegimeHealth.Neutral;
             }
             else
             {
                 if (IsLong)
                 {
-                    if (currentRegime == SwingMarketRegime.TrendUp || currentRegime == SwingMarketRegime.Expansion)
-                        health = SwingRegimeHealth.Aligned;
-                    else if (currentRegime == SwingMarketRegime.TrendDown)
+                    if (isStructureInvalidated || currentRegime == SwingMarketRegime.TrendDown)
                         health = SwingRegimeHealth.Deteriorated;
+                    else if (currentRegime == SwingMarketRegime.TrendUp || currentRegime == SwingMarketRegime.Expansion)
+                        health = SwingRegimeHealth.Aligned;
                     else
                         health = SwingRegimeHealth.Neutral;
                 }
                 else
                 {
-                    if (currentRegime == SwingMarketRegime.TrendDown || currentRegime == SwingMarketRegime.Compression)
-                        health = SwingRegimeHealth.Aligned;
-                    else if (currentRegime == SwingMarketRegime.TrendUp)
+                    if (isStructureInvalidated || currentRegime == SwingMarketRegime.TrendUp)
                         health = SwingRegimeHealth.Deteriorated;
+                    else if (currentRegime == SwingMarketRegime.TrendDown || currentRegime == SwingMarketRegime.Compression)
+                        health = SwingRegimeHealth.Aligned;
                     else
                         health = SwingRegimeHealth.Neutral;
                 }
             }
 
-            // 3. Suivi de la persistance (Hystérésis)
+            // 2. Suivi de la persistance (Hystérésis)
             if (health == SwingRegimeHealth.Deteriorated)
             {
                 ConsecutiveAdverseBars++;
@@ -1388,19 +1444,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                     ConsecutiveAdverseBars = Math.Max(0, ConsecutiveAdverseBars - 1);
             }
 
-            // 4. Test de confirmation temporelle (multibarres)
+            // 3. Test de confirmation temporelle (multibarres)
             int minBars = Math.Max(1, confirmationBarsRequired);
             bool isDeteriorationConfirmed = ConsecutiveAdverseBars >= minBars;
 
-            // 5. Test d'invalidation structurelle (Structure-First)
-            double structLevel = StructuralStopPrice;
-            bool isStructureInvalidated = false;
-            if (structLevel > 0)
-            {
-                isStructureInvalidated = IsLong ? (close < structLevel) : (close > structLevel);
-            }
-
-            // 6. Prise de décision
+            // 4. Prise de décision
             // Cas A : Invalidation structurelle confirmée sous régime adverse persistant -> EXIT
             if (isDeteriorationConfirmed && isStructureInvalidated)
             {
@@ -1446,6 +1494,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             // Déplacement du Stop à Break-Even (+ 1 tick dans le sens du gain)
             CurrentStopPrice = EntryPrice + (IsLong ? tickSize : -tickSize);
+            UpdateDynamicStructure(CurrentStopPrice);
 
             // Si tous les contrats ont été soldés à TP1 (ex: 1 seul contrat initial)
             if (RemainingContracts <= 0)

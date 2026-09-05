@@ -1439,13 +1439,32 @@ namespace NinjaTrader.NinjaScript.Indicators
                     }
                 }
 
-                // 6. Invalidation structurelle de régime V2 (Architecture Structure-First)
+                // 6. Invalidation structurelle de régime V2 (Architecture Structure-First Dynamique)
                 if (EnableSwingRegimeInvalidation)
                 {
+                    // Mise à jour de la structure dynamique avec les pivots favorables récents (Architecture V2 Point 2)
+                    if (miAnalyzer != null)
+                    {
+                        if (t.IsLong)
+                        {
+                            double recentSupport = miAnalyzer.NearestSellSide(close);
+                            if (recentSupport > 0 && recentSupport > t.DynamicStructuralPrice && recentSupport < close)
+                                t.UpdateDynamicStructure(recentSupport);
+                        }
+                        else
+                        {
+                            double recentResistance = miAnalyzer.NearestBuySide(close);
+                            if (recentResistance > 0 && recentResistance < t.DynamicStructuralPrice && recentResistance > close)
+                                t.UpdateDynamicStructure(recentResistance);
+                        }
+                    }
+
+                    bool hasOpposingChoch = HasRecentChoch(!t.IsLong);
                     SwingRegimeDecision decision = t.EvaluateRegimeDecision(
                         currentRegime,
                         close,
-                        htfEmaVal,
+                        t.DynamicStructuralPrice,
+                        hasOpposingChoch,
                         atrDaily,
                         RegimeConfirmationBars,
                         EnableRegimeSoftProtection);
@@ -1453,7 +1472,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (decision == SwingRegimeDecision.StructuralExit)
                     {
                         t.CloseTrade(close, nowUtc, "STRUCTURAL_REGIME_INVALIDATION", tick, ptVal);
-                        t.ExecutionNotes += string.Format(CultureInfo.InvariantCulture, " [STRUCTURAL_REGIME_INVALIDATION (Regime={0}, Struct={1:F2})]", currentRegime, t.StructuralStopPrice);
+                        t.ExecutionNotes += string.Format(CultureInfo.InvariantCulture, " [STRUCTURAL_REGIME_INVALIDATION (Regime={0}, Struct={1:F2}, Choch={2})]", currentRegime, t.DynamicStructuralPrice, hasOpposingChoch);
                         if (volumeProfileManager != null && volumeProfileManager.Repository != null)
                         {
                             try { volumeProfileManager.Repository.UpsertSwingTrade(t); } catch { }
@@ -1550,12 +1569,20 @@ namespace NinjaTrader.NinjaScript.Indicators
                 return SwingMarketRegime.Transition;
 
             double distAtr = atrDaily > 0 ? Math.Abs(close - htfEmaVal) / atrDaily : 0.0;
-            if (htfTrendDir > 0 && close > htfEmaVal)
-                return distAtr < 0.35 ? SwingMarketRegime.Expansion : SwingMarketRegime.TrendUp;
-            if (htfTrendDir < 0 && close < htfEmaVal)
-                return distAtr < 0.35 ? SwingMarketRegime.Compression : SwingMarketRegime.TrendDown;
+
+            // 1. Zone d'équilibre / consolidation étroite autour de la moyenne (Balance)
             if (distAtr < 0.25)
                 return SwingMarketRegime.Balance;
+
+            // 2. Tendance haussière confirmée (pente positive et cours au-dessus)
+            if (htfTrendDir > 0 && close > htfEmaVal)
+                return distAtr > 1.0 ? SwingMarketRegime.Expansion : SwingMarketRegime.TrendUp;
+
+            // 3. Tendance baissière confirmée (pente négative et cours en-dessous)
+            if (htfTrendDir < 0 && close < htfEmaVal)
+                return distAtr > 1.0 ? SwingMarketRegime.Compression : SwingMarketRegime.TrendDown;
+
+            // 4. Divergence entre la position du cours et la direction HTF -> Transition
             return SwingMarketRegime.Transition;
         }
 

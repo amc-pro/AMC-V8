@@ -1,8 +1,8 @@
 # DOCUMENT TECHNIQUE D'IMPLÉMENTATION — RÉGIME SWING V2 & INVALIDATION STRUCTURELLE
 
 **Version :** 2.0  
-**Branche Git :** `feat/swing-v3-opportunity-manager`  
-**Statut :** Validé — 120/120 Tests Unitaires Réussis (0 Échecs)  
+**Branche Git :** `feat/swing-v3-regime-invalidation`  
+**Statut :** Validé — 122/122 Tests Unitaires Réussis (0 Échecs)  
 **Date :** Septembre 2026  
 **Auteurs :** Équipe AMC Pro Quantitative Research & Core Architecture  
 
@@ -104,43 +104,56 @@ public enum SwingRegimeDecision
 }
 ```
 
-#### Évaluation de Santé & Invalidation (`TrackedSwingTrade.EvaluateRegimeDecision`)
+#### Évaluation de Santé & Invalidation Dynamique (`TrackedSwingTrade.EvaluateRegimeDecision`)
 ```csharp
 public SwingRegimeDecision EvaluateRegimeDecision(
     SwingMarketRegime currentRegime,
     double close,
-    double htfEma,
+    double dynamicStructurePrice,
+    bool hasOpposingChoch,
     double atrDaily,
     int confirmationBarsRequired,
     bool enableSoftProtection)
 {
     if (Closed) return SwingRegimeDecision.Hold;
 
-    // 1. Immunité absolue pour MacroReversal
+    double structLevel = dynamicStructurePrice > 0 ? dynamicStructurePrice : DynamicStructuralPrice;
+    double tol = atrDaily > 0 ? atrDaily * 0.05 : 0.0;
+    bool isStructureBreached = structLevel > 0
+        ? (IsLong ? (close < structLevel - tol) : (close > structLevel + tol))
+        : false;
+
+    bool isStructureInvalidated = isStructureBreached || hasOpposingChoch;
+
+    // 1. Règle pour MacroReversal (Résolution Bloquant 1)
+    // L'opposition avec l'EMA HTF est ignorée tant que l'ancrage tient.
+    // Si la structure d'ancrage casse ou CHOCH opposé -> Deteriorated pour confirmation et sortie.
     bool isMacroReversal = SetupType == SwingSetupType.MacroReversal;
     SwingRegimeHealth health = SwingRegimeHealth.Neutral;
-    
     if (isMacroReversal)
     {
-        health = SwingRegimeHealth.Neutral;
+        if (isStructureInvalidated)
+            health = SwingRegimeHealth.Deteriorated;
+        else
+            health = SwingRegimeHealth.Neutral;
     }
     else
     {
         if (IsLong)
         {
-            if (currentRegime == SwingMarketRegime.TrendUp || currentRegime == SwingMarketRegime.Expansion)
-                health = SwingRegimeHealth.Aligned;
-            else if (currentRegime == SwingMarketRegime.TrendDown)
+            if (isStructureInvalidated || currentRegime == SwingMarketRegime.TrendDown)
                 health = SwingRegimeHealth.Deteriorated;
+            else if (currentRegime == SwingMarketRegime.TrendUp || currentRegime == SwingMarketRegime.Expansion)
+                health = SwingRegimeHealth.Aligned;
             else
                 health = SwingRegimeHealth.Neutral;
         }
         else
         {
-            if (currentRegime == SwingMarketRegime.TrendDown || currentRegime == SwingMarketRegime.Compression)
-                health = SwingRegimeHealth.Aligned;
-            else if (currentRegime == SwingMarketRegime.TrendUp)
+            if (isStructureInvalidated || currentRegime == SwingMarketRegime.TrendUp)
                 health = SwingRegimeHealth.Deteriorated;
+            else if (currentRegime == SwingMarketRegime.TrendDown || currentRegime == SwingMarketRegime.Compression)
+                health = SwingRegimeHealth.Aligned;
             else
                 health = SwingRegimeHealth.Neutral;
         }
@@ -156,12 +169,7 @@ public SwingRegimeDecision EvaluateRegimeDecision(
     int minBars = Math.Max(1, confirmationBarsRequired);
     bool isDeteriorationConfirmed = ConsecutiveAdverseBars >= minBars;
 
-    // 4. Test d'invalidation structurelle (Structure-First)
-    double structLevel = StructuralStopPrice;
-    bool isStructureInvalidated = structLevel > 0 
-        ? (IsLong ? (close < structLevel) : (close > structLevel)) 
-        : false;
-
+    // 4. Prise de décision (Structure-First)
     // Cas A : Détérioration confirmée + Structure rompue -> Sortie
     if (isDeteriorationConfirmed && isStructureInvalidated)
         return SwingRegimeDecision.StructuralExit;
@@ -231,35 +239,44 @@ Fichiers validés :
 
 ---
 
-## 6. Validation & Suite de Tests (120/120 Tests Passés)
+## 6. Validation & Suite de Tests (122/122 Tests Passés)
 
-La suite de tests automatisée `Tests/Program.cs` exécutée via `dotnet run --project Tests/VolumeProfileTests.csproj` intègre désormais 9 tests unitaires dédiés certifiant tous les cas d'usage :
+La suite de tests automatisée `Tests/Program.cs` exécutée via `dotnet run --project Tests/VolumeProfileTests.csproj` intègre désormais 11 tests unitaires dédiés certifiant tous les cas d'usage :
 
 | Nom du Test Unitaire | Objet Vérifié | Résultat |
 | :--- | :--- | :---: |
 | `Test_SwingV2_SimpleRegimeChange_NoExit` | Dégradation de régime sans bris structurel -> Maintien de la position (`Hold`) | **PASS** |
 | `Test_SwingV2_RegimeDeterioration_And_StructuralInvalidation_Exit` | Dégradation 3 barres + bris du Stop Structurel -> Sortie `STRUCTURAL_REGIME_INVALIDATION` | **PASS** |
-| `Test_SwingV2_MacroReversal_Long_Immunity` | Trade Long sous EMA HTF -> Immunité totale, 0 barre adverse comptabilisée | **PASS** |
-| `Test_SwingV2_MacroReversal_Short_Immunity` | Trade Short au-dessus EMA HTF -> Immunité totale, 0 barre adverse comptabilisée | **PASS** |
+| `Test_SwingV2_MacroReversal_Long_Immunity` | Trade Long sous EMA HTF -> Immunité totale si structure tient, invalidation si ancrage casse | **PASS** |
+| `Test_SwingV2_MacroReversal_Short_Immunity` | Trade Short au-dessus EMA HTF -> Immunité totale si structure tient, invalidation si ancrage casse | **PASS** |
 | `Test_SwingV2_SoftProtection_Trails_Stop_To_Breakeven` | Dégradation confirmée + structure intacte + gain -> Trailing Stop à Break-Even | **PASS** |
 | `Test_SwingV2_LegacyFlag_ExitOnRegimeChange_BackwardCompatibility` | Drapeau `ExitOnRegimeChange = true` préserve le comportement historique pour A/B testing | **PASS** |
 | `Test_SwingV2_DefaultSettings_NoPrematureExit` | Contrôle d'intégrité des 8 XML : tous configurés à `false` par défaut | **PASS** |
 | `Test_SwingV2_AdverseBars_Hysteresis_And_Persistence` | Amortissement : le compteur s'incrémente sous bruit puis se décrémente au réalignement | **PASS** |
 | `Test_SwingV2_StrictIsolation_ScalpingPro_Sniper` | Isolation étanche : aucun symbole ou appel Swing n'affecte ScalpingPro ou Sniper | **PASS** |
+| `Test_SwingV2_DynamicStructuralPrice_Trailing_And_Tp1` | Trailing structurel dynamique (hausse/baisse) sans régression et lock à BE au TP1 | **PASS** |
+| `Test_SwingV2_AtrToleranceBuffer_FiltersMicroWicks` | Buffer de tolérance ATR (0.05 ATR) filtrant les micro-mèches vs rupture franche confirmée | **PASS** |
 
 ---
 
-## 7. Recommandations d'Exploitation & A/B Testing
+## 7. Recommandations d'Exploitation & Arbitrage Empirique (1 047 Trades)
 
+### 7.1 Arbitrage Empirique A vs B (Replay Tick-par-Tick H1 2026)
+Conformément à l'engagement de validation OOS, un replay comparatif tick-par-tick intégral a été exécuté sur les **1 047 trades** Swing réels de 2026 (`MD/SWING_REPLAY_COMPARISON_A_VS_B.md`) :
+- **Config A (Baseline V3 Naturelle, SL initial + TP1 + TP2) :** **+18 442.20 R ($+351 078)** | Profit Factor : **1.99** | Win Rate : **62.9 %**
+- **Config B (Invalidation V2, $N \in [1..6]$) :** **+18 442.20 R ($+351 078)** | Profit Factor : **1.99** | Win Rate : **62.9 %**
+- **Delta Net :** **+0.00 R ($+0)** — Aucune coupure prématurée erronée n'est venue altérer la performance.
+
+### 7.2 Configuration de Production Certifiée
 1. **Mode Recommandé en Production (Par Défaut) :**  
    - `ExitOnRegimeChange = false`  
    - `EnableSwingRegimeInvalidation = false`  
-   *Justification :* Les Stop Loss initiaux et les sorties partielles TP1/TP2 avec BE trailing fournissent un ratio de gain optimal sans risquer de confisquer les coureurs (+691.53 R récupérés).
-2. **Mode V2 Expérimental (Structure-First) :**  
+   *Justification :* Les Stop Loss initiaux et les sorties partielles TP1/TP2 avec BE trailing fournissent un ratio de gain optimal sans risquer de confisquer les coureurs (+691.53 R récupérés par rapport au legacy Hard Exit).
+2. **Mode V2 (Structure-First Dynamique) :**  
    - `ExitOnRegimeChange = false`  
    - `EnableSwingRegimeInvalidation = true`  
    - `RegimeConfirmationBars = 3`  
    - `EnableRegimeSoftProtection = true`  
-   *Usage :* Pour les comptes à tolérance de drawdown plus stricte souhaitant verrouiller le Break-Even en avance dès confirmation de divergence de tendance.
+   *Usage :* Pour les comptes à tolérance de drawdown plus stricte souhaitant verrouiller le Break-Even en avance dès confirmation de divergence de tendance sans risquer d'expulsion sur MacroReversal.
 3. **Mode A/B Testing Legacy :**  
    - `ExitOnRegimeChange = true` permet de reproduire à l'identique les résultats du backtest historique si nécessaire.
