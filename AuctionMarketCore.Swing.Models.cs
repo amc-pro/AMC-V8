@@ -1291,14 +1291,21 @@ namespace NinjaTrader.NinjaScript.Indicators
         public int ConsecutiveAdverseBars { get; set; }
         public string ExecutionNotes { get; set; }
 
-        public double StructuralStopPrice => Signal != null ? Signal.StructuralStopPrice : InitialStopPrice;
-        public SwingSetupType SetupType => Signal != null ? Signal.SetupType : SwingSetupType.RejectExtreme;
+        public double StructuralStopPrice
+        {
+            get { return Signal != null ? Signal.StructuralStopPrice : InitialStopPrice; }
+        }
+
+        public SwingSetupType SetupType
+        {
+            get { return Signal != null ? Signal.SetupType : SwingSetupType.RejectExtreme; }
+        }
 
         private double dynamicStructuralPrice;
         public double DynamicStructuralPrice
         {
-            get => dynamicStructuralPrice > 0 ? dynamicStructuralPrice : StructuralStopPrice;
-            set => dynamicStructuralPrice = value;
+            get { return dynamicStructuralPrice > 0 ? dynamicStructuralPrice : StructuralStopPrice; }
+            set { dynamicStructuralPrice = value; }
         }
 
         public void UpdateDynamicStructure(double newLevel)
