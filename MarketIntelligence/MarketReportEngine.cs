@@ -36,8 +36,18 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
         /// <summary>
         /// Appele a l'ouverture d'une nouvelle bougie H4. Retourne le snapshot
         /// construit (reutilise par le MarketUpdateEngine : aucun recalcul).
+        /// Par défaut avec envoi Telegram.
         /// </summary>
         public MarketSnapshot OnNewH4Bar(DateTime h4OpenTime)
+        {
+            return OnNewH4Bar(h4OpenTime, true);
+        }
+
+        /// <summary>
+        /// Appele a l'ouverture d'une nouvelle bougie H4. Permet d'alimenter
+        /// le snapshot en mode historique sans emettre de message Telegram.
+        /// </summary>
+        public MarketSnapshot OnNewH4Bar(DateTime h4OpenTime, bool isRealtime)
         {
             if (!Enabled) return null;
             if (h4OpenTime <= lastReportedH4) return null;   // jamais deux fois la meme bougie
@@ -52,9 +62,12 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
 
             lastReportedH4 = h4OpenTime;
 
-            string text = formatter.FormatReport(snapshot);
-            // jamais etre avale par l'anti-spam 5 s declenche par une alerte M15.
-            if (!string.IsNullOrEmpty(text)) dispatcher.Dispatch(text, true);
+            if (isRealtime)
+            {
+                string text = formatter.FormatReport(snapshot);
+                // jamais etre avale par l'anti-spam 5 s declenche par une alerte M15.
+                if (!string.IsNullOrEmpty(text)) dispatcher.Dispatch(text, true);
+            }
             return snapshot;
         }
 

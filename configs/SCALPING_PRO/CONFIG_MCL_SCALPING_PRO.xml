@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <NinjaTrader>
-  <SniperMarketCorePro>
-    <SniperMarketCorePro>
+  <AuctionMarketCore>
+    <AuctionMarketCore>
       <IsVisible>true</IsVisible>
       <AreLinesConfigurable>true</AreLinesConfigurable>
       <ArePlotsConfigurable>true</ArePlotsConfigurable>
@@ -30,7 +30,7 @@
       <IsOverlay>true</IsOverlay>
       <Lines />
       <MaximumBarsLookBack>TwoHundredFiftySix</MaximumBarsLookBack>
-      <Name>SniperMarketCorePro</Name>
+      <Name>AuctionMarketCore</Name>
       <Plots />
       <SelectedValueSeries>0</SelectedValueSeries>
       <InputPlot>0</InputPlot>
@@ -52,7 +52,7 @@
       <MovementThresholdTicks>3</MovementThresholdTicks>
       <LookbackBars>150</LookbackBars>
       <ValueAreaPercent>70</ValueAreaPercent>
-      <VolumetricTimeframe>2</VolumetricTimeframe>
+      <VolumetricTimeframe>5</VolumetricTimeframe>
       <UseSessionProfile>true</UseSessionProfile>
       <ShowDashboard>true</ShowDashboard>
       <ShowLevelLines>true</ShowLevelLines>
@@ -123,6 +123,7 @@
       <ImbalanceZoneMemoryBars>15</ImbalanceZoneMemoryBars>
       <ImbalanceZoneRetestTicks>3</ImbalanceZoneRetestTicks>
       <ImbalanceZoneMinLevels>2</ImbalanceZoneMinLevels>
+      <EnableFvgRetestTrigger>false</EnableFvgRetestTrigger>
       <EnableFinishedAuction>true</EnableFinishedAuction>
       <FinishedAuctionMaxVolume>5</FinishedAuctionMaxVolume>
       <UseAdaptiveFinishedAuction>true</UseAdaptiveFinishedAuction>
@@ -135,7 +136,7 @@
       <EnableDeltaFlip>true</EnableDeltaFlip>
       <DeltaFlipLookback>2</DeltaFlipLookback>
       <DeltaFlipMinPercentile>40</DeltaFlipMinPercentile>
-      <EnableCumDeltaDivergence>true</EnableCumDeltaDivergence>
+      <EnableCumDeltaDivergence>false</EnableCumDeltaDivergence>
       <CumDeltaSwingStrength>3</CumDeltaSwingStrength>
       <CumDeltaDivergenceLookback>25</CumDeltaDivergenceLookback>
       <CumDeltaMinDivergencePercent>100</CumDeltaMinDivergencePercent>
@@ -146,7 +147,7 @@
       <MaxAlertsPerSession>0</MaxAlertsPerSession>
       <EnableRiskManagement>true</EnableRiskManagement>
       <RiskAtrPeriod>14</RiskAtrPeriod>
-      <StopAtrMultiple>1.25</StopAtrMultiple>
+      <StopAtrMultiple>1.75</StopAtrMultiple>
       <StopBufferTicks>4</StopBufferTicks>
       <TargetR1>1</TargetR1>
       <TargetR2>2</TargetR2>
@@ -157,7 +158,7 @@
       <EnableHtfFilter>true</EnableHtfFilter>
       <HtfMinutes>15</HtfMinutes>
       <HtfEmaPeriod>50</HtfEmaPeriod>
-      <HtfStrictMode>false</HtfStrictMode>
+      <HtfStrictMode>true</HtfStrictMode>
       <EnableTradeJournal>true</EnableTradeJournal>
       <JournalMaxBarsInTrade>24</JournalMaxBarsInTrade>
       <JournalFilePath />
@@ -167,28 +168,28 @@
       <IbPeriodMinutes>30</IbPeriodMinutes>
       <ExecutionMode>Sniper</ExecutionMode>
       <EnableSniperEngine>true</EnableSniperEngine>
-      <MinScoreToAlert>35</MinScoreToAlert>
+      <MinScoreToAlert>50</MinScoreToAlert>
       <MaxAlertsPerWeek>0</MaxAlertsPerWeek>
       <MaxSniperAlertsPerSession>0</MaxSniperAlertsPerSession>
       <SelectionBufferBars>0</SelectionBufferBars>
-      <SniperRthOnly>false</SniperRthOnly>
+      <SniperRthOnly>true</SniperRthOnly>
       <NewsBlackoutMinutes>5</NewsBlackoutMinutes>
       <NewsTimesCsv>1530</NewsTimesCsv>
-      <NewsWindowPenalty>1</NewsWindowPenalty>
+      <NewsWindowPenalty>15</NewsWindowPenalty>
       <NewsWeekdaysOnly>true</NewsWeekdaysOnly>
-      <NewsHardBlock>true</NewsHardBlock>
+      <NewsHardBlock>false</NewsHardBlock>
       <MaxEntryDriftAtr>0.5</MaxEntryDriftAtr>
       <GateN1MinScore>6</GateN1MinScore>
-      <GateN2MinScore>6</GateN2MinScore>
-      <GateN3MinScore>5</GateN3MinScore>
-      <GateN4MinScore>4</GateN4MinScore>
-      <HtfGateAppliesToMeanReversion>false</HtfGateAppliesToMeanReversion>
+      <GateN2MinScore>3</GateN2MinScore>
+      <GateN3MinScore>3</GateN3MinScore>
+      <GateN4MinScore>2</GateN4MinScore>
+      <HtfGateAppliesToMeanReversion>true</HtfGateAppliesToMeanReversion>
       <HtfMisalignmentPenalty>4</HtfMisalignmentPenalty>
       <HtfSoftMode>true</HtfSoftMode>
       <SmcEventMaxAgeBars>12</SmcEventMaxAgeBars>
       <RequireFootprintEvidence>true</RequireFootprintEvidence>
-      <TierSilverScore>46</TierSilverScore>
-      <TierGoldScore>66</TierGoldScore>
+      <TierSilverScore>50</TierSilverScore>
+      <TierGoldScore>65</TierGoldScore>
       <NormalizeScoresPerSetup>true</NormalizeScoresPerSetup>
       <MaxImbalanceRetests>5</MaxImbalanceRetests>
       <IbExtensionMin>0.05</IbExtensionMin>
@@ -219,6 +220,6 @@
       <MiTrendMinDistanceTicks>0.5</MiTrendMinDistanceTicks>
       <MiTrendMinSlopeTicks>0.1</MiTrendMinSlopeTicks>
       <MiTelegramChannel>3</MiTelegramChannel>
-    </SniperMarketCorePro>
-  </SniperMarketCorePro>
+    </AuctionMarketCore>
+  </AuctionMarketCore>
 </NinjaTrader>
