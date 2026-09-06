@@ -46,6 +46,10 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
         public string BiasReason;
         public int Confidence;            // 0..100
 
+        public MiProfileLocation ProfileLocation;
+        public MiVolatilityRegime VolatilityRegime;
+        public double NormalizedAtr;
+
         public List<string> ExtraLines;   // extensions (Delta, VWAP, News...)
 
         public MiTrend GetTrend(MiTimeframe tf)
@@ -109,15 +113,22 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
             s.BiasReason = DescribeBias(s);
             s.Confidence = ComputeConfidence(s);
 
-            foreach (var m in source.Modules)
+            s.ProfileLocation = source.ProfileLocation;
+            s.VolatilityRegime = source.VolatilityRegime;
+            s.NormalizedAtr = source.NormalizedAtr;
+
+            if (source.Modules != null)
             {
-                if (m == null) continue;
-                string line = null;
-                try { line = m.Describe(); }
-                catch (Exception) { line = null; }
-                if (string.IsNullOrEmpty(line)) continue;
-                if (s.ExtraLines == null) s.ExtraLines = new List<string>(2);
-                s.ExtraLines.Add(line);
+                foreach (var m in source.Modules)
+                {
+                    if (m == null) continue;
+                    string line = null;
+                    try { line = m.Describe(); }
+                    catch (Exception) { line = null; }
+                    if (string.IsNullOrEmpty(line)) continue;
+                    if (s.ExtraLines == null) s.ExtraLines = new List<string>(2);
+                    s.ExtraLines.Add(line);
+                }
             }
 
             return s;
@@ -321,15 +332,18 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
             // Extensions : moyenne des contributions valides, appliquee comme
             // modulateur +/-5 points sans changer l'echelle 0..100.
             double sum = 0; int count = 0;
-            foreach (var m in source.Modules)
+            if (source.Modules != null)
             {
-                if (m == null) continue;
-                double c;
-                try { c = m.ConfidenceContribution; }
-                catch (Exception) { continue; }
-                if (c < 0) continue;
-                sum += Clamp01(c);
-                count++;
+                foreach (var m in source.Modules)
+                {
+                    if (m == null) continue;
+                    double c;
+                    try { c = m.ConfidenceContribution; }
+                    catch (Exception) { continue; }
+                    if (c < 0) continue;
+                    sum += Clamp01(c);
+                    count++;
+                }
             }
             if (count > 0) score += (sum / count - 0.5) * 10.0;
 

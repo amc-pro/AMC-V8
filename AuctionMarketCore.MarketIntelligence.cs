@@ -68,6 +68,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         private string miDisabledReason;
         /// <summary>Dernier snapshot connu, pour la ligne de statut du dashboard.</summary>
         private SMI.MarketSnapshot miLastSnapshot;
+        private SMI.QualityEngine miQualityEngine;
+        private SMI.NoTradeEngine miNoTradeEngine;
 
         private void MarketIntelligenceSetDefaults()
         {
@@ -147,6 +149,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             miReportEngine = new SMI.MarketReportEngine(builder, formatter, miDispatcher, logger) { Enabled = EnableMarketReport };
             miUpdateEngine = new SMI.MarketUpdateEngine(builder, new SMI.MarketSnapshotComparer(), formatter, miDispatcher, logger) { Enabled = EnableMarketUpdate };
+            miQualityEngine = new SMI.QualityEngine();
+            miNoTradeEngine = new SMI.NoTradeEngine(miQualityEngine);
             miLastH4Open = DateTime.MinValue;
             miLastSnapshot = null;
             miDisabledReason = null;
@@ -163,6 +167,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (miUpdateEngine != null) miUpdateEngine.Reset();
             miReportEngine = null;
             miUpdateEngine = null;
+            miQualityEngine = null;
+            miNoTradeEngine = null;
             miSource = null;
             miLastSnapshot = null;
         }
@@ -189,26 +195,22 @@ namespace NinjaTrader.NinjaScript.Indicators
                         Lows[miH4Index][1], Closes[miH4Index][1]);
                 }
 
-                // Nouvelle bougie H4 -> rapport complet.
+                // Nouvelle bougie H4 -> rapport complet (calcul du snapshot en continu, émission Telegram en Realtime uniquement).
                 if (BarsInProgress == miH4Index && IsFirstTickOfBar && CurrentBars[miH4Index] > MiTrendEmaPeriod + 2)
                 {
                     DateTime open = Times[miH4Index][0];
                     if (open > miLastH4Open)
                     {
                         miLastH4Open = open;
-                        if (State == State.Realtime)
-                        {
-                            var snap = miReportEngine.OnNewH4Bar(open);
-                            if (snap != null) { miUpdateEngine.Prime(snap); miLastSnapshot = snap; }
-                        }
+                        var snap = miReportEngine.OnNewH4Bar(open, State == State.Realtime);
+                        if (snap != null) { miUpdateEngine.Prime(snap); miLastSnapshot = snap; }
                     }
                 }
 
-                // Detection des changements majeurs : cloture M15 (peu couteux, pas de spam).
-                if (BarsInProgress == miM15Index && IsFirstTickOfBar
-                    && State == State.Realtime && CurrentBars[miM15Index] > MiTrendEmaPeriod + 2)
+                // Detection des changements majeurs : cloture M15 (mise à jour snapshot en continu, émission Telegram en Realtime uniquement).
+                if (BarsInProgress == miM15Index && IsFirstTickOfBar && CurrentBars[miM15Index] > MiTrendEmaPeriod + 2)
                 {
-                    miUpdateEngine.Evaluate();
+                    miUpdateEngine.Evaluate(State == State.Realtime);
                     if (miUpdateEngine.Current != null) miLastSnapshot = miUpdateEngine.Current;
                 }
             }
@@ -238,24 +240,25 @@ namespace NinjaTrader.NinjaScript.Indicators
         private int GetMarketIntelligenceDirectionalPenalty(bool isBuy)
         {
             if (!EnableMarketIntelligence || miLastSnapshot == null) return 0;
-            
-            // MODIF: Suppression de la pénalité pour NO TRADE (était -12)
+
+            if (miQualityEngine != null)
+            {
+                var qEval = miQualityEngine.Evaluate(miLastSnapshot, isBuy);
+                if (qEval.State == SMI.ContextQualityState.Confirmed) return 10;
+                if (qEval.State == SMI.ContextQualityState.Ready) return 5;
+                if (qEval.State == SMI.ContextQualityState.Degraded) return -4;
+                if (qEval.State == SMI.ContextQualityState.Invalidated) return -8;
+                return 0;
+            }
+
+            // Fallback de compatibilité
             if (miLastSnapshot.Bias == SMI.MiBias.NoTrade) return 0;
             
             bool aligned = (isBuy && miLastSnapshot.Bias == SMI.MiBias.BuyOnly)
                         || (!isBuy && miLastSnapshot.Bias == SMI.MiBias.SellOnly);
             
-            // FIX BUG 5: Si confiance faible mais signal aligné, réduire pénalité pour éviter blocage excessif
-            // lors de transitions de tendance
-            if (aligned && miLastSnapshot.Confidence < 50)
-            {
-                // Signal aligné mais confiance faible: pénalité réduite au lieu de blocage complet
-                return -2;
-            }
-            
-            // MODIF: Ajout bonus +10 si tous les HTF sont alignés (AlignmentPercent >= 80)
-            if (aligned && miLastSnapshot.AlignmentPercent >= 80)
-                return 10;
+            if (aligned && miLastSnapshot.Confidence < 50) return -2;
+            if (aligned && miLastSnapshot.AlignmentPercent >= 80) return 10;
             
             return aligned ? 0 : -8;
         }
@@ -447,6 +450,57 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (past <= 0) return 0.5;
                     double move = Math.Abs(c - past) / (o.TickSize > 0 ? o.TickSize : 0.25);
                     return Math.Max(0, Math.Min(1, move / 40.0));
+                }
+            }
+
+            public SMI.MiProfileLocation ProfileLocation
+            {
+                get
+                {
+                    if (o.volumeProfileManager != null && o.volumeProfileManager.PrevDay != null)
+                    {
+                        var day = o.volumeProfileManager.PrevDay;
+                        if (day != null && day.Valid)
+                        {
+                            double p = LastPrice;
+                            double tick = o.TickSize > 0 ? o.TickSize : 0.25;
+                            if (Math.Abs(p - day.Poc) / tick <= 3) return SMI.MiProfileLocation.AtPoc;
+                            if (p > day.Vah) return SMI.MiProfileLocation.AboveVah;
+                            if (p < day.Val) return SMI.MiProfileLocation.BelowVal;
+                            return SMI.MiProfileLocation.InsideVa;
+                        }
+                    }
+                    return SMI.MiProfileLocation.Unknown;
+                }
+            }
+
+            public SMI.MiVolatilityRegime VolatilityRegime
+            {
+                get
+                {
+                    if (o.regimeAtr != null && o.riskAtr != null &&
+                        o.regimeAtr.IsValidDataPoint(0) && o.riskAtr.IsValidDataPoint(0))
+                    {
+                        double dailyAtr = o.regimeAtr[0];
+                        double shortAtr = o.riskAtr[0] * 4.0;
+                        if (dailyAtr > 0)
+                        {
+                            double ratio = shortAtr / dailyAtr;
+                            if (ratio < 0.75) return SMI.MiVolatilityRegime.Compression;
+                            if (ratio > 1.35) return SMI.MiVolatilityRegime.Expansion;
+                        }
+                    }
+                    return SMI.MiVolatilityRegime.Normal;
+                }
+            }
+
+            public double NormalizedAtr
+            {
+                get
+                {
+                    if (o.riskAtr != null && o.riskAtr.IsValidDataPoint(0))
+                        return o.riskAtr[0];
+                    return 0.0;
                 }
             }
 

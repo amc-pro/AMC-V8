@@ -1022,6 +1022,20 @@ namespace NinjaTrader.NinjaScript.Indicators
                     }
                 }
 
+                // Filtrage contextuel par le NoTradeEngine (Sprint 3)
+                if (EnableMarketIntelligence && miNoTradeEngine != null && miLastSnapshot != null)
+                {
+                    bool isMeanReversal = setup == SwingSetupType.MacroReversal || setup == SwingSetupType.RejectExtreme;
+                    var noTradeDecision = miNoTradeEngine.EvaluateTradeEligibility(miLastSnapshot, dir == SwingDirection.Long, isMeanReversal);
+                    if (noTradeDecision.IsRejected)
+                    {
+                        candidate.IsValid = false;
+                        candidate.RejectionReason = "MI_NO_TRADE: " + noTradeDecision.Reason;
+                        LogSwingCandidateRejection(setup, dir, candidate.RejectionReason, candidate.FinalQualityScore);
+                        continue;
+                    }
+                }
+
                 validCandidates.Add(candidate);
             }
 
@@ -1471,8 +1485,11 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                     if (decision == SwingRegimeDecision.StructuralExit)
                     {
+                        double distFromStruct = Math.Abs(close - t.DynamicStructuralPrice);
                         t.CloseTrade(close, nowUtc, "STRUCTURAL_REGIME_INVALIDATION", tick, ptVal);
-                        t.ExecutionNotes += string.Format(CultureInfo.InvariantCulture, " [STRUCTURAL_REGIME_INVALIDATION (Regime={0}, Struct={1:F2}, Choch={2})]", currentRegime, t.DynamicStructuralPrice, hasOpposingChoch);
+                        t.ExecutionNotes += string.Format(CultureInfo.InvariantCulture,
+                            " [STRUCTURAL_REGIME_INVALIDATION (Regime={0}, Struct={1:F2}, Close={2:F2}, DistStruct={3:F2}, Choch={4}, AdverseBars={5}, HardSl={6:F2})]",
+                            currentRegime, t.DynamicStructuralPrice, close, distFromStruct, hasOpposingChoch, t.ConsecutiveAdverseBars, t.CurrentStopPrice);
                         if (volumeProfileManager != null && volumeProfileManager.Repository != null)
                         {
                             try { volumeProfileManager.Repository.UpsertSwingTrade(t); } catch { }
@@ -1669,8 +1686,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                         return true;
                 }
             }
-            return isBuy ? snClose > prevBarPocPrice && snOpen < prevBarPocPrice
-                         : snClose < prevBarPocPrice && snOpen > prevBarPocPrice;
+            // Zéro faux-positif : sans module SMC HTF actif, on ne simule pas un CHOCH sur un simple croisement de POC LTF
+            return false;
         }
 
         private void LogSwingCandidateRejection(SwingSetupType setup, SwingDirection dir, string reason, double score)

@@ -175,6 +175,36 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_SwingV2_StrictIsolation_ScalpingPro_Sniper", Test_SwingV2_StrictIsolation_ScalpingPro_Sniper);
             RunTest("Test_SwingV2_DynamicStructuralPrice_Trailing_And_Tp1", Test_SwingV2_DynamicStructuralPrice_Trailing_And_Tp1);
             RunTest("Test_SwingV2_AtrToleranceBuffer_FiltersMicroWicks", Test_SwingV2_AtrToleranceBuffer_FiltersMicroWicks);
+            RunTest("Test_SwingV2_PhysicalSl_Vs_StructuralInvalidation_DistinctRoles", Test_SwingV2_PhysicalSl_Vs_StructuralInvalidation_DistinctRoles);
+            RunTest("Test_MarketIntelligence_HistoricalDecoupling_NoTelegramSpam", Test_MarketIntelligence_HistoricalDecoupling_NoTelegramSpam);
+
+            // ================================================================
+            // 🔬 SUITE FORENSIC REPLAY & HYSTÉRÉSIS MULTIBARRES SPRINT 1 (6 TESTS)
+            // ================================================================
+            RunTest("Test_Forensic_N1_Immediate_Exit", SwingReplayForensicTests.Run_Test_Forensic_N1_Immediate_Exit);
+            RunTest("Test_Forensic_N3_Progression", SwingReplayForensicTests.Run_Test_Forensic_N3_Progression);
+            RunTest("Test_Forensic_N5_Progression", SwingReplayForensicTests.Run_Test_Forensic_N5_Progression);
+            RunTest("Test_Forensic_Hysteresis_Rebound", SwingReplayForensicTests.Run_Test_Forensic_Hysteresis_Rebound);
+            RunTest("Test_Forensic_MacroReversal_Immunity_And_Exit", SwingReplayForensicTests.Run_Test_Forensic_MacroReversal_Immunity_And_Exit);
+            RunTest("Test_Forensic_PhysicalSl_Vs_Structural_Buffer", SwingReplayForensicTests.Run_Test_Forensic_PhysicalSl_Vs_Structural_Buffer);
+
+            // ================================================================
+            // ⏳ SUITE MARKET INTELLIGENCE DÉCOUPLAGE & INVARIANCE TEMPORELLE SPRINT 2 (4 TESTS)
+            // ================================================================
+            RunTest("Test_Temporal_Invariance_T_vs_T_plus_N", MarketIntelligenceTemporalTests.Run_Test_Temporal_Invariance_T_vs_T_plus_N);
+            RunTest("Test_Historical_vs_Realtime_Determinism", MarketIntelligenceTemporalTests.Run_Test_Historical_vs_Realtime_Determinism);
+            RunTest("Test_ZeroLookahead_Trend_Classifier", MarketIntelligenceTemporalTests.Run_Test_ZeroLookahead_Trend_Classifier);
+            RunTest("Test_ProfileLocation_And_VolatilityRegime", MarketIntelligenceTemporalTests.Run_Test_ProfileLocation_And_VolatilityRegime);
+
+            // ================================================================
+            // 🎯 SUITE QUALITY ENGINE & NO-TRADE MATRIX SPRINT 3 (6 TESTS)
+            // ================================================================
+            RunTest("Test_QualityEngine_Optimal_Confirmed_Context", QualityEngineTests.Run_Test_QualityEngine_Optimal_Confirmed_Context);
+            RunTest("Test_QualityEngine_Discrete_States_Progression", QualityEngineTests.Run_Test_QualityEngine_Discrete_States_Progression);
+            RunTest("Test_NoTradeEngine_Blocks_HtfConflict", QualityEngineTests.Run_Test_NoTradeEngine_Blocks_HtfConflict);
+            RunTest("Test_NoTradeEngine_Blocks_AdverseH4Trend_Unless_MeanReversal", QualityEngineTests.Run_Test_NoTradeEngine_Blocks_AdverseH4Trend_Unless_MeanReversal);
+            RunTest("Test_NoTradeEngine_Blocks_BadLocation", QualityEngineTests.Run_Test_NoTradeEngine_Blocks_BadLocation);
+            RunTest("Test_NoTradeEngine_Passes_Aligned_Setup", QualityEngineTests.Run_Test_NoTradeEngine_Passes_Aligned_Setup);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));
@@ -3294,8 +3324,8 @@ namespace AMC.VolumeProfile.Tests
                 string text = File.ReadAllText(file);
                 Assert(text.Contains("<ExitOnRegimeChange>false</ExitOnRegimeChange>"),
                     string.Format("Le fichier {0} doit avoir ExitOnRegimeChange = false par défaut.", Path.GetFileName(file)));
-                Assert(text.Contains("<EnableSwingRegimeInvalidation>false</EnableSwingRegimeInvalidation>"),
-                    string.Format("Le fichier {0} doit avoir EnableSwingRegimeInvalidation = false par défaut.", Path.GetFileName(file)));
+                Assert(text.Contains("<EnableSwingRegimeInvalidation>true</EnableSwingRegimeInvalidation>"),
+                    string.Format("Le fichier {0} doit avoir EnableSwingRegimeInvalidation = true (production).", Path.GetFileName(file)));
                 Assert(text.Contains("<RegimeConfirmationBars>3</RegimeConfirmationBars>"),
                     string.Format("Le fichier {0} doit avoir RegimeConfirmationBars = 3 par défaut.", Path.GetFileName(file)));
                 Assert(text.Contains("<EnableRegimeSoftProtection>true</EnableRegimeSoftProtection>"),
@@ -3441,6 +3471,209 @@ namespace AMC.VolumeProfile.Tests
             trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4976.0, 4980.0, false, atrDaily, 3, true);
             var decBreak = trade.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4975.0, 4980.0, false, atrDaily, 3, true);
             Assert(decBreak == SwingRegimeDecision.StructuralExit, "Une rupture franche dépassant le buffer ATR de 0.05 confirmée sur 3 barres doit déclencher StructuralExit.");
+        }
+
+        private static void Test_SwingV2_PhysicalSl_Vs_StructuralInvalidation_DistinctRoles()
+        {
+            // Valide les deux responsabilités distinctes confirmées par l'arbitrage architectural :
+            // 1. Physical SL : Hard stop d'urgence / protection du capital contre les chocs de liquidité.
+            // 2. Structural Invalidation : Décision logique anticipée confirmée sur N barres fermées.
+
+            DateTime now = DateTime.UtcNow;
+            double tick = 0.25;
+            double ptVal = 50.0; // ES ($50 / pt)
+
+            // --- CAS 1 : Choc brutal / Flash Crash -> Le Physical SL coupe immédiatement ---
+            var sigCrash = new SwingSignal
+            {
+                Symbol = "ES",
+                Direction = SwingDirection.Long,
+                SetupType = SwingSetupType.HtfContinuation,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4950.0, // Physical SL (50 pts / 200 ticks plus bas)
+                StructuralStopPrice = 4980.0 // Structure à 20 pts
+            };
+            var tradeCrash = new TrackedSwingTrade(sigCrash, tick, ptVal);
+
+            // Simulation d'une bougie de flash crash : low = 4945 <= 4950 (Physical SL touché)
+            double lowCrash = 4945.0;
+            bool crashSlTriggered = tradeCrash.IsLong && lowCrash <= tradeCrash.CurrentStopPrice;
+            Assert(crashSlTriggered, "Le Physical SL doit se déclencher immédiatement si le prix franchit le hard stop.");
+            tradeCrash.CloseTrade(tradeCrash.CurrentStopPrice, now, "STOP_LOSS", tick, ptVal);
+            Assert(tradeCrash.Closed, "Le trade crash doit être fermé immédiatement.");
+            Assert(tradeCrash.ExitReason == "STOP_LOSS", "Le motif doit être STOP_LOSS pour protection immédiate.");
+
+            // --- CAS 2 : Dérive structurelle confirmée sur N=3 barres -> Structural Invalidation coupe en avance ---
+            var sigStruct = new SwingSignal
+            {
+                Symbol = "ES",
+                Direction = SwingDirection.Long,
+                SetupType = SwingSetupType.HtfContinuation,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4950.0, // Physical SL à 4950.0
+                StructuralStopPrice = 4980.0 // Pivot structurel à 4980.0
+            };
+            var tradeStruct = new TrackedSwingTrade(sigStruct, tick, ptVal);
+            double atrDaily = 20.0;
+
+            // Barre 1 : Low = 4972 (> 4950, SL intact), Close = 4975 (< 4980, structure brisée)
+            bool slBar1 = tradeStruct.IsLong && 4972.0 <= tradeStruct.CurrentStopPrice;
+            Assert(!slBar1, "Barre 1 : Physical SL non touché.");
+            var d1 = tradeStruct.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4975.0, 4980.0, false, atrDaily, 3, true);
+            Assert(d1 == SwingRegimeDecision.Hold, "Barre 1 : Pas de sortie prématurée à 1 barre (attente de confirmation N=3).");
+            Assert(tradeStruct.ConsecutiveAdverseBars == 1, "Compteur adverse = 1.");
+
+            // Barre 2 : Low = 4968 (> 4950, SL intact), Close = 4973 (< 4980)
+            bool slBar2 = tradeStruct.IsLong && 4968.0 <= tradeStruct.CurrentStopPrice;
+            Assert(!slBar2, "Barre 2 : Physical SL non touché.");
+            var d2 = tradeStruct.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4973.0, 4980.0, false, atrDaily, 3, true);
+            Assert(d2 == SwingRegimeDecision.Hold, "Barre 2 : Pas de sortie prématurée à 2 barres.");
+            Assert(tradeStruct.ConsecutiveAdverseBars == 2, "Compteur adverse = 2.");
+
+            // Barre 3 : Low = 4965 (> 4950, SL intact), Close = 4970 (< 4980) -> Confirmation N=3 atteinte !
+            bool slBar3 = tradeStruct.IsLong && 4965.0 <= tradeStruct.CurrentStopPrice;
+            Assert(!slBar3, "Barre 3 : Physical SL toujours non touché.");
+            var d3 = tradeStruct.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4970.0, 4980.0, false, atrDaily, 3, true);
+            Assert(d3 == SwingRegimeDecision.StructuralExit, "Barre 3 : Confirmation atteinte -> Sortie logique anticipée (StructuralExit).");
+            tradeStruct.CloseTrade(4970.0, now, "STRUCTURAL_REGIME_INVALIDATION", tick, ptVal);
+            Assert(tradeStruct.Closed, "Trade clôturé par invalidation structurelle.");
+            Assert(tradeStruct.ExitReason == "STRUCTURAL_REGIME_INVALIDATION", "Motif = STRUCTURAL_REGIME_INVALIDATION.");
+            // Gain de risque : sortie à 4970.0 au lieu du SL à 4950.0 -> 20 points (80 ticks / $1 000) de perte épargnée !
+            double savedRiskPoints = tradeStruct.ExitPrice - tradeStruct.InitialStopPrice;
+            Assert(savedRiskPoints == 20.0, "L'invalidation structurelle a économisé 20 pts de risque par rapport au Hard SL.");
+
+            // --- CAS 3 : Bruit thermique temporaire et rebond (Hystérésis protectrice) ---
+            var sigRebound = new SwingSignal
+            {
+                Symbol = "ES",
+                Direction = SwingDirection.Long,
+                SetupType = SwingSetupType.HtfContinuation,
+                EntryPrice = 5000.0,
+                InitialStopPrice = 4950.0,
+                StructuralStopPrice = 4980.0
+            };
+            var tradeRebound = new TrackedSwingTrade(sigRebound, tick, ptVal);
+
+            // 2 barres sous la structure
+            tradeRebound.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4975.0, 4980.0, false, atrDaily, 3, true);
+            tradeRebound.EvaluateRegimeDecision(SwingMarketRegime.TrendDown, 4974.0, 4980.0, false, atrDaily, 3, true);
+            Assert(tradeRebound.ConsecutiveAdverseBars == 2, "Compteur = 2 après 2 barres.");
+
+            // Barre 3 : Rebond haussier ! Close = 4988 (> 4980) en régime TrendUp
+            var dRebound = tradeRebound.EvaluateRegimeDecision(SwingMarketRegime.TrendUp, 4988.0, 4980.0, false, atrDaily, 3, true);
+            Assert(dRebound == SwingRegimeDecision.Hold, "Rebond au-dessus de la structure -> La position est maintenue.");
+            Assert(tradeRebound.ConsecutiveAdverseBars == 1, "Le compteur adverse s'est amorti (2 -> 1) évitant l'éjection à contre-temps.");
+        }
+
+        private class DummyMiSource : IMarketIntelligenceSource
+        {
+            public string InstrumentName { get { return "NQ"; } }
+            public DateTime MarketTime { get; set; }
+            public string TimeZoneLabel { get { return "EST"; } }
+            public double TickSize { get { return 0.25; } }
+            public double LastPrice { get; set; }
+
+            public MiTrend TrendH4 { get; set; }
+            public MiTrend TrendH1 { get; set; }
+            public MiTrend TrendM15 { get; set; }
+            public MiTrend TrendM5 { get; set; }
+
+            public MiTrend GetTrend(MiTimeframe tf)
+            {
+                switch (tf)
+                {
+                    case MiTimeframe.H4: return TrendH4;
+                    case MiTimeframe.H1: return TrendH1;
+                    case MiTimeframe.M15: return TrendM15;
+                    default: return TrendM5;
+                }
+            }
+
+            public MiStructureEvent LastBos { get; set; }
+            public MiStructureEvent LastChoch { get; set; }
+            public MiStructureEvent LastBosH4 { get; set; }
+            public MiStructureEvent LastChochH4 { get; set; }
+
+            public int BarsSinceBos { get; set; }
+            public int BarsSinceChoch { get; set; }
+            public int BarsSinceOrderBlock { get; set; }
+            public int BarsSinceBosH4 { get; set; }
+            public int BarsSinceChochH4 { get; set; }
+
+            public double NearestBuySideLiquidity { get; set; }
+            public double NearestSellSideLiquidity { get; set; }
+
+            public MiOrderBlockKind OrderBlockKind { get; set; }
+            public MiOrderBlockState OrderBlockState { get; set; }
+
+            public double VolumeQuality { get; set; }
+            public double MomentumQuality { get; set; }
+
+            public MiProfileLocation ProfileLocation { get; set; }
+            public MiVolatilityRegime VolatilityRegime { get; set; }
+            public double NormalizedAtr { get; set; }
+
+            public IEnumerable<IMarketIntelligenceModule> Modules { get { return null; } }
+
+            public DummyMiSource()
+            {
+                MarketTime = new DateTime(2026, 6, 1, 10, 0, 0, DateTimeKind.Utc);
+                LastPrice = 20000.0;
+                TrendH4 = MiTrend.Bullish;
+                TrendH1 = MiTrend.Bullish;
+                TrendM15 = MiTrend.Bullish;
+                TrendM5 = MiTrend.Bullish;
+                VolumeQuality = 0.8;
+                MomentumQuality = 0.8;
+                ProfileLocation = MiProfileLocation.InsideVa;
+                VolatilityRegime = MiVolatilityRegime.Normal;
+                NormalizedAtr = 20.0;
+                BarsSinceBos = -1;
+                BarsSinceChoch = -1;
+                BarsSinceOrderBlock = -1;
+                BarsSinceBosH4 = -1;
+                BarsSinceChochH4 = -1;
+            }
+        }
+
+        private static void Test_MarketIntelligence_HistoricalDecoupling_NoTelegramSpam()
+        {
+            var source = new DummyMiSource();
+            var builder = new MarketSnapshotBuilder(source);
+            var formatter = new TelegramFormatter();
+            var sentMessages = new List<string>();
+            var logger = new MiDelegateLogger(m => { });
+            var dispatcher = new TelegramDispatcher((text, onComplete) =>
+            {
+                sentMessages.Add(text);
+                onComplete(true);
+            }, logger, () => source.MarketTime);
+
+            var reportEngine = new MarketReportEngine(builder, formatter, dispatcher, logger);
+            var updateEngine = new MarketUpdateEngine(builder, new MarketSnapshotComparer(), formatter, dispatcher, logger);
+
+            DateTime h4Time = new DateTime(2026, 6, 1, 8, 0, 0, DateTimeKind.Utc);
+
+            // Phase 1 : Mode Historique (State.Historical -> isRealtime = false)
+            var snapHist = reportEngine.OnNewH4Bar(h4Time, isRealtime: false);
+            Assert(snapHist != null, "Le snapshot doit être construit et retourné même en mode historique.");
+            Assert(snapHist.Bias == MiBias.BuyOnly, "Le biais doit être correctement calculé (BuyOnly).");
+            Assert(sentMessages.Count == 0, "Aucun message Telegram ne doit être envoyé en mode historique.");
+
+            // Mise à jour M15 en mode Historique (isRealtime = false)
+            source.LastPrice = 20050.0;
+            updateEngine.Prime(snapHist);
+            bool updatedHist = updateEngine.Evaluate(isRealtime: false);
+            Assert(updateEngine.Current != null, "Current doit être alimenté en mode historique.");
+            Assert(sentMessages.Count == 0, "Toujours 0 message Telegram envoyé en historique.");
+
+            // Phase 2 : Mode Temps Réel (State.Realtime -> isRealtime = true)
+            DateTime h4TimeNext = h4Time.AddHours(4);
+            source.MarketTime = h4TimeNext;
+            var snapRealtime = reportEngine.OnNewH4Bar(h4TimeNext, isRealtime: true);
+            Assert(snapRealtime != null, "Snapshot H4 temps réel valide.");
+            Assert(sentMessages.Count == 1, "En temps réel, exactement 1 rapport Telegram doit être émis.");
+            Assert(sentMessages[0].Contains("RAPPORT H4"), "Le message doit être le rapport H4.");
         }
 
         #endregion
