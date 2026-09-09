@@ -1,6 +1,6 @@
 # 📊 RAPPORT DE CONCEPTION & VALIDATION DU QUALITY ENGINE & NO-TRADE MATRIX (SPRINT 3)
 
-**Statut :** INTÉGRÉ, COMPILÉ ET VALIDÉ (140/140 TESTS RÉUSSIS)  
+**Statut :** INTÉGRÉ, COMPILÉ ET VALIDÉ FONCTIONNELLEMENT (140/140 TESTS RÉUSSIS) — VALIDATION EMPIRIQUE EN ATTENTE  
 **Date :** Septembre 2026  
 **Auteurs :** Antigravity AI & Architecture Quantitative AMC Pro  
 **Périmètre :** Moteur d'évaluation de la qualité contextuelle (`QualityEngine`), matrice de filtres d'abstention (`NoTradeEngine`), interfaçage Swing V3 et Scalping Pro.  
@@ -68,7 +68,7 @@ public enum ContextQualityState
 
 ## 3. Matrice de Filtrage du No-Trade Engine (`NoTradeEngine.cs`)
 
-Le `NoTradeEngine` agit comme un coupe-circuit déterministe prévenant les entrées toxiques :
+Le `NoTradeEngine` agit comme un coupe-circuit déterministe **post-construction du candidat, pré-exécution** :
 
 | Filtre d'Invalidation | Code de Rejet (`NoTradeReason`) | Condition Déclenchante | Motif & Justification Métier |
 | :--- | :--- | :--- | :--- |
@@ -77,6 +77,9 @@ Le `NoTradeEngine` agit comme un coupe-circuit déterministe prévenant les entr
 | **Filtre 3 : Mauvaise Localisation** | `BadLocation` | Achat sous `VAL` baissier ou Vente au-dessus `VAH` haussier | Évite l'achat en pleine chute libre ou la vente en plein breakout haussier d'expansion. |
 | **Filtre 4 : CHOCH Adverse** | `AdverseChochRecent` | Présence d'un CHOCH H4 opposé $\le 3$ barres | Alerte précoce de retournement structurel majeur en cours. |
 | **Filtre 5 : Qualité Insuffisante** | `LowContextQuality` | $\text{QualityScore} < 50.0$ | Le marché est trop dégradé ou erratique pour justifier un risque financier. |
+
+> [!IMPORTANT]
+> **Exemptions Mean-Reversion :** Les setups `MacroReversal` et `RejectExtreme` sont exemptés des filtres **2 (HtfOpposedDirection)** et **3 (BadLocation)** uniquement. Ils restent soumis aux filtres **1 (HtfConflict)**, **4 (AdverseChochRecent)** et **5 (LowContextQuality)** car ces invalidations structurelles critiques s'appliquent même aux retournements extrêmes.
 
 ---
 
@@ -99,6 +102,9 @@ if (EnableMarketIntelligence && miNoTradeEngine != null && miLastSnapshot != nul
     }
 }
 ```
+
+> [!WARNING]
+> **Position dans le pipeline :** Le `NoTradeEngine` intervient **après** la construction du candidat (scoring, direction, setup type), mais **avant** l'exécution de l'ordre. Ce placement est intentionnel : il permet de journaliser le candidat rejeté avec ses détails complets (`SetupType`, `Direction`, `FinalQualityScore`, `RejectionReason`).
 
 ### 4.2. Câblage Scalping Pro (`AuctionMarketCore.MarketIntelligence.cs`)
 Dans la méthode `GetMarketIntelligenceDirectionalPenalty()` :
@@ -142,6 +148,9 @@ Une suite de tests unitaires complète a été créée dans [QualityEngineTests.
 3. **Blocage des conflits :** Le désalignement H4 vs H1 déclenche systématiquement le rejet avec motif motivé `HtfConflict`.
 4. **Exemption Mean-Reversal :** Les setups de retournement extrême (`MacroReversal`, `RejectExtreme`) bénéficient de leur exemption légitime pour entrer contre la tendance macro lorsque le marché est aux bornes statistiques.
 5. **Protection contre la chute libre :** L'achat sous VAL en tendance baissière est strictement rejeté avec le motif `BadLocation`.
+
+> [!WARNING]
+> **Limite de cette validation :** Les 140 tests démontrent que le moteur fait ce qu'on lui a demandé (**validation fonctionnelle**). Ils ne démontrent pas que les poids choisis (Trend 35, Structure 25, Location 25, Volatility 15) et le seuil de rejet (Score < 50) améliorent effectivement le trading (**validation empirique**). Un replay A/B multi-actifs avec QualityEngine ON/OFF sur le dataset de 1 047 trades est nécessaire avant activation en production.
 
 ---
 

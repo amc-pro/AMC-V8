@@ -18,11 +18,14 @@ BarsUpdate ──> MarketReport / Update ──> [Telegram Dispatcher] ──> (
 MAINTENANT (Architecture Unified State Core V2) :
 Market Data (H4/H1/M15/M5)
         │
-        ▼ (Barres Clôturées [1], [3] — Zéro Lookahead)
+        ▼
 MARKET INTELLIGENCE CORE
+        ├── Tendance & Structure   → Barres Clôturées [1], [3] (Anti-Lookahead Strict)
+        ├── Prix & Localisation    → Barre Courante [0] (Légitime : info disponible à T)
+        └── Volatilité & ATR       → Indicateurs [0] (Légitime : valeur instantanée à T)
         │
         ▼
-UNIFIED MARKET SNAPSHOT (Immuable · Déterministe · Enregistré à T)
+UNIFIED MARKET SNAPSHOT (Scellé à T · Déterministe · Non modifié après construction)
         ├── Tendance Multi-Timeframe (H4, H1, M15, M5)
         ├── Structure SMC (BOS, CHOCH, Order Blocks)
         ├── Localisation Volume Profile (Above/Inside/Below VA, At POC)
@@ -30,7 +33,7 @@ UNIFIED MARKET SNAPSHOT (Immuable · Déterministe · Enregistré à T)
         │
         ├────────────────────────────────┬────────────────────────────────┐
         ▼ (State == State.Historical)    ▼ (State == State.Realtime)      ▼
-REPLAY / STRATÉGIES AMC             TELEGRAM DISPATCHER            QUALITY ENGINE (Sprint 3)
+REPLAY / STRATÉGIES AMC             TELEGRAM DISPATCHER            QUALITY ENGINE
 (Swing V3 & Scalping Pro)          (Zero Spam Historique)         (Scoring contextuel 0..100)
 ```
 
@@ -70,6 +73,21 @@ Pour garantir qu'aucune barre future ou non clôturée ne pollue le calcul histo
 3. **Faux CHOCH éradiqué :**
    La méthode `HasRecentChoch` a été purgée de son ancien fallback sur le croisement de POC LTF. Si le module d'analyse structurelle H4 n'est pas instancié ou pas prêt, elle retourne strictement `false`.
 
+### 3.2. Composants utilisant la barre courante `[0]` (Légitime mais distinct)
+
+> [!WARNING]
+> Les composants suivants utilisent l'indice `[0]` (barre en cours / valeur instantanée). Ce n'est **PAS** du lookahead car ces données sont disponibles à l'instant de décision T. Mais ils ne bénéficient pas de la même garantie anti-repainting que les tendances/structures.
+
+| Composant | Indice | Justification |
+| :--- | :---: | :--- |
+| `LastPrice` | `Closes[miM5Index][0]` | Prix de marché courant — obligatoire pour la localisation spatiale |
+| `ProfileLocation` | Calculé à partir de `LastPrice` vs `PrevDay` (D-1 clos) | Le profil de référence est D-1 (anti-lookahead), seul le prix est `[0]` |
+| `VolatilityRegime` | `regimeAtr[0]` / `riskAtr[0]` | ATR instantané — nécessaire pour détecter compression/expansion en temps réel |
+| `NormalizedAtr` | `riskAtr[0]` | Même justification que ci-dessus |
+| `MarketTime` | `Time[0]` sur H1 | Horodatage de la barre courante |
+
+**Conséquence :** Un test de causalité replay (Snapshot(T) calculé à T == Snapshot(T) calculé rétrospectivement depuis T+N) est nécessaire pour certifier formellement l'absence de contamination temporelle sur ces composants `[0]`.
+
 ---
 
 ## 4. Enrichissement Volume Profile & Régimes de Volatilité
@@ -102,7 +120,7 @@ public enum MiVolatilityRegime
 
 ---
 
-## 5. Certification par Tests Automatisés (134/134 Tests Réussis)
+## 5. Certification par Tests Automatisés (140/140 Tests Réussis)
 
 Une suite de tests dédiée a été créée dans [MarketIntelligenceTemporalTests.cs](file:///c:/AMC-Pro/AMC-V8/Tests/MarketIntelligenceTemporalTests.cs) et intégrée au banc d'essai [Program.cs](file:///c:/AMC-Pro/AMC-V8/Tests/Program.cs) :
 
@@ -115,15 +133,19 @@ Une suite de tests dédiée a été créée dans [MarketIntelligenceTemporalTest
   ✔ [PASS] Test_Historical_vs_Realtime_Determinism
   ✔ [PASS] Test_ZeroLookahead_Trend_Classifier
   ✔ [PASS] Test_ProfileLocation_And_VolatilityRegime
+  ✔ [PASS] Test_QualityEngine_* (6 tests)
 ================================================================
-📊 RESULTATS : 134 REUSSIS, 0 ECHOUES (100% SUCCÈS)
+📊 RESULTATS : 140 REUSSIS, 0 ECHOUES (100% SUCCÈS)
 ================================================================
 ```
 
 ### Ce que ces tests démontrent formellement :
-1. **Invariance Temporelle Absolue :** Un snapshot calculé à $T$ conserve rigoureusement tous ses champs (Biais, Confiance, Alignement, Niveaux de Liquidité) après l'arrivée des barres $T+1$ et $T+2$. Zéro effet mémoire contaminant, zéro repainting.
+1. **Invariance Temporelle (sur Mock) :** Un snapshot calculé à $T$ conserve rigoureusement tous ses champs (Biais, Confiance, Alignement, Niveaux de Liquidité) après l'arrivée des barres $T+1$ et $T+2$. Zéro effet mémoire contaminant, zéro repainting.
 2. **Déterminisme Historical vs Realtime :** Les snapshots générés en mode historique sont identiques bit à bit à ceux générés en temps réel, avec neutralisation totale des envois de paquets réseau Telegram en historique.
 3. **Stabilité Numérique du Classifieur :** Le classifieur de tendance gère les valeurs singulières (`NaN`, `Infinity`, divisions par zéro) sans plantage et classe proprement les divergences momentum/EMA.
+
+> [!IMPORTANT]
+> **Limite connue :** Ces tests utilisent un Mock (`DummyMiSource`) et non un replay NinjaTrader réel. Un test de causalité replay sur données tick est requis pour certifier formellement l'absence de lookahead sur les composants `[0]` (prix, ATR, volatilité).
 
 ---
 

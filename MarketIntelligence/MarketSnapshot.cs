@@ -6,51 +6,51 @@ using System.Collections.Generic;
 namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
 {
     /// <summary>
-    /// Photographie immuable de l'etat du marche. Un seul exemplaire est
-    /// conserve en memoire (le precedent), aucune allocation superflue.
+    /// Photographie scellee de l'etat du marche a un instant T.
+    /// Aucun champ n'est modifiable apres construction par le Builder.
     /// </summary>
     public sealed class MarketSnapshot
     {
-        public string Instrument;
-        public DateTime Time;
-        public string TimeZoneLabel;
+        public string Instrument { get; internal set; }
+        public DateTime Time { get; internal set; }
+        public string TimeZoneLabel { get; internal set; }
 
-        public MiTrend TrendH4;
-        public MiTrend TrendH1;
-        public MiTrend TrendM15;
-        public MiTrend TrendM5;
-        public int AlignmentPercent;      // 0 / 25 / 50 / 75 / 100
-        public MiTimeframe AlignmentReference;
+        public MiTrend TrendH4 { get; internal set; }
+        public MiTrend TrendH1 { get; internal set; }
+        public MiTrend TrendM15 { get; internal set; }
+        public MiTrend TrendM5 { get; internal set; }
+        public int AlignmentPercent { get; internal set; }      // 0 / 25 / 50 / 75 / 100
+        public MiTimeframe AlignmentReference { get; internal set; }
 
-        public MiStructureEvent LastBos;
-        public MiStructureEvent LastChoch;
-        public int BarsSinceBos = -1;
-        public int BarsSinceChoch = -1;
-        public int BarsSinceOrderBlock = -1;
+        public MiStructureEvent LastBos { get; internal set; }
+        public MiStructureEvent LastChoch { get; internal set; }
+        public int BarsSinceBos { get; internal set; } = -1;
+        public int BarsSinceChoch { get; internal set; } = -1;
+        public int BarsSinceOrderBlock { get; internal set; } = -1;
 
-        public MiStructureEvent LastBosH4;
-        public MiStructureEvent LastChochH4;
-        public int BarsSinceBosH4 = -1;
-        public int BarsSinceChochH4 = -1;
+        public MiStructureEvent LastBosH4 { get; internal set; }
+        public MiStructureEvent LastChochH4 { get; internal set; }
+        public int BarsSinceBosH4 { get; internal set; } = -1;
+        public int BarsSinceChochH4 { get; internal set; } = -1;
 
-        public double BuySideLiquidity;
-        public double SellSideLiquidity;
-        public double BuySideDistanceTicks;
-        public double SellSideDistanceTicks;
-        public MiLiquidityTarget Target;
+        public double BuySideLiquidity { get; internal set; }
+        public double SellSideLiquidity { get; internal set; }
+        public double BuySideDistanceTicks { get; internal set; }
+        public double SellSideDistanceTicks { get; internal set; }
+        public MiLiquidityTarget Target { get; internal set; }
 
-        public MiOrderBlockKind OrderBlockKind;
-        public MiOrderBlockState OrderBlockState;
+        public MiOrderBlockKind OrderBlockKind { get; internal set; }
+        public MiOrderBlockState OrderBlockState { get; internal set; }
 
-        public MiBias Bias;
-        public string BiasReason;
-        public int Confidence;            // 0..100
+        public MiBias Bias { get; internal set; }
+        public string BiasReason { get; internal set; }
+        public int Confidence { get; internal set; }            // 0..100
 
-        public MiProfileLocation ProfileLocation;
-        public MiVolatilityRegime VolatilityRegime;
-        public double NormalizedAtr;
+        public MiProfileLocation ProfileLocation { get; internal set; }
+        public MiVolatilityRegime VolatilityRegime { get; internal set; }
+        public double NormalizedAtr { get; internal set; }
 
-        public List<string> ExtraLines;   // extensions (Delta, VWAP, News...)
+        public IReadOnlyList<string> ExtraLines { get; internal set; }
 
         public MiTrend GetTrend(MiTimeframe tf)
         {
@@ -119,6 +119,7 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
 
             if (source.Modules != null)
             {
+                List<string> extras = null;
                 foreach (var m in source.Modules)
                 {
                     if (m == null) continue;
@@ -126,9 +127,10 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
                     try { line = m.Describe(); }
                     catch (Exception) { line = null; }
                     if (string.IsNullOrEmpty(line)) continue;
-                    if (s.ExtraLines == null) s.ExtraLines = new List<string>(2);
-                    s.ExtraLines.Add(line);
+                    if (extras == null) extras = new List<string>(2);
+                    extras.Add(line);
                 }
+                s.ExtraLines = extras;
             }
 
             return s;

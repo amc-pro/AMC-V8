@@ -3324,8 +3324,8 @@ namespace AMC.VolumeProfile.Tests
                 string text = File.ReadAllText(file);
                 Assert(text.Contains("<ExitOnRegimeChange>false</ExitOnRegimeChange>"),
                     string.Format("Le fichier {0} doit avoir ExitOnRegimeChange = false par défaut.", Path.GetFileName(file)));
-                Assert(text.Contains("<EnableSwingRegimeInvalidation>true</EnableSwingRegimeInvalidation>"),
-                    string.Format("Le fichier {0} doit avoir EnableSwingRegimeInvalidation = true (production).", Path.GetFileName(file)));
+                Assert(text.Contains("<EnableSwingRegimeInvalidation>false</EnableSwingRegimeInvalidation>"),
+                    string.Format("Le fichier {0} doit avoir EnableSwingRegimeInvalidation = false (en attente de validation A/B empirique).", Path.GetFileName(file)));
                 Assert(text.Contains("<RegimeConfirmationBars>3</RegimeConfirmationBars>"),
                     string.Format("Le fichier {0} doit avoir RegimeConfirmationBars = 3 par défaut.", Path.GetFileName(file)));
                 Assert(text.Contains("<EnableRegimeSoftProtection>true</EnableRegimeSoftProtection>"),
