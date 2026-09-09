@@ -24,14 +24,14 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
 
         public MiStructureEvent LastBos { get; internal set; }
         public MiStructureEvent LastChoch { get; internal set; }
-        public int BarsSinceBos { get; internal set; } = -1;
-        public int BarsSinceChoch { get; internal set; } = -1;
-        public int BarsSinceOrderBlock { get; internal set; } = -1;
+        public int BarsSinceBos { get; internal set; }
+        public int BarsSinceChoch { get; internal set; }
+        public int BarsSinceOrderBlock { get; internal set; }
 
         public MiStructureEvent LastBosH4 { get; internal set; }
         public MiStructureEvent LastChochH4 { get; internal set; }
-        public int BarsSinceBosH4 { get; internal set; } = -1;
-        public int BarsSinceChochH4 { get; internal set; } = -1;
+        public int BarsSinceBosH4 { get; internal set; }
+        public int BarsSinceChochH4 { get; internal set; }
 
         public double BuySideLiquidity { get; internal set; }
         public double SellSideLiquidity { get; internal set; }
@@ -51,6 +51,15 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
         public double NormalizedAtr { get; internal set; }
 
         public IReadOnlyList<string> ExtraLines { get; internal set; }
+
+        public MarketSnapshot()
+        {
+            BarsSinceBos = -1;
+            BarsSinceChoch = -1;
+            BarsSinceOrderBlock = -1;
+            BarsSinceBosH4 = -1;
+            BarsSinceChochH4 = -1;
+        }
 
         public MiTrend GetTrend(MiTimeframe tf)
         {
