@@ -25,29 +25,32 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Activer Market Intelligence", GroupName = "13. Market Intelligence", Order = 1)]
         public bool EnableMarketIntelligence { get; set; }
 
-        [Display(Name = "Market Report H4", GroupName = "13. Market Intelligence", Order = 2)]
+        [Display(Name = "Activer Quality Engine & No-Trade Matrix", GroupName = "13. Market Intelligence", Order = 2)]
+        public bool EnableQualityEngine { get; set; }
+
+        [Display(Name = "Market Report H4", GroupName = "13. Market Intelligence", Order = 3)]
         public bool EnableMarketReport { get; set; }
 
-        [Display(Name = "Market Update (changements majeurs)", GroupName = "13. Market Intelligence", Order = 3)]
+        [Display(Name = "Market Update (changements majeurs)", GroupName = "13. Market Intelligence", Order = 4)]
         public bool EnableMarketUpdate { get; set; }
 
         [Range(2, 200)]
-        [Display(Name = "Periode EMA de tendance", GroupName = "13. Market Intelligence", Order = 4)]
+        [Display(Name = "Periode EMA de tendance", GroupName = "13. Market Intelligence", Order = 5)]
         public int MiTrendEmaPeriod { get; set; }
 
         [Range(1, 10)]
-        [Display(Name = "Force des swings (SMC)", GroupName = "13. Market Intelligence", Order = 5)]
+        [Display(Name = "Force des swings (SMC)", GroupName = "13. Market Intelligence", Order = 6)]
         public int MiSwingStrength { get; set; }
 
         [Range(0.0, 10.0)]
-        [Display(Name = "Distance minimale prix/EMA (ticks)", GroupName = "13. Market Intelligence", Order = 6)]
+        [Display(Name = "Distance minimale prix/EMA (ticks)", GroupName = "13. Market Intelligence", Order = 7)]
         public double MiTrendMinDistanceTicks { get; set; }
 
         [Range(0.0, 10.0)]
-        [Display(Name = "Pente minimale EMA (ticks/barre)", GroupName = "13. Market Intelligence", Order = 7)]
+        [Display(Name = "Pente minimale EMA (ticks/barre)", GroupName = "13. Market Intelligence", Order = 8)]
         public double MiTrendMinSlopeTicks { get; set; }
 
-        [Display(Name = "Canal Telegram (1, 2 ou 3)", GroupName = "13. Market Intelligence", Order = 8)]
+        [Display(Name = "Canal Telegram (1, 2 ou 3)", GroupName = "13. Market Intelligence", Order = 9)]
         [Range(1, 3)]
         public int MiTelegramChannel { get; set; }
 
@@ -74,6 +77,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private void MarketIntelligenceSetDefaults()
         {
             EnableMarketIntelligence = false;
+            EnableQualityEngine = true;
             EnableMarketReport = true;
             EnableMarketUpdate = true;
             MiTrendEmaPeriod = 21;
@@ -241,7 +245,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (!EnableMarketIntelligence || miLastSnapshot == null) return 0;
 
-            if (miQualityEngine != null)
+            if (EnableQualityEngine && miQualityEngine != null)
             {
                 var qEval = miQualityEngine.Evaluate(miLastSnapshot, isBuy);
                 if (qEval.State == SMI.ContextQualityState.Confirmed) return 10;

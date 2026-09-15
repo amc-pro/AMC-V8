@@ -240,6 +240,7 @@
       <OppositeSignalPenalty>5</OppositeSignalPenalty>
       <EnableShadowJournal>true</EnableShadowJournal>
       <EnableMarketIntelligence>true</EnableMarketIntelligence>
+      <EnableQualityEngine>true</EnableQualityEngine>
       <EnableMarketReport>true</EnableMarketReport>
       <EnableMarketUpdate>true</EnableMarketUpdate>
       <MiTrendEmaPeriod>50</MiTrendEmaPeriod>

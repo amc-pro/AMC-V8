@@ -907,6 +907,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             HtfGateAppliesToMeanReversion = true;
             HtfMisalignmentPenalty = 4;
             EnableMarketIntelligence = true;
+            EnableQualityEngine = true;
 
             MinRiskReward = 1.0;
             TargetR1 = 1.0;

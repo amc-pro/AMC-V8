@@ -205,6 +205,7 @@ namespace AMC.VolumeProfile.Tests
             RunTest("Test_NoTradeEngine_Blocks_AdverseH4Trend_Unless_MeanReversal", QualityEngineTests.Run_Test_NoTradeEngine_Blocks_AdverseH4Trend_Unless_MeanReversal);
             RunTest("Test_NoTradeEngine_Blocks_BadLocation", QualityEngineTests.Run_Test_NoTradeEngine_Blocks_BadLocation);
             RunTest("Test_NoTradeEngine_Passes_Aligned_Setup", QualityEngineTests.Run_Test_NoTradeEngine_Passes_Aligned_Setup);
+            RunTest("Test_QualityEngine_AB_Switch_Isolation", QualityEngineTests.Run_Test_QualityEngine_AB_Switch_Isolation);
 
             Console.WriteLine("================================================================");
             Console.WriteLine(string.Format("📊 RESULTATS : {0} REUSSIS, {1} ECHOUES", passedTests, failedTests));

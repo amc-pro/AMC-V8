@@ -289,6 +289,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             EnableClosedVolumeProfile = true;
             EnableSQLiteVolumeProfileHistory = true;
             EnableMarketIntelligence = true;
+            EnableQualityEngine = true;
 
             // Paramètres de Risque Swing Macro
             MinRiskReward = 1.5;
@@ -1023,7 +1024,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
 
                 // Filtrage contextuel par le NoTradeEngine (Sprint 3)
-                if (EnableMarketIntelligence && miNoTradeEngine != null && miLastSnapshot != null)
+                if (EnableMarketIntelligence && EnableQualityEngine && miNoTradeEngine != null && miLastSnapshot != null)
                 {
                     bool isMeanReversal = setup == SwingSetupType.MacroReversal || setup == SwingSetupType.RejectExtreme;
                     var noTradeDecision = miNoTradeEngine.EvaluateTradeEligibility(miLastSnapshot, dir == SwingDirection.Long, isMeanReversal);

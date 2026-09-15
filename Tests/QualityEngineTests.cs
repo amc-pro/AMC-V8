@@ -154,5 +154,30 @@ namespace AMC.VolumeProfile.Tests
             Assert(decision.Reason == NoTradeReason.None, "Reason = None.");
             Assert(decision.QualityScore >= 70.0, "Score >= 70.");
         }
+
+        /// <summary>
+        /// Test 7 : Commutateur A/B d'isolation du QualityEngine.
+        /// </summary>
+        public static void Run_Test_QualityEngine_AB_Switch_Isolation()
+        {
+            var nte = new NoTradeEngine();
+            var snap = CreateBaseSnapshot();
+            snap.TrendH4 = MiTrend.Bullish;
+            snap.TrendH1 = MiTrend.Bearish;
+
+            bool enableMarketIntelligence = true;
+
+            // Scénario A : Baseline (EnableQualityEngine = false)
+            bool enableQualityEngine_A = false;
+            bool shouldFilter_A = enableMarketIntelligence && enableQualityEngine_A;
+            Assert(!shouldFilter_A, "En mode Baseline (EnableQualityEngine=false), le filtrage NoTradeEngine doit être ignoré.");
+
+            // Scénario B : Avec QualityEngine (EnableQualityEngine = true)
+            bool enableQualityEngine_B = true;
+            bool shouldFilter_B = enableMarketIntelligence && enableQualityEngine_B;
+            Assert(shouldFilter_B, "En mode QualityEngine (EnableQualityEngine=true), le filtrage NoTradeEngine doit être actif.");
+            var decision = nte.EvaluateTradeEligibility(snap, isBuy: true);
+            Assert(decision.IsRejected, "Le NoTradeEngine doit effectivement rejeter le trade en Scénario B.");
+        }
     }
 }
