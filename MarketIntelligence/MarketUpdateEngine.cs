@@ -54,6 +54,15 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
         /// <summary>Evalue un nouvel etat de marche. Retourne true si un message a ete emis.</summary>
         public bool Evaluate()
         {
+            return Evaluate(true);
+        }
+
+        /// <summary>
+        /// Evalue un nouvel etat de marche. Permet d'alimenter Current en continu
+        /// (y compris en backtest/replay) tout en neutralisant l'envoi Telegram.
+        /// </summary>
+        public bool Evaluate(bool isRealtime)
+        {
             if (!Enabled) return false;
 
             MarketSnapshot current;
@@ -89,6 +98,8 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
                     logger.Log(result.ReasonSummary);
                 return false;
             }
+
+            if (!isRealtime) return true;
 
             string text = formatter.FormatUpdate(baseline, current, result);
             if (string.IsNullOrEmpty(text)) return false;

@@ -336,7 +336,7 @@ def main():
         if not files:
             print("❌ Aucun fichier de journal / outcomes trouvé dans le dossier NinjaTrader ou local.")
             print("💡 Pour lancer un test dans NinjaTrader 8 :")
-            print("   1. Chargez l'indicateur SniperMarketCorePro sur un graphique avec de l'historique.")
+            print("   1. Chargez l'indicateur AuctionMarketCore sur un graphique avec de l'historique.")
             print("   2. Cochez 'Journal Sniper (shadow mode)' ou passez 'Mode d'execution' sur 'Research'.")
             print("   3. Relancez ce script : python analyze_journal.py")
             return

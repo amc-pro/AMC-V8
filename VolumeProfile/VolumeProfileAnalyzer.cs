@@ -107,13 +107,15 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
 
         private List<RefLevel> CollectReferenceLevels(ClosedVolumeProfile day, ClosedVolumeProfile week, ClosedVolumeProfile month)
         {
-            var list = new List<RefLevel>(16);
+            var list = new List<RefLevel>(32);
 
             if (day != null && day.Valid)
             {
                 list.Add(new RefLevel { Name = "POC Jour Préc", Price = day.Poc, PeriodType = "DAY" });
                 list.Add(new RefLevel { Name = "VAH Jour Préc", Price = day.Vah, PeriodType = "DAY" });
                 list.Add(new RefLevel { Name = "VAL Jour Préc", Price = day.Val, PeriodType = "DAY" });
+                if (day.Vwap > 0)
+                    list.Add(new RefLevel { Name = "VWAP Jour Préc", Price = day.Vwap, PeriodType = "DAY" });
             }
 
             if (week != null && week.Valid)
@@ -121,6 +123,26 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 list.Add(new RefLevel { Name = "POC Sem Préc", Price = week.Poc, PeriodType = "WEEK" });
                 list.Add(new RefLevel { Name = "VAH Sem Préc", Price = week.Vah, PeriodType = "WEEK" });
                 list.Add(new RefLevel { Name = "VAL Sem Préc", Price = week.Val, PeriodType = "WEEK" });
+
+                if (week.Vwap > 0)
+                {
+                    list.Add(new RefLevel { Name = "VWAP Sem Préc", Price = week.Vwap, PeriodType = "WEEK" });
+                    if (week.VwapSd1Upper > 0 && week.VwapSd1Lower > 0)
+                    {
+                        list.Add(new RefLevel { Name = "VWAP SD+1 Sem Préc", Price = week.VwapSd1Upper, PeriodType = "WEEK" });
+                        list.Add(new RefLevel { Name = "VWAP SD-1 Sem Préc", Price = week.VwapSd1Lower, PeriodType = "WEEK" });
+                    }
+                    if (week.VwapSd2Upper > 0 && week.VwapSd2Lower > 0)
+                    {
+                        list.Add(new RefLevel { Name = "VWAP SD+2 Sem Préc", Price = week.VwapSd2Upper, PeriodType = "WEEK" });
+                        list.Add(new RefLevel { Name = "VWAP SD-2 Sem Préc", Price = week.VwapSd2Lower, PeriodType = "WEEK" });
+                    }
+                    if (week.VwapSd3Upper > 0 && week.VwapSd3Lower > 0)
+                    {
+                        list.Add(new RefLevel { Name = "VWAP SD+3 Sem Préc", Price = week.VwapSd3Upper, PeriodType = "WEEK" });
+                        list.Add(new RefLevel { Name = "VWAP SD-3 Sem Préc", Price = week.VwapSd3Lower, PeriodType = "WEEK" });
+                    }
+                }
 
                 if (week.Nodes != null)
                 {
@@ -145,6 +167,26 @@ namespace NinjaTrader.NinjaScript.Indicators.VolumeProfilePro
                 list.Add(new RefLevel { Name = "POC Mois Préc", Price = month.Poc, PeriodType = "MONTH" });
                 list.Add(new RefLevel { Name = "VAH Mois Préc", Price = month.Vah, PeriodType = "MONTH" });
                 list.Add(new RefLevel { Name = "VAL Mois Préc", Price = month.Val, PeriodType = "MONTH" });
+
+                if (month.Vwap > 0)
+                {
+                    list.Add(new RefLevel { Name = "VWAP Mois Préc", Price = month.Vwap, PeriodType = "MONTH" });
+                    if (month.VwapSd1Upper > 0 && month.VwapSd1Lower > 0)
+                    {
+                        list.Add(new RefLevel { Name = "VWAP SD+1 Mois Préc", Price = month.VwapSd1Upper, PeriodType = "MONTH" });
+                        list.Add(new RefLevel { Name = "VWAP SD-1 Mois Préc", Price = month.VwapSd1Lower, PeriodType = "MONTH" });
+                    }
+                    if (month.VwapSd2Upper > 0 && month.VwapSd2Lower > 0)
+                    {
+                        list.Add(new RefLevel { Name = "VWAP SD+2 Mois Préc", Price = month.VwapSd2Upper, PeriodType = "MONTH" });
+                        list.Add(new RefLevel { Name = "VWAP SD-2 Mois Préc", Price = month.VwapSd2Lower, PeriodType = "MONTH" });
+                    }
+                    if (month.VwapSd3Upper > 0 && month.VwapSd3Lower > 0)
+                    {
+                        list.Add(new RefLevel { Name = "VWAP SD+3 Mois Préc", Price = month.VwapSd3Upper, PeriodType = "MONTH" });
+                        list.Add(new RefLevel { Name = "VWAP SD-3 Mois Préc", Price = month.VwapSd3Lower, PeriodType = "MONTH" });
+                    }
+                }
 
                 if (month.Nodes != null)
                 {

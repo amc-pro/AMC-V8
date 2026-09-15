@@ -19,6 +19,7 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
         private readonly IMiLogger logger;
         private readonly Func<DateTime> clock;
 
+        private readonly object dedupLock = new object();
         private string lastSentHash;
         private DateTime lastSentUtc = DateTime.MinValue;
         private int inFlight;
@@ -49,16 +50,19 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
             DateTime now = clock();
             string hash = Hash(text);
 
-            if (hash == lastSentHash && (now - lastSentUtc) < DuplicateWindow)
+            lock (dedupLock)
             {
-                Log("message identique ignore (deduplication).");
-                return false;
-            }
+                if (hash == lastSentHash && (now - lastSentUtc) < DuplicateWindow)
+                {
+                    Log("message identique ignore (deduplication).");
+                    return false;
+                }
 
-            if (!bypassMinInterval && lastSentUtc != DateTime.MinValue && (now - lastSentUtc) < MinInterval)
-            {
-                Log("intervalle minimal non atteint, message ignore.");
-                return false;
+                if (!bypassMinInterval && lastSentUtc != DateTime.MinValue && (now - lastSentUtc) < MinInterval)
+                {
+                    Log("intervalle minimal non atteint, message ignore.");
+                    return false;
+                }
             }
 
             if (Interlocked.Increment(ref inFlight) > MaxInFlight)
@@ -68,13 +72,11 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
                 return false;
             }
 
-            lastSentHash = hash;
-            lastSentUtc = now;
-            Attempt(text, 1);
+            Attempt(text, hash, 1);
             return true;
         }
 
-        private void Attempt(string text, int attempt)
+        private void Attempt(string text, string hash, int attempt)
         {
             try
             {
@@ -82,6 +84,11 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
                 {
                     if (ok)
                     {
+                        lock (dedupLock)
+                        {
+                            lastSentHash = hash;
+                            lastSentUtc = clock();
+                        }
                         Interlocked.Decrement(ref inFlight);
                         return;
                     }
@@ -90,19 +97,15 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
                     {
                         Interlocked.Decrement(ref inFlight);
                         Log("echec definitif apres " + attempt + " tentatives.");
-                        // Le hash est libere pour permettre un renvoi ulterieur.
-                        lastSentHash = null;
                         return;
                     }
 
                     int delayMs = 1000 * (int)Math.Pow(2, attempt - 1); // 1s, 2s, 4s
                     Log("echec d'envoi, nouvelle tentative dans " + delayMs + " ms.");
-                    // FIX AUDIT E4 : le timer se dispose et se retire de la liste
-                    // apres execution pour eviter une fuite memoire sur les sessions longues.
                     Timer retryTimer = null;
                     retryTimer = new Timer(_ =>
                     {
-                        Attempt(text, attempt + 1);
+                        Attempt(text, hash, attempt + 1);
                         lock (timerLock)
                         {
                             if (retryTimer != null) pendingTimers.Remove(retryTimer);
@@ -137,7 +140,10 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
                 pendingTimers.Clear();
             }
             inFlight = 0;
-            lastSentHash = null;
+            lock (dedupLock)
+            {
+                lastSentHash = null;
+            }
         }
 
         private static string Hash(string text)

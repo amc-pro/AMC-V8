@@ -13,6 +13,16 @@
     <Compile Include="..\VolumeProfile\VolumeProfileAnalyzer.cs" Link="VolumeProfileAnalyzer.cs" />
     <Compile Include="..\VolumeProfile\VolumeProfileManager.cs" Link="VolumeProfileManager.cs" />
     <Compile Include="..\MarketIntelligence\MarketState.cs" Link="MarketState.cs" />
+    <Compile Include="..\MarketIntelligence\MarketSnapshot.cs" Link="MarketSnapshot.cs" />
+    <Compile Include="..\MarketIntelligence\MarketSnapshotComparer.cs" Link="MarketSnapshotComparer.cs" />
+    <Compile Include="..\MarketIntelligence\MarketStructureAnalyzer.cs" Link="MarketStructureAnalyzer.cs" />
+    <Compile Include="..\MarketIntelligence\TelegramFormatter.cs" Link="TelegramFormatter.cs" />
+    <Compile Include="..\MarketIntelligence\MarketReportEngine.cs" Link="MarketReportEngine.cs" />
+    <Compile Include="..\MarketIntelligence\MarketUpdateEngine.cs" Link="MarketUpdateEngine.cs" />
+    <Compile Include="..\MarketIntelligence\TelegramDispatcher.cs" Link="TelegramDispatcher.cs" />
+    <Compile Include="..\MarketIntelligence\QualityEngine.cs" Link="QualityEngine.cs" />
+    <Compile Include="..\MarketIntelligence\NoTradeEngine.cs" Link="NoTradeEngine.cs" />
+    <Compile Include="..\AuctionMarketCore.Swing.Models.cs" Link="AuctionMarketCore.Swing.Models.cs" />
   </ItemGroup>
 
   <ItemGroup>

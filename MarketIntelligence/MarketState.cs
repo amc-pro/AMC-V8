@@ -70,6 +70,26 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
         Critical = 2
     }
 
+    /// <summary>Localisation du prix par rapport aux structures clés du Volume Profile.</summary>
+    public enum MiProfileLocation
+    {
+        Unknown = 0,
+        AboveVah,
+        InsideVa,
+        BelowVal,
+        AtPoc,
+        NearHvn,
+        InsideLvn
+    }
+
+    /// <summary>Régime de volatilité normalisé (Compression, Normal, Expansion).</summary>
+    public enum MiVolatilityRegime
+    {
+        Normal = 0,
+        Compression,
+        Expansion
+    }
+
     /// <summary>
     /// Classification de tendance déterministe, uniquement à partir de bougies clôturées.
     /// La tendance n'est pas définie par un simple croisement prix/EMA : elle exige
@@ -151,6 +171,11 @@ namespace NinjaTrader.NinjaScript.Indicators.SniperMarketIntelligence
         /// <summary>Scores normalises 0..1 utilises par la ponderation Confidence.</summary>
         double VolumeQuality { get; }
         double MomentumQuality { get; }
+
+        /// <summary>Localisation Volume Profile et régime de volatilité.</summary>
+        MiProfileLocation ProfileLocation { get; }
+        MiVolatilityRegime VolatilityRegime { get; }
+        double NormalizedAtr { get; }
 
         /// <summary>Extensions futures (Volume Profile, Delta, VWAP, News, DOM...).</summary>
         IEnumerable<IMarketIntelligenceModule> Modules { get; }
